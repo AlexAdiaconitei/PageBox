@@ -13,6 +13,21 @@ history, so it is treated as a handover credential: the account is flagged
 The same flag is set on every account a superadmin creates or resets. There is no sign-up
 page — accounts only come from a superadmin.
 
+Once anyone exists, those variables stop doing anything: a restart must not reopen a closed
+account. That also means a forgotten superadmin password has no way back through the
+interface, and there is no email delivery yet. The way back is physical access to the
+deployment:
+
+```bash
+node scripts/set-password.mjs                              # restores the .env bootstrap credentials
+node scripts/set-password.mjs --email you@example.com --password "…"
+node scripts/set-password.mjs --email you@example.com --password "…" --keep
+```
+
+It revokes every session of that account, and flags the password as one that must be
+changed at next sign-in — a password typed on a command line has been in a shell history.
+`--keep` skips that when you would rather not be asked again.
+
 ## Two sessions, one user table
 
 | Cookie                | Host                  | Lifetime      | What it unlocks             |

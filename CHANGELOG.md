@@ -7,6 +7,13 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — password recovery from the host
+
+- `scripts/set-password.mjs` sets an account's password directly against the database, for
+  when the superadmin password is lost: `BOOTSTRAP_ADMIN_*` only applies to an empty
+  instance, and there is no email delivery. It revokes the account's sessions and, unless
+  `--keep` is given, requires a change at next sign-in.
+
 ### Added — M6: drag & drop uploads
 
 - Drop a `dist/` folder, a `.zip` or a lone `index.html` onto a site's page. The archive is
