@@ -16,7 +16,7 @@ export default defineConfig({
 			// PageBox serves two hostnames from one deployable, so `event.url` must be built
 			// from the proxy headers (HOST_HEADER/PROTOCOL_HEADER) — never from a fixed
 			// ORIGIN, which would collapse both hosts into one and disable the host split
-			// (see IMPLEMENTATION-PLAN.md §1.1 B3).
+			// (see docs/IMPLEMENTATION-PLAN.md §1.1 B3).
 			adapter: adapter()
 		})
 	],

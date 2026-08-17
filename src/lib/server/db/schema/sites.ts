@@ -2,7 +2,7 @@ import * as t from 'drizzle-orm/pg-core';
 import { pgTable } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 
-/** Domain tables (PLAN-static-hosting.md §4). Ids are ULIDs unless noted. */
+/** Domain tables (docs/PLAN-static-hosting.md §4). Ids are ULIDs unless noted. */
 
 export const visibilityValues = ['public', 'private'] as const;
 export const deploymentStatusValues = ['uploading', 'ready', 'failed'] as const;

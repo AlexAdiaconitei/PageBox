@@ -6,7 +6,7 @@ import { lazy } from './lazy';
  *
  * Parsed once, on first use (see getConfig). Anything invalid must stop the process — a
  * misconfigured host split silently removes the main security boundary of PageBox
- * (see PLAN-static-hosting.md §D1), so it is not a warning.
+ * (see docs/PLAN-static-hosting.md §D1), so it is not a warning.
  */
 
 const bytes = (fallback: number) =>

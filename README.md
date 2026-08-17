@@ -8,8 +8,8 @@ PageBox never builds anything — it receives already-built artifacts (a `dist/`
 lone `index.html`) over an API token or by drag & drop, stores them immutably in S3, and
 serves them. Rollback is switching a pointer.
 
-- Design brief: [`PLAN-static-hosting.md`](PLAN-static-hosting.md)
-- Implementation plan and milestones: [`IMPLEMENTATION-PLAN.md`](IMPLEMENTATION-PLAN.md)
+- Design brief: [`docs/PLAN-static-hosting.md`](docs/PLAN-static-hosting.md)
+- Implementation plan and milestones: [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md)
 
 ## Status
 
@@ -52,7 +52,7 @@ With the proxy profile, `*.localhost` resolves to 127.0.0.1 on most systems, so
 
 ### Dokploy
 
-See [`deploy/dokploy.md`](deploy/dokploy.md). Short version: Application → Dockerfile →
+See [`docs/dokploy.md`](docs/dokploy.md). Short version: Application → Dockerfile →
 two domains → environment variables → health check path `/healthz`.
 
 ### Development

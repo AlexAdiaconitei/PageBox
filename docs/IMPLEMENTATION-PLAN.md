@@ -1,6 +1,6 @@
 # PageBox — plan de implementación
 
-> Complementa a `PLAN-static-hosting.md` (brief de diseño). Este documento fija **stack
+> Complementa a `PLAN-static-hosting.md` (brief de diseño, en este mismo directorio). Este documento fija **stack
 > concreto, estructura de repo, contrato de despliegue y milestones ejecutables**.
 > Objetivo primario de entrega: **desplegable en Dokploy (Application/Dockerfile) desde el
 > día 1**, y **desplegable con `docker compose up` en cualquier host** sin depender de la
