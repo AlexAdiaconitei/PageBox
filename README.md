@@ -19,9 +19,9 @@ serves them. Rollback is switching a pointer.
 check, Docker image, compose stack, Dokploy guide), serving from S3 with the full
 resolution, caching and range semantics, the deploy API (token-authenticated zip uploads,
 rollback, audit trail), the admin panel (users, groups, grants, deploy tokens, deployment
-history), and private sites enforced on every file. Deploy tokens, rollback and the audit
-log are done; drag & drop uploads (M6) are next — see the milestone table in the
-implementation plan.
+history), private sites enforced on every file, and drag & drop uploads with a preflight
+that catches the base-path mistakes before they ship. What is left is hardening and the
+homelab deployment (M7, M8) — see the milestone table in the implementation plan.
 
 First sign-in: the panel is at `PAGEBOX_ADMIN_HOST`, with the bootstrap credentials from
 `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`. That password is a handover

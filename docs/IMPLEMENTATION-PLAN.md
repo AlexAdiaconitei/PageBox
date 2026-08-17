@@ -8,7 +8,26 @@
 
 ---
 
-## Estado: M0 → M4 implementados (2026-08-17)
+## Estado: M0 → M4 + M6 implementados (2026-08-17)
+
+### M6 — drag & drop en el panel
+
+106 tests (66 unitarios + 40 de integración). Un solo camino de ingesta: el endpoint de
+deployments acepta bearer **o** sesión de panel, con las mismas guardas.
+
+- Preflight en cliente (`src/lib/preflight.ts`, puro y testeado): raíz adivinada cuando
+  todo cuelga de una carpeta, falta `index.html`, referencias absolutas de raíz con las
+  rutas que van a 404, generador detectado con **su línea de config exacta** ya sustituida,
+  caps, y exclusión de dotfiles/`.git`/`node_modules`.
+- Empaquetado en navegador con `fflate` en modo *store*: ratio 1:1, así que un build
+  legítimo nunca dispara el guard de zip-bomb del servidor.
+- Los avisos bloqueantes exigen un check explícito de responsabilidad; se guardan en
+  `deployment.warnings` con `acknowledged_at`. PageBox despliega igualmente — no adivina ni
+  reescribe HTML.
+- **Verificación posterior**: tras activar se relee el `index.html` desplegado desde S3 y se
+  comprueban los ficheros que referencia; el número de rotos sale en la lista y en la
+  respuesta de la API (`brokenAssets`). Test: un `index.html` que apunta a `missing.js`
+  reporta 1.
 
 ### Cambio posterior: tokens y throttling con better-auth
 

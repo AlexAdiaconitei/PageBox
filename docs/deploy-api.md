@@ -79,6 +79,22 @@ Rejections come back as `400` with a `reason`, or `413` when the body is over
 `401` means the token is unknown, disabled or expired. `429` means this token has made too
 many calls in its window.
 
+## Uploading from the panel instead
+
+The same endpoint takes a panel session, which is what the site page's drop area uses. It
+differs in three ways:
+
+- no `Authorization` header; the browser session identifies the caller, who needs
+  `deployer` on the site;
+- it must carry an `Origin` from the admin host, or it is refused with `403` — a
+  cookie-authenticated upload is the one a browser can be tricked into making;
+- `?warnings=<codes>&acknowledged=1` records what the preflight reported and that someone
+  accepted it. Warnings without an acknowledgement are refused with `400`.
+
+The response adds `brokenAssets`: after activation PageBox reads the deployed `index.html`
+back and checks the files it references, so a build with a wrong base path reports the
+count instead of looking fine.
+
 ## The rest
 
 ```http

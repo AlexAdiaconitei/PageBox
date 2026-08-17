@@ -7,6 +7,21 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — M6: drag & drop uploads
+
+- Drop a `dist/` folder, a `.zip` or a lone `index.html` onto a site's page. The archive is
+  packed in the browser in store mode and sent to the same endpoint CI uses.
+- The deployment endpoint accepts a panel session as well as a bearer token, with identical
+  guards; the cookie path is covered by the same-origin check.
+- Preflight before anything is uploaded: the root is guessed when everything sits inside one
+  folder, a missing `index.html` is flagged, root-absolute references are reported with the
+  paths that will 404, the generator is named with its exact base-path setting, and
+  dotfiles, `.git` and `node_modules` are left out.
+- A build that will not work deploys only behind an explicit acknowledgement, and the
+  warnings plus the time they were accepted are stored on the deployment.
+- After activation, the deployed `index.html` is read back and the files it references are
+  checked; the count of missing ones is shown in the deployment list.
+
 ### Changed — deploy tokens and throttling now come from better-auth
 
 - Deploy tokens are `@better-auth/api-key` keys: generation, hashing, expiry,
