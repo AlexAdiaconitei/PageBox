@@ -10,9 +10,9 @@ import { getConfig } from '../config';
 import { db } from '../db';
 import { deployment, site } from '../db/schema';
 import { newId } from '../ids';
-import { deletePrefix, deploymentPrefix } from '../s3';
+import { deletePrefix, deploymentPrefix, headObject, objectKey } from '../s3';
 import { invalidateSite, type SiteRef } from '../sites/resolve';
-import { extractZipToS3, ZipRejected } from './zip';
+import { extractZipToS3, INGEST_VERSION, ZipRejected } from './zip';
 
 /**
  * Turns an uploaded archive into an activated deployment.
@@ -83,6 +83,7 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			siteId: input.siteRef.id,
 			status: 'uploading',
 			checksum: written.checksum,
+			ingestVersion: INGEST_VERSION,
 			source: input.source,
 			notes: input.notes ?? null,
 			warnings: input.warnings?.length ? input.warnings : null,
@@ -150,6 +151,15 @@ async function markFailed(siteId: string, deploymentId: string): Promise<void> {
 		.catch(() => {});
 }
 
+/**
+ * A previous deployment of exactly these bytes, worth activating instead of storing a
+ * second copy — but only when it is still the same thing as what we would produce now.
+ *
+ * Two conditions beyond the checksum, both learned the hard way: it must come from the
+ * current extraction rules, and its objects must still be there. Reusing across a rule
+ * change resurrects a deployment built by the old ones, which is how a fixed upload
+ * silently re-served a broken site.
+ */
 async function findReusable(siteId: string, checksum: string) {
 	const [row] = await db
 		.select()
@@ -158,11 +168,16 @@ async function findReusable(siteId: string, checksum: string) {
 			and(
 				eq(deployment.siteId, siteId),
 				eq(deployment.checksum, checksum),
-				eq(deployment.status, 'ready')
+				eq(deployment.status, 'ready'),
+				eq(deployment.ingestVersion, INGEST_VERSION)
 			)
 		)
 		.limit(1);
-	return row ?? null;
+
+	if (!row) return null;
+
+	const intact = await headObject(objectKey(siteId, row.id, 'index.html'));
+	return intact ? row : null;
 }
 
 type WriteResult =

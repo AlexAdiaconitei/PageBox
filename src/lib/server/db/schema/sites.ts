@@ -86,6 +86,12 @@ export const deployment = pgTable(
 		totalBytes: t.bigint('total_bytes', { mode: 'number' }).notNull().default(0),
 		/** sha256 of the uploaded archive — lets a retrying CI job detect a duplicate. */
 		checksum: t.text('checksum'),
+		/**
+		 * Which set of extraction rules produced this deployment. The same archive can
+		 * expand differently after a rule changes (rebasing onto a single root did), so a
+		 * checksum alone is not enough to decide two deployments are the same thing.
+		 */
+		ingestVersion: t.integer('ingest_version').notNull().default(1),
 		source: t.text('source').notNull().default('api'),
 		notes: t.text('notes'),
 

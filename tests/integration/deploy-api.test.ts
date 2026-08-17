@@ -161,11 +161,17 @@ run('deploy API', () => {
 	});
 
 	it('reuses the deployment when the same archive is uploaded again', async () => {
-		const archive = buildZip({ 'index.html': '<!doctype html><h1>idempotent</h1>' });
+		const marker = `idempotent-${Date.now()}`;
+		const archive = buildZip({ 'index.html': `<!doctype html><h1>${marker}</h1>` });
 		const first = await (await upload(archive)).json();
 		const second = await (await upload(archive)).json();
 		expect(second.reused).toBe(true);
 		expect(second.deploymentId).toBe(first.deploymentId);
+
+		// Reuse activates something; that something has to actually serve. A deployment
+		// produced by older extraction rules would come back looking identical and serve
+		// nothing.
+		expect(await (await site(`/s/${slug}/`)).text()).toContain(marker);
 	});
 
 	it('rejects zip-slip', async () => {

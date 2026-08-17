@@ -7,6 +7,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — re-uploading an archive resurrected a deployment built by older rules
+
+- Deployments record which extraction rules produced them (`ingest_version`), and an upload
+  only reuses one made by the current rules. The same bytes expand differently after a rule
+  changes — rebasing onto a single root did exactly that — so a checksum alone cannot decide
+  two deployments are the same thing.
+- Reuse also checks the stored deployment is still intact before activating it.
+
 ### Fixed — an archive wrapping everything in one folder deployed a broken site
 
 - `zip -r site.zip out` puts every path under `out/`, and the API stored it verbatim: the

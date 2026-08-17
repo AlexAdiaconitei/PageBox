@@ -12,6 +12,15 @@ import { contentTypeFor } from '../sites/mime';
  * detected after decompression has already cost the disk and the memory it was aimed at.
  */
 
+/**
+ * Bumped whenever extraction changes what an archive expands into. Deployments record it,
+ * and an upload only reuses one that was produced by the same rules — otherwise the same
+ * bytes silently resurrect a deployment built by the old, wrong ones.
+ *
+ * 2: archives wrapping everything in a single directory are rebased onto it.
+ */
+export const INGEST_VERSION = 2;
+
 export type ZipLimits = {
 	maxFiles: number;
 	maxUncompressedBytes: number;
