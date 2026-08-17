@@ -18,7 +18,7 @@ page — accounts only come from a superadmin.
 | Cookie                | Host                  | Lifetime      | What it unlocks             |
 | --------------------- | --------------------- | ------------- | --------------------------- |
 | `pb_admin.session_token` | `PAGEBOX_ADMIN_HOST` | 30 days       | the panel and the API by cookie |
-| `pb_view.session_token`  | `PAGEBOX_SITES_HOST` | 12 hours      | reading private sites (M4)  |
+| `pb_view.session_token`  | `PAGEBOX_SITES_HOST` | 12 hours      | reading private sites       |
 
 Both are host-only — no `Domain` attribute, so neither travels to any other subdomain —
 and every session row records which host it was minted for. A session presented on the
