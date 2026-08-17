@@ -20,6 +20,13 @@ const slug = `${process.env.PAGEBOX_E2E_SLUG ?? 'demo'}-private`;
 const readerEmail = 'reader-e2e@example.com';
 const readerPassword = 'reader-e2e-password';
 
+/**
+ * A fresh address per run. better-auth's rate limiter counts every request to
+ * /sign-in/email, not just the failed ones, so a fixed address makes repeated runs throttle
+ * themselves — which looks exactly like a broken login.
+ */
+const callerIp = `198.51.101.${Math.floor(Math.random() * 250) + 1}`;
+
 const run = base && adminEmail && adminPassword ? describe : describe.skip;
 
 type Jar = Map<string, string>;
@@ -54,7 +61,7 @@ function request(
 	const base_headers: Record<string, string> = {
 		[hostHeader]: host,
 		'x-forwarded-proto': 'http',
-		'x-forwarded-for': '198.51.100.12',
+		'x-forwarded-for': callerIp,
 		origin: `http://${host}`,
 		...headers
 	};

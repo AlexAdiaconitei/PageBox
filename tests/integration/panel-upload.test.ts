@@ -16,7 +16,15 @@ const password = process.env.PAGEBOX_E2E_PASSWORD;
 const adminHost = process.env.PAGEBOX_E2E_ADMIN_HOST ?? 'pagebox.localhost';
 const sitesHost = process.env.PAGEBOX_E2E_SITES_HOST ?? 'pages.localhost';
 const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-host';
-const slug = `${process.env.PAGEBOX_E2E_SLUG ?? 'demo'}-api`;
+// Its own site: the deploy-API suite runs in parallel and also replaces what is live.
+const slug = `${process.env.PAGEBOX_E2E_SLUG ?? 'demo'}-panel`;
+
+/**
+ * A fresh address per run. better-auth's rate limiter counts every request to
+ * /sign-in/email, not just the failed ones, so a fixed address makes repeated runs throttle
+ * themselves — which looks exactly like a broken login.
+ */
+const callerIp = `198.51.103.${Math.floor(Math.random() * 250) + 1}`;
 
 const run = base && email && password ? describe : describe.skip;
 
@@ -27,7 +35,7 @@ function proxyHeaders(host = adminHost): Record<string, string> {
 	return {
 		[hostHeader]: host,
 		'x-forwarded-proto': 'http',
-		'x-forwarded-for': '198.51.100.14'
+		'x-forwarded-for': callerIp
 	};
 }
 
@@ -90,10 +98,14 @@ run('panel uploads', () => {
 	});
 
 	it('records the upload as coming from the panel', async () => {
-		const list = await fetch(`${base}/api/v1/sites/${slug}/deployments?limit=1`, {
+		const created = await (await upload(archive({ 'index.html': '<h1>source</h1>' }))).json();
+
+		// Asked for by id, not "the latest": the deploy-API suite is uploading to this same
+		// site in parallel, and "the latest" is whichever of us finished last.
+		const one = await fetch(`${base}/api/v1/sites/${slug}/deployments/${created.deploymentId}`, {
 			headers: { ...proxyHeaders(), cookie: cookieHeader() }
 		}).then((res) => res.json());
-		expect(list.deployments[0].source).toBe('panel-upload');
+		expect(one.source).toBe('panel-upload');
 	});
 
 	// This is the path a browser can be tricked into taking, so it must not work without
@@ -133,10 +145,11 @@ run('panel uploads', () => {
 		const accepted = await upload(zip, { query: '?warnings=absolute-paths&acknowledged=1' });
 		expect(accepted.status).toBe(201);
 
-		const list = await fetch(`${base}/api/v1/sites/${slug}/deployments?limit=1`, {
+		const created = await accepted.json();
+		const one = await fetch(`${base}/api/v1/sites/${slug}/deployments/${created.deploymentId}`, {
 			headers: { ...proxyHeaders(), cookie: cookieHeader() }
 		}).then((res) => res.json());
-		expect(list.deployments[0].warnings).toContain('absolute-paths');
+		expect(one.warnings).toContain('absolute-paths');
 	});
 
 	// Turns the warning into a fact: the page names a file the deployment does not have.

@@ -47,12 +47,15 @@ await seed(`${slug}-private`, 'private', files);
 // Separate target for the deploy-API tests, which replace the active deployment and
 // would otherwise pull the ground out from under the serving tests.
 await seed(`${slug}-api`, 'public', files);
+// And one for the panel-upload suite, which also replaces the active deployment.
+await seed(`${slug}-panel`, 'public', files);
 await sql.end();
 
 console.log(`\nseeded ${files.length} files`);
 console.log(`  public : ${env.PAGEBOX_SITES_PREFIX ?? '/s'}/${slug}/`);
 console.log(`  private: ${env.PAGEBOX_SITES_PREFIX ?? '/s'}/${slug}-private/`);
 console.log(`  api     : ${env.PAGEBOX_SITES_PREFIX ?? '/s'}/${slug}-api/   (deploy-API tests)`);
+console.log(`  panel   : ${env.PAGEBOX_SITES_PREFIX ?? '/s'}/${slug}-panel/ (panel-upload tests)`);
 
 async function seed(siteSlug, visibility, entries) {
 	const basePath = `${env.PAGEBOX_SITES_PREFIX ?? '/s'}/${siteSlug}/`;

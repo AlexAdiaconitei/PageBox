@@ -17,6 +17,13 @@ const adminHost = process.env.PAGEBOX_E2E_ADMIN_HOST ?? 'pagebox.localhost';
 const sitesHost = process.env.PAGEBOX_E2E_SITES_HOST ?? 'pages.localhost';
 const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-host';
 
+/**
+ * A fresh address per run. better-auth's rate limiter counts every request to
+ * /sign-in/email, not just the failed ones, so a fixed address makes repeated runs throttle
+ * themselves — which looks exactly like a broken login.
+ */
+const callerIp = `198.51.100.${Math.floor(Math.random() * 250) + 1}`;
+
 const run = base && email && password ? describe : describe.skip;
 
 type Jar = Map<string, string>;
@@ -51,7 +58,7 @@ function request(
 	const headers: Record<string, string> = {
 		[hostHeader]: host,
 		'x-forwarded-proto': 'http',
-		'x-forwarded-for': '198.51.100.11'
+		'x-forwarded-for': callerIp
 	};
 	if (jar && jar.size) headers.cookie = cookieHeader(jar);
 	if (form) headers['content-type'] = 'application/x-www-form-urlencoded';
@@ -75,6 +82,15 @@ async function signIn(host = adminHost): Promise<Jar> {
 	});
 	store(jar, res);
 	return jar;
+}
+
+/**
+ * A form action answers a non-HTML client with HTTP 200 and puts the real outcome in the
+ * body, so asserting on `res.status` here always passes and never means anything.
+ */
+async function actionResult(res: Response): Promise<{ type: string; status: number }> {
+	const body = (await res.json()) as { type?: string; status?: number };
+	return { type: body.type ?? 'unknown', status: body.status ?? res.status };
 }
 
 run('panel sessions', () => {
@@ -152,6 +168,76 @@ run('panel sessions', () => {
 			origin: null
 		});
 		expect(res.status).toBe(403);
+	});
+
+	// This flow was broken and looked exactly like a wrong password: better-auth refused
+	// the in-process call for a missing Origin, and the form reported it as bad credentials.
+	// It runs on an account of its own — test files run in parallel, and rotating the shared
+	// password underneath them is how you get four unrelated failures.
+	it('walks a new account through its forced password change', async () => {
+		// A fresh account per run: resetting an existing one means looking its id up out of
+		// the page, and a lookup that picks the wrong row rewrites somebody else's password.
+		const account = `pwflow-${Date.now()}@example.com`;
+		const handover = 'handover-password-1';
+		const chosen = 'chosen-password-2026';
+
+		const created = await actionResult(
+			await request('/users?/create', {
+				jar,
+				method: 'POST',
+				form: { email: account, name: 'Password flow', password: handover, role: 'user' }
+			})
+		);
+		expect(created.type).toBe('success');
+
+		const session: Jar = new Map();
+		store(
+			session,
+			await request('/login', {
+				jar: session,
+				method: 'POST',
+				form: { email: account, password: handover }
+			})
+		);
+		expect([...session.keys()].some((name) => name.startsWith('pb_admin'))).toBe(true);
+
+		// Nothing but the change form opens while the handover credential stands.
+		const gated = await request('/sites', { jar: session });
+		expect(gated.status).toBe(303);
+		expect(gated.headers.get('location')).toBe('/account/password');
+
+		const changed = await actionResult(
+			await request('/account/password', {
+				jar: session,
+				method: 'POST',
+				form: { currentPassword: handover, newPassword: chosen, confirm: chosen }
+			})
+		);
+		expect(changed).toEqual({ type: 'redirect', status: 303 });
+
+		const after: Jar = new Map();
+		store(
+			after,
+			await request('/login', {
+				jar: after,
+				method: 'POST',
+				form: { email: account, password: chosen }
+			})
+		);
+		expect((await request('/sites', { jar: after })).status).toBe(200);
+	});
+
+	it('reports a wrong current password as such', async () => {
+		const res = await request('/account/password', {
+			jar,
+			method: 'POST',
+			form: {
+				currentPassword: 'not-the-password',
+				newPassword: 'irrelevant-but-long',
+				confirm: 'irrelevant-but-long'
+			}
+		});
+		expect(await res.text()).toContain('current password is wrong');
 	});
 
 	it('keeps user administration to superadmins', async () => {

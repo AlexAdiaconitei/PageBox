@@ -104,7 +104,7 @@ a restart does not hand an attacker a fresh budget and replicas share one window
 
 | What | Default | Setting |
 | --- | --- | --- |
-| sign-in and password change | 10 attempts / 5 min per IP | `LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_SECONDS` |
+| sign-in and password change | 10 requests / 5 min per IP | `LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_SECONDS` |
 | every other auth endpoint | 120 / min per IP | — |
 | a deploy token | 120 calls / hour per key | `API_KEY_MAX_REQUESTS`, `API_KEY_WINDOW_SECONDS` |
 
@@ -113,6 +113,10 @@ PageBox sends credential calls *through the handler* in-process
 (`src/lib/server/auth/credentials.ts`) instead of calling `auth.api.signInEmail`. Calling
 the endpoint directly, which is the obvious way to write it, silently skips throttling —
 a loop against the login form was answered unlimited until this was fixed.
+
+It counts **requests, not failures** — a successful sign-in spends budget too. That is
+better-auth's behaviour, and it matters for anything that signs in repeatedly from one
+address, test suites included.
 
 Deploy tokens are throttled by the api-key plugin itself, on every verification, and the
 limit is stored on the key. A token over its limit gets `429`, never `401`: a CI job

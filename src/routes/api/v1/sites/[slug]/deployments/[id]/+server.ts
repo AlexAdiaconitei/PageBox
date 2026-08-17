@@ -1,23 +1,23 @@
 import type { RequestHandler } from './$types';
 import { and, eq } from 'drizzle-orm';
 import { json, jsonError } from '$lib/server/api/auth';
-import { clientIp, requireSiteToken } from '$lib/server/api/context';
+import { clientIp, identifyCaller } from '$lib/server/api/context';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { deployment } from '$lib/server/db/schema';
 import { deletePrefix, deploymentPrefix } from '$lib/server/s3';
 
 export const GET: RequestHandler = async (event) => {
-	const context = await requireSiteToken(event, event.params.slug);
+	const context = await identifyCaller(event, event.params.slug);
 	if ('response' in context) return context.response;
 
-	const row = await find(context.siteRef.id, event.params.id);
+	const row = await find(context.caller.siteRef.id, event.params.id);
 	if (!row) return jsonError(404, 'deployment not found');
 
 	return json(200, {
 		id: row.id,
 		status: row.status,
-		active: row.id === context.siteRef.activeDeploymentId,
+		active: row.id === context.caller.siteRef.activeDeploymentId,
 		fileCount: row.fileCount,
 		totalBytes: row.totalBytes,
 		checksum: row.checksum,
@@ -31,9 +31,10 @@ export const GET: RequestHandler = async (event) => {
 
 /** Deleting the live deployment would take the site down, so it is refused. */
 export const DELETE: RequestHandler = async (event) => {
-	const context = await requireSiteToken(event, event.params.slug);
+	const context = await identifyCaller(event, event.params.slug);
 	if ('response' in context) return context.response;
-	const { auth, siteRef } = context;
+	const { caller } = context;
+	const siteRef = caller.siteRef;
 
 	const row = await find(siteRef.id, event.params.id);
 	if (!row) return jsonError(404, 'deployment not found');
@@ -46,7 +47,8 @@ export const DELETE: RequestHandler = async (event) => {
 
 	await audit({
 		action: 'deployment.deleted',
-		actorTokenId: auth.tokenId,
+		actorTokenId: caller.tokenId,
+		actorUserId: caller.userId,
 		targetType: 'deployment',
 		targetId: row.id,
 		meta: { siteId: siteRef.id, fileCount: row.fileCount },

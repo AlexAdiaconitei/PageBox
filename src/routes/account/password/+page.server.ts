@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
-import { changeOwnPassword } from '$lib/server/auth/credentials';
+import { changeOwnPassword, refusedForCredentials } from '$lib/server/auth/credentials';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/schema';
@@ -29,10 +29,15 @@ export const actions: Actions = {
 		// handler for the same throttling as sign-in.
 		const result = await changeOwnPassword(event, { currentPassword, newPassword });
 		if (!result.ok) {
-			return fail(result.rateLimited ? 429 : 400, {
-				message: result.rateLimited
-					? 'Too many attempts. Try again in a few minutes.'
-					: 'The current password is wrong'
+			if (result.rateLimited) {
+				return fail(429, { message: 'Too many attempts. Try again in a few minutes.' });
+			}
+			// Only say "wrong password" when that is what happened; the server log has the
+			// reason for everything else.
+			return fail(400, {
+				message: refusedForCredentials(result)
+					? 'The current password is wrong'
+					: 'Could not change the password — the server log has the reason'
 			});
 		}
 

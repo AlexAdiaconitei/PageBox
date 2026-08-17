@@ -7,6 +7,16 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — the password change form reported a wrong password when the call was wrong
+
+- Credential calls made through better-auth's handler now forward `Origin`. Without it
+  better-auth answered `403 MISSING_OR_NULL_ORIGIN`, which the form turned into "the
+  current password is wrong" — pointing at the credentials instead of at the bug.
+- A refusal is only reported as a bad password when better-auth says so; anything else says
+  the server log has the reason, and the reason is logged.
+- The deploy API accepts a panel session on every route, not only on upload, so the panel
+  can read a single deployment.
+
 ### Added — password recovery from the host
 
 - `scripts/set-password.mjs` sets an account's password directly against the database, for

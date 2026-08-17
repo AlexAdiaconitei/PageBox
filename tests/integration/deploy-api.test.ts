@@ -22,6 +22,13 @@ const sitesHost = process.env.PAGEBOX_E2E_SITES_HOST ?? 'pages.localhost';
 const slug = process.env.PAGEBOX_E2E_API_SLUG ?? `${process.env.PAGEBOX_E2E_SLUG ?? 'demo'}-api`;
 const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-host';
 
+/**
+ * A fresh address per run. better-auth's rate limiter counts every request to
+ * /sign-in/email, not just the failed ones, so a fixed address makes repeated runs throttle
+ * themselves — which looks exactly like a broken login.
+ */
+const callerIp = `198.51.102.${Math.floor(Math.random() * 250) + 1}`;
+
 const run = base && (token || (adminEmail && adminPassword)) ? describe : describe.skip;
 
 const api = (path: string, init: RequestInit = {}, bearer: string | null | undefined = undefined) =>
@@ -74,7 +81,7 @@ async function issueToken(): Promise<string> {
 			headers: {
 				[hostHeader]: adminHost,
 				'x-forwarded-proto': 'http',
-				'x-forwarded-for': '198.51.100.13',
+				'x-forwarded-for': callerIp,
 				origin: `http://${adminHost}`,
 				cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join('; '),
 				...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {})

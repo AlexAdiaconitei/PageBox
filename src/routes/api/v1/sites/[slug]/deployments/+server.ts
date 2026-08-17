@@ -1,15 +1,13 @@
-import type { RequestEvent, RequestHandler } from './$types';
+import type { RequestHandler } from './$types';
 import { desc, eq } from 'drizzle-orm';
 import { json, jsonError } from '$lib/server/api/auth';
-import { clientIp, requireSiteToken } from '$lib/server/api/context';
+import { clientIp, identifyCaller } from '$lib/server/api/context';
 import { audit } from '$lib/server/audit';
 import { config, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
 import { deployment } from '$lib/server/db/schema';
 import { ingestDeployment } from '$lib/server/deploy/ingest';
 import { verifyDeployment } from '$lib/server/deploy/verify';
-import { atLeast, permissionFor } from '$lib/server/perms';
-import { lookupSiteBySlug, type SiteRef } from '$lib/server/sites/resolve';
 
 const ACCEPTED_TYPES = [
 	'application/zip',
@@ -17,60 +15,9 @@ const ACCEPTED_TYPES = [
 	'application/octet-stream'
 ];
 
-type Caller = {
-	kind: 'token' | 'session';
-	tokenId: string | null;
-	userId: string | null;
-	siteRef: SiteRef;
-};
-
-/**
- * Two ways in, one endpoint.
- *
- * CI sends a bearer token; the panel's drag & drop sends the browser session. They differ
- * only in who is asking — the same guards, the same limits and the same ingestion run for
- * both, because two ingestion paths would be two sets of guards drifting apart.
- *
- * The cookie path is the one a browser can be tricked into making, so it is covered by the
- * same-origin check in hooks.server.ts; the bearer path is exempt there and needs no CSRF
- * token of its own.
- */
-async function identify(
-	event: RequestEvent,
-	slug: string
-): Promise<{ caller: Caller } | { response: Response }> {
-	const hasBearer = event.request.headers.get('authorization')?.toLowerCase().startsWith('bearer ');
-
-	if (hasBearer) {
-		const context = await requireSiteToken(event, slug);
-		if ('response' in context) return context;
-		return {
-			caller: {
-				kind: 'token',
-				tokenId: context.auth.tokenId,
-				userId: context.auth.ownerUserId || null,
-				siteRef: context.siteRef
-			}
-		};
-	}
-
-	const user = event.locals.user;
-	if (!user) return { response: jsonError(401, 'sign in or send a deploy token') };
-
-	const siteRef = await lookupSiteBySlug(slug);
-	if (!siteRef || siteRef.archived) return { response: jsonError(404, 'site not found') };
-
-	const permission = await permissionFor(user, siteRef);
-	// Same answer as a site that does not exist: the API never confirms what is hosted
-	// here to someone who may not deploy to it.
-	if (!atLeast(permission, 'deployer')) return { response: jsonError(404, 'site not found') };
-
-	return { caller: { kind: 'session', tokenId: null, userId: user.id, siteRef } };
-}
-
 /** Upload a build: the body is the zip itself, no multipart wrapper. */
 export const POST: RequestHandler = async (event) => {
-	const identified = await identify(event, event.params.slug);
+	const identified = await identifyCaller(event, event.params.slug);
 	if ('response' in identified) return identified.response;
 	const { caller } = identified;
 	const siteRef = caller.siteRef;
@@ -159,7 +106,7 @@ export const POST: RequestHandler = async (event) => {
 
 /** Deployment history, newest first. */
 export const GET: RequestHandler = async (event) => {
-	const identified = await identify(event, event.params.slug);
+	const identified = await identifyCaller(event, event.params.slug);
 	if ('response' in identified) return identified.response;
 	const siteRef = identified.caller.siteRef;
 

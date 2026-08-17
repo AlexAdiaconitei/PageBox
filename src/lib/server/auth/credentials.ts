@@ -15,6 +15,8 @@ import { authFor } from './index';
 export type CredentialResult = {
 	ok: boolean;
 	status: number;
+	/** better-auth's error code, e.g. INVALID_PASSWORD — see `refusedForCredentials`. */
+	code: string | null;
 	/** True when better-auth refused because the caller has tried too often. */
 	rateLimited: boolean;
 	retryAfterSeconds: number;
@@ -34,7 +36,18 @@ async function call(
 	const headers = new Headers({ 'content-type': 'application/json' });
 	// The limiter keys on the caller's address and the session is bound to its cookie, so
 	// both have to survive the hop into the handler.
-	for (const name of ['cookie', 'user-agent', 'x-forwarded-for', 'cf-connecting-ip']) {
+	// `origin` matters as much as the cookie: better-auth runs its own origin check on some
+	// endpoints and answers 403 MISSING_OR_NULL_ORIGIN without it — which, mapped through a
+	// credential form, reads as "wrong password" and sends people hunting for the wrong bug.
+	// hooks.server.ts has already checked that this Origin is ours.
+	for (const name of [
+		'cookie',
+		'user-agent',
+		'origin',
+		'referer',
+		'x-forwarded-for',
+		'cf-connecting-ip'
+	]) {
 		const value = event.request.headers.get(name);
 		if (value) headers.set(name, value);
 	}
@@ -56,14 +69,41 @@ async function call(
 	);
 
 	applySetCookies(event, response);
+	const body = await response.json().catch(() => null);
+
+	if (!response.ok) {
+		// The caller is told only "those credentials do not work"; the operator gets the
+		// reason better-auth gave, which is the difference between a wrong password and a
+		// misconfigured call.
+		console.warn(
+			`[pagebox] ${path} refused with ${response.status}:`,
+			JSON.stringify(body)?.slice(0, 300)
+		);
+	}
 
 	return {
 		ok: response.ok,
 		status: response.status,
+		code: (body as { code?: string } | null)?.code ?? null,
 		rateLimited: response.status === 429,
 		retryAfterSeconds: Number(response.headers.get('x-retry-after') ?? 0),
-		body: await response.json().catch(() => null)
+		body
 	};
+}
+
+/**
+ * True when better-auth refused because the credentials were wrong, rather than because
+ * the call itself was malformed. Anything else is a bug on our side and must not be
+ * reported to the user as a bad password.
+ */
+export function refusedForCredentials(result: CredentialResult): boolean {
+	if (result.ok || result.rateLimited) return false;
+	if (result.status === 401) return true;
+	return (
+		result.code === 'INVALID_PASSWORD' ||
+		result.code === 'INVALID_EMAIL_OR_PASSWORD' ||
+		result.code === 'USER_NOT_FOUND'
+	);
 }
 
 export const signInWithPassword = (

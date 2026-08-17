@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { and, eq } from 'drizzle-orm';
 import { json, jsonError } from '$lib/server/api/auth';
-import { clientIp, requireSiteToken } from '$lib/server/api/context';
+import { clientIp, identifyCaller } from '$lib/server/api/context';
 import { audit } from '$lib/server/audit';
 import { siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
@@ -10,9 +10,10 @@ import { activate } from '$lib/server/deploy/ingest';
 
 /** Rollback and roll-forward are the same operation: point the site at a deployment. */
 export const POST: RequestHandler = async (event) => {
-	const context = await requireSiteToken(event, event.params.slug);
+	const context = await identifyCaller(event, event.params.slug);
 	if ('response' in context) return context.response;
-	const { auth, siteRef } = context;
+	const { caller } = context;
+	const siteRef = caller.siteRef;
 
 	const [row] = await db
 		.select()
@@ -30,7 +31,8 @@ export const POST: RequestHandler = async (event) => {
 
 	await audit({
 		action: 'deployment.activated',
-		actorTokenId: auth.tokenId,
+		actorTokenId: caller.tokenId,
+		actorUserId: caller.userId,
 		targetType: 'deployment',
 		targetId: row.id,
 		meta: { siteId: siteRef.id, previousDeploymentId: previous },
