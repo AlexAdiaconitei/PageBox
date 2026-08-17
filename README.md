@@ -9,19 +9,26 @@ lone `index.html`) over an API token or by drag & drop, stores them immutably in
 serves them. Rollback is switching a pointer.
 
 - Deploy API and CI setup: [`docs/deploy-api.md`](docs/deploy-api.md)
+- Accounts, roles and grants: [`docs/access.md`](docs/access.md)
 - Design brief: [`docs/PLAN-static-hosting.md`](docs/PLAN-static-hosting.md)
 - Implementation plan and milestones: [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md)
 
 ## Status
 
-**M0–M2 complete** — deployable skeleton (two-host dispatch, schema + migrations, health
+**M0–M3 complete** — deployable skeleton (two-host dispatch, schema + migrations, health
 check, Docker image, compose stack, Dokploy guide), serving from S3 with the full
-resolution, caching and range semantics, and the deploy API: token-authenticated zip
-uploads, rollback and audit trail. The panel and users (M3) are next; see the milestone
-table in the implementation plan.
+resolution, caching and range semantics, the deploy API (token-authenticated zip uploads,
+rollback, audit trail), and the admin panel: users, groups, grants, deploy tokens and
+deployment history. Private sites are enforced next (M4); see the milestone table in the
+implementation plan.
 
-Private sites currently answer 404 for everyone — sessions and grants arrive in M4, and
-serving them before that would be the one unrecoverable mistake here.
+Private sites currently answer 404 for everyone. Sessions, grants and the panel exist now,
+but the serving path does not read them until M4 — serving a private site before that
+check is in place would be the one unrecoverable mistake here.
+
+First sign-in: the panel is at `PAGEBOX_ADMIN_HOST`, with the bootstrap credentials from
+`BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`. That password is a handover
+credential: nothing else opens until it has been replaced.
 
 ## Two hostnames, always
 

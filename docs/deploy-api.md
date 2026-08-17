@@ -3,7 +3,8 @@
 Lives on the admin host, under `/api/v1`. Authentication is a bearer deploy token; the
 site host never exposes any of it.
 
-Until the panel exists (M3), issue tokens from the command line:
+Issue a token from the site's page in the panel, or from the command line when you want an
+unscoped one (or have no panel session at hand):
 
 ```bash
 node scripts/create-deploy-token.mjs --site docs-a --name "github actions"

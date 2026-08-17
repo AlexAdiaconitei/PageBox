@@ -8,7 +8,33 @@
 
 ---
 
-## Estado: M0 + M1 + M2 implementados (2026-08-17)
+## Estado: M0 + M1 + M2 + M3 implementados (2026-08-17)
+
+### M3 — auth y panel
+
+Criterio de aceptación comprobado end-to-end: el superadmin crea `ana@example.com`, esa
+cuenta entra, se le fuerza el cambio de la contraseña de entrega, ve **"No sites yet"**,
+recibe `/users` como **404**, y solo tras el grant aparece `demo-api` con rol `deployer`;
+un sitio sin grant sigue siendo 404 para ella. 75 tests (42 unitarios + 33 de integración).
+
+- Dos instancias de better-auth sobre las mismas tablas (`pb_admin` / `pb_view`), con
+  `session.scope` validado contra el host y auditado si no coincide.
+- Panel: sites (crear, ajustes, visibilidad), deployments (activar, rollback, borrar),
+  grants a usuarios y grupos, tokens de deploy emitidos y revocados desde la UI, usuarios
+  (crear, suspender, rol, reset de contraseña), grupos y registro de actividad.
+- `perms.ts`: permisos efectivos de §4 con cache de 60 s invalidada en cada cambio.
+- Diseño: consola densa (tablas de línea fina, monoespaciada para lo copiable, iconos
+  lucide, un solo acento reservado al deployment vivo), claro y oscuro.
+
+**Dos cosas que cambiaron al montarlo:**
+
+| Punto | Qué pasó |
+| --- | --- |
+| CSRF | El check de SvelteKit compara `Origin` contra una URL reconstruida con headers de proxy: sin `x-forwarded-proto` todo POST del panel era 403, y `trustedOrigins` no acepta hostnames de runtime. Ahora se comprueba en `hooks.server.ts` contra `PAGEBOX_ADMIN_HOST`/`PAGEBOX_SITES_HOST` (hostname, ignorando esquema y puerto). |
+| `/api/*` | Quedaba detrás de la puerta de sesión → un token válido recibía 303 al login, que un `curl` de CI lee como éxito. Exento explícitamente; el API responde su propio 401. |
+
+Además: el plugin `admin` de better-auth rechaza roles que no estén declarados, así que
+`superadmin` y `user` se definen sobre `createAccessControl`.
 
 ### M2 — API de despliegue
 

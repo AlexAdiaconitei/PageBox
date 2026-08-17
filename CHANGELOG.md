@@ -7,6 +7,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — M3: authentication and admin panel
+
+- Two better-auth instances over the same tables: `pb_admin` on the admin host and
+  `pb_view` on the site host. Every session row carries its scope and is refused when
+  presented on the other host; the mismatch is audited.
+- Sign-in and sign-out on both hosts, sign-up disabled, rate limiting on credentials, and
+  a forced password change while an account still holds its handover credential.
+- Panel: sites (list, create, settings), deployments (activate, rollback, delete), grants
+  to users and groups, deploy tokens issued and revoked from the UI, user administration
+  (create, suspend, role, password reset), groups with membership, and the audit trail.
+- Effective permissions (`superadmin` / owner / grants / public) with a short-lived cache
+  invalidated on every grant, membership and visibility change.
+- CSRF: cookie-authenticated mutations must carry an `Origin` whose hostname matches the
+  host being addressed. Bearer-authenticated API calls are exempt.
+- Panel design system: dense hairline tables, monospace for copyable values, lucide icons,
+  light and dark palettes.
+
 ### Added — M2: deploy API
 
 - `GET /api/v1/whoami`: CI asks for its own `basePath` before building, so the prefix is
