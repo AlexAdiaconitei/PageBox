@@ -13,9 +13,13 @@ serves them. Rollback is switching a pointer.
 
 ## Status
 
-**M0 complete** — deployable skeleton: two-host dispatch, schema + migrations, health
-check, Docker image, compose stack, Dokploy guide. Serving deployments (M1) and the API
-(M2) are next; see the milestone table in the implementation plan.
+**M0 and M1 complete** — deployable skeleton (two-host dispatch, schema + migrations,
+health check, Docker image, compose stack, Dokploy guide) and serving: a deployment is
+streamed from S3 with the full resolution, caching and range semantics. The upload API
+(M2) is next; see the milestone table in the implementation plan.
+
+Private sites currently answer 404 for everyone — sessions and grants arrive in M4, and
+serving them before that would be the one unrecoverable mistake here.
 
 ## Two hostnames, always
 
@@ -66,6 +70,17 @@ pnpm dev                              # http://pagebox.localhost:5173
 
 `pnpm check` type-checks, `pnpm test` runs the unit tests, `pnpm db:generate` writes a new
 migration after a schema change.
+
+To exercise serving before the upload API exists, publish a generated build by hand and
+run the integration suite against it:
+
+```bash
+node scripts/seed-demo.mjs                  # seeds /s/demo/ and a private twin
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000 pnpm test
+```
+
+`scripts/seed-demo.mjs --dir path/to/dist` publishes a real build instead of the generated
+one. Both read `.env`, rewriting the compose hostnames to localhost.
 
 ## Startup behaviour
 

@@ -8,7 +8,27 @@
 
 ---
 
-## Estado: M0 implementado (2026-08-17)
+## Estado: M0 + M1 implementados (2026-08-17)
+
+### M1 — servido desde S3
+
+Verificado con `scripts/seed-demo.mjs` (10 ficheros a MinIO) y 13 tests de integración
+(`PAGEBOX_E2E_BASE=... pnpm test`), 48 tests en total:
+
+- las 6 reglas de §5 (exacto, `.html`, `/index.html`, índice de directorio, shell de SPA,
+  `404.html` con status 404) y el 301 de barra final;
+- `Content-Type` por tabla propia, `nosniff`, `ETag`/304, `Range` → 206 con
+  `Content-Range`, `HEAD`, 405 para el resto de métodos;
+- `.br`/`.gz` por negociación, con cache negativa por deployment; `Range` desactiva la
+  negociación;
+- cache: assets con hash `immutable`, HTML y 404 `no-cache`, sitio privado
+  `private, no-store` + `CDN-Cache-Control` en **todas** las respuestas, incluidos 404;
+- dotfiles, `__pb/*` y traversal → 404; sitios privados → 404 hasta M4.
+
+**Decisión tomada en M1:** un sitio `private` no se sirve a nadie hasta que existan sesiones
+y grants (M4). Es la lectura segura de "privado" mientras no hay a quién autorizar.
+
+### M0 — esqueleto desplegable
 
 Verificado con el stack real (`docker compose up -d`, imagen construida desde el
 `Dockerfile`):
