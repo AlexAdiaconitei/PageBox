@@ -2,6 +2,8 @@ import { getRequestEvent } from '$app/server';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin } from 'better-auth/plugins/admin';
+import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access';
+import { createAccessControl } from 'better-auth/plugins/access';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getConfig, type HostKind } from '../config';
 import { db } from '../db';
@@ -27,6 +29,17 @@ import { lazy } from '../lazy';
  */
 
 const DAY = 60 * 60 * 24;
+
+/**
+ * PageBox names its roles `superadmin` and `user`; the admin plugin only accepts role
+ * names it can resolve to a permission set, so both are declared here over the plugin's
+ * own statements. `superadmin` gets the full admin set, `user` the plain one.
+ */
+const ac = createAccessControl(defaultStatements);
+const roles = {
+	superadmin: ac.newRole(adminAc.statements),
+	user: ac.newRole(userAc.statements)
+};
 
 /** Session scope stored in the DB, one per host. */
 export type SessionScope = 'admin' | 'view';
@@ -107,7 +120,7 @@ function createAuth(kind: HostKind) {
 		plugins:
 			kind === 'admin'
 				? [
-						admin({ adminRoles: ['superadmin'], defaultRole: 'user' }),
+						admin({ ac, roles, adminRoles: ['superadmin'], defaultRole: 'user' }),
 						sveltekitCookies(getRequestEvent)
 					]
 				: [sveltekitCookies(getRequestEvent)]
