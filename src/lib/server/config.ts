@@ -61,6 +61,13 @@ const schema = z.object({
 	MAX_FILES: z.coerce.number().int().positive().default(20_000),
 	MAX_ZIP_RATIO: z.coerce.number().int().positive().default(100),
 
+	// --- credential throttling ------------------------------------------------
+	//
+	// Counted per IP and per account, and only failures count. Raise the attempt count
+	// for a team behind one NAT, where every colleague shares an address.
+	LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+	LOGIN_WINDOW_SECONDS: z.coerce.number().int().positive().default(300),
+
 	// --- startup tasks -------------------------------------------------------
 	PAGEBOX_MIGRATE_ON_START: z.stringbool().default(true),
 	PAGEBOX_ENSURE_BUCKET_ON_START: z.stringbool().default(true),

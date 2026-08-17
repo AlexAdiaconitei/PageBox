@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { authFor } from '$lib/server/auth';
 import { audit } from '$lib/server/audit';
 import { config } from '$lib/server/config';
+import { isRateLimited, recordFailedAttempt } from '$lib/server/ratelimit';
 
 /**
  * One login page, two backends: the instance is chosen by the host the request arrived
@@ -33,16 +34,37 @@ export const actions: Actions = {
 			return fail(400, { email, message: 'Email and password are required' });
 		}
 
+		// better-auth's own limiter sits in its HTTP handler, which PageBox does not mount,
+		// so credential guessing is throttled here or not at all.
+		const attempt = {
+			scope: `login:${event.locals.hostKind}`,
+			ip: clientIp(event),
+			identifier: email
+		};
+		const limit = await isRateLimited(attempt);
+		if (limit.blocked) {
+			await audit({
+				action: 'login.rate_limited',
+				meta: { email, host: event.locals.hostKind },
+				ip: clientIp(event)
+			});
+			return fail(429, {
+				email,
+				message: `Too many attempts. Try again in ${Math.ceil(limit.retryAfterSeconds / 60)} minute(s).`
+			});
+		}
+
 		try {
 			await authFor(event.locals.hostKind).api.signInEmail({
 				body: { email, password },
 				headers: event.request.headers
 			});
 		} catch (err) {
+			await recordFailedAttempt(attempt);
 			await audit({
 				action: 'login.failed',
 				meta: { email, host: event.locals.hostKind },
-				ip: event.request.headers.get('x-forwarded-for')
+				ip: clientIp(event)
 			});
 			// Same answer for "no such user", "wrong password" and "banned": the login page
 			// is not an account-existence oracle. Rate limiting lives in better-auth.
@@ -59,11 +81,19 @@ export const actions: Actions = {
 		await audit({
 			action: 'login.succeeded',
 			meta: { email, host: event.locals.hostKind },
-			ip: event.request.headers.get('x-forwarded-for')
+			ip: clientIp(event)
 		});
 		redirect(303, next);
 	}
 };
+
+function clientIp(event: { getClientAddress: () => string }): string | null {
+	try {
+		return event.getClientAddress();
+	} catch {
+		return null;
+	}
+}
 
 /** Only same-site paths: an open redirect on a login page is a phishing primitive. */
 function safeNext(value: string | null, hostKind: 'admin' | 'sites'): string {

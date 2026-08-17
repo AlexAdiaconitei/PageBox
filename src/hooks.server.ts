@@ -66,6 +66,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 					headers: { location: event.url.pathname + '/' + event.url.search }
 				});
 			}
+			// Only private sites pay for a session lookup. A public asset request is the
+			// hot path of this whole application and has nothing to authorise.
+			if (hit.siteRef.visibility === 'private') {
+				event.locals.user = await loadSession(event, kind);
+			}
 			return serveSite(event, hit);
 		}
 		if (!SITES_HOST_ROUTES.has(event.url.pathname)) return notFound();

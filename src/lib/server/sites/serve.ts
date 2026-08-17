@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import type { RequestEvent } from '@sveltejs/kit';
 import { cache } from '../cache';
+import { atLeast, permissionFor } from '../perms';
 import { getObject, headObject, objectKey, type ObjectHead } from '../s3';
 import { contentTypeFor, isCompressible, isHtml } from './mime';
 import {
@@ -34,9 +35,10 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
 		});
 	}
 
-	// TODO(M4): private sites need a session and a grant check here. Until that exists,
-	// answering 404 is the only safe reading of "private".
-	if (siteRef.visibility === 'private') return notFound(siteRef);
+	if (siteRef.visibility === 'private') {
+		const denial = await guardPrivate(event, siteRef);
+		if (denial) return denial;
+	}
 
 	if (!siteRef.activeDeploymentId) return notFound(siteRef);
 
@@ -50,6 +52,60 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
 	if (!found) return notFound(siteRef);
 
 	return respond(event, siteRef, found);
+}
+
+/**
+ * Authorisation for a private site, applied to *every* file — the HTML and each asset it
+ * pulls. A design where only the HTML is checked leaves the content readable to anyone who
+ * knows an asset URL.
+ *
+ * Returns a response when the request must not proceed, or null when it may.
+ */
+async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Response | null> {
+	const permission = await permissionFor(event.locals.user, siteRef);
+	if (atLeast(permission, 'viewer')) return null;
+
+	// Signed in but not granted: the same 404 as a site that does not exist. Anything
+	// else would confirm which private sites are hosted here.
+	if (event.locals.user) return notFound(siteRef);
+
+	// Not signed in. Only a navigation may be sent to the login page: a 302 answering a
+	// <script src> or a fetch() arrives as HTML where code was expected, and the page
+	// breaks in silence halfway through a session expiring.
+	if (!isNavigation(event.request)) {
+		return new Response('Unauthorized', {
+			status: 401,
+			headers: {
+				'content-type': 'text/plain; charset=utf-8',
+				'cache-control': 'private, no-store',
+				'cdn-cache-control': 'no-store',
+				vary: 'Cookie'
+			}
+		});
+	}
+
+	const next = event.url.pathname + event.url.search;
+	return new Response(null, {
+		status: 302,
+		headers: {
+			location: `/login?next=${encodeURIComponent(next)}`,
+			'cache-control': 'private, no-store',
+			'cdn-cache-control': 'no-store',
+			vary: 'Cookie'
+		}
+	});
+}
+
+/**
+ * A top-level document request, as opposed to a sub-resource.
+ *
+ * `Sec-Fetch-Dest` says so exactly and every current browser sends it; the Accept header
+ * is the fallback for clients that do not.
+ */
+export function isNavigation(request: Request): boolean {
+	const dest = request.headers.get('sec-fetch-dest');
+	if (dest) return dest === 'document' || dest === 'iframe';
+	return (request.headers.get('accept') ?? '').includes('text/html');
 }
 
 type Found = {

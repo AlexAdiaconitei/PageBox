@@ -5,6 +5,7 @@ import { adminAuth } from '$lib/server/auth';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/schema';
+import { isRateLimited, recordFailedAttempt } from '$lib/server/ratelimit';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	return { forced: locals.user?.mustChangePassword ?? false };
@@ -25,12 +26,23 @@ export const actions: Actions = {
 			return fail(400, { message: 'Use at least 10 characters' });
 		}
 
+		// The current password is a credential too: guessing it here must cost the same.
+		const attempt = {
+			scope: 'password-change',
+			ip: event.getClientAddress(),
+			identifier: current.id
+		};
+		if ((await isRateLimited(attempt)).blocked) {
+			return fail(429, { message: 'Too many attempts. Try again in a few minutes.' });
+		}
+
 		try {
 			await adminAuth.api.changePassword({
 				body: { currentPassword, newPassword, revokeOtherSessions: true },
 				headers: event.request.headers
 			});
 		} catch {
+			await recordFailedAttempt(attempt);
 			return fail(400, { message: 'The current password is wrong' });
 		}
 
