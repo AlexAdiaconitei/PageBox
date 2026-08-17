@@ -2,6 +2,7 @@ import type { Handle, HandleServerError, ServerInit } from '@sveltejs/kit';
 import { config, hostKind } from '$lib/server/config';
 import { probeHealth } from '$lib/server/health';
 import { resolveSite } from '$lib/server/sites/resolve';
+import { serveSite } from '$lib/server/sites/serve';
 import { startup } from '$lib/server/startup';
 
 export const init: ServerInit = async () => {
@@ -50,9 +51,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					headers: { location: event.url.pathname + '/' + event.url.search }
 				});
 			}
-			// M1 serves the deployment bytes from S3. Until then, and for any site with no
-			// activated deployment, the honest answer is 404.
-			return notFound();
+			return serveSite(event, hit);
 		}
 		if (!SITES_HOST_ROUTES.has(event.url.pathname)) return notFound();
 	} else {
