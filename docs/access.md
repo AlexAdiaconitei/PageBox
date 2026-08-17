@@ -56,6 +56,42 @@ A group is a name and a list of members. Grant a site to the group once instead 
 person, and membership changes take effect immediately — the permission cache is dropped
 whenever a grant, a membership or a site's visibility changes.
 
+## Reading a private site
+
+Every file of a private site is authorised, not just the HTML. A design that checks only
+the page leaves the content readable to anyone who learns an asset URL.
+
+| Caller                          | Answer                                              |
+| ------------------------------- | ---------------------------------------------------- |
+| granted (directly or by group)  | the file                                             |
+| signed in, no grant             | 404 — the same answer as a site that does not exist  |
+| anonymous, navigating           | 302 to `/login?next=…` on the site host              |
+| anonymous, sub-resource         | 401, with no `Location`                              |
+
+The last two are different on purpose. A 302 answering a `<script src>` or a `fetch()`
+arrives as HTML where code was expected, so a session expiring mid-visit would break the
+page in silence instead of prompting a sign-in.
+
+One consequence worth stating plainly: an anonymous caller can tell a private site *exists*
+by getting a login redirect instead of a 404. Hiding that would mean sending readers a 404
+instead of the sign-in page, which makes private sites unusable. Signed-in users without a
+grant still learn nothing.
+
+Every response for a private site — including its 404s, 401s and redirects — carries
+`Cache-Control: private, no-store`, `CDN-Cache-Control: no-store` and `Vary: Cookie`. One
+private asset cached at a CDN edge is readable without a session, which is the worst
+failure this design has.
+
+## Throttling
+
+Sign-in and password change count failed attempts per IP and per account: ten per five
+minutes by default, `LOGIN_MAX_ATTEMPTS` and `LOGIN_WINDOW_SECONDS` to change it — raise
+the count for a team that shares one public address. Successful sign-ins never count
+against the limit.
+
+better-auth's own rate limiter is not in play here: it lives in its HTTP handler, and
+PageBox calls the auth API directly so the site host does not expose better-auth's routes.
+
 ## Deploy tokens
 
 Issued per site from the site's page, or unscoped from the command line

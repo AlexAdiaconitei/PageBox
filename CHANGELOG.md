@@ -7,6 +7,19 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — M4: private sites
+
+- Private sites are authorised per file, HTML and assets alike, against the reader's
+  `pb_view` session and the site's grants.
+- Anonymous navigations are sent to `/login?next=…`; anonymous sub-resources get a dry
+  401, never a redirect that would arrive as HTML where code was expected.
+- A signed-in reader without a grant gets 404 — the same answer as a site that does not
+  exist.
+- Public sites keep the fast path: no session lookup, nothing to authorise.
+- Credential throttling for sign-in and password change: ten failed attempts per five
+  minutes, counted per IP and per account, configurable with `LOGIN_MAX_ATTEMPTS` and
+  `LOGIN_WINDOW_SECONDS`. Successful sign-ins never count.
+
 ### Added — M3: authentication and admin panel
 
 - Two better-auth instances over the same tables: `pb_admin` on the admin host and

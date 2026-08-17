@@ -8,7 +8,30 @@
 
 ---
 
-## Estado: M0 + M1 + M2 + M3 implementados (2026-08-17)
+## Estado: M0 → M4 implementados (2026-08-17)
+
+### M4 — sitios privados
+
+85 tests (44 unitarios + 41 de integración). El test de acceso privado da de alta un lector
+por el panel, le concede el grant, lee el sitio con sesión `pb_view`, retira el grant y
+comprueba que deja de servir.
+
+- Autorización **por fichero**, no solo del HTML: granted → contenido; con sesión y sin
+  grant → 404; anónimo navegando → 302 a `/login?next=…`; anónimo pidiendo un sub-recurso
+  → **401 seco** (un 302 a un `<script src>` llega como HTML donde se esperaba código).
+- Toda respuesta de sitio privado —incluidos 404, 401 y redirects— lleva
+  `private, no-store` + `CDN-Cache-Control: no-store` + `Vary: Cookie`.
+- Los sitios públicos no pagan lookup de sesión: es el hot path.
+
+**Hallazgo:** el rate limit de better-auth vive en su handler HTTP, que no montamos (usamos
+`auth.api.*` directamente), así que **el login estaba sin límite** — 12 contraseñas
+erróneas seguidas se respondían todas. Ahora hay contador propio de intentos fallidos por
+IP y por cuenta (10 / 5 min, configurable con `LOGIN_MAX_ATTEMPTS` y
+`LOGIN_WINDOW_SECONDS`); los aciertos no consumen cupo.
+
+**Compromiso documentado:** un anónimo puede deducir que un sitio privado *existe* porque
+recibe redirect al login en vez de 404. Ocultarlo obligaría a devolver 404 al lector
+legítimo, que es lo que hace el sitio inusable. Con sesión y sin grant no se filtra nada.
 
 ### M3 — auth y panel
 

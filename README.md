@@ -15,16 +15,13 @@ serves them. Rollback is switching a pointer.
 
 ## Status
 
-**M0–M3 complete** — deployable skeleton (two-host dispatch, schema + migrations, health
+**M0–M4 complete** — deployable skeleton (two-host dispatch, schema + migrations, health
 check, Docker image, compose stack, Dokploy guide), serving from S3 with the full
 resolution, caching and range semantics, the deploy API (token-authenticated zip uploads,
-rollback, audit trail), and the admin panel: users, groups, grants, deploy tokens and
-deployment history. Private sites are enforced next (M4); see the milestone table in the
+rollback, audit trail), the admin panel (users, groups, grants, deploy tokens, deployment
+history), and private sites enforced on every file. Deploy tokens, rollback and the audit
+log are done; drag & drop uploads (M6) are next — see the milestone table in the
 implementation plan.
-
-Private sites currently answer 404 for everyone. Sessions, grants and the panel exist now,
-but the serving path does not read them until M4 — serving a private site before that
-check is in place would be the one unrecoverable mistake here.
 
 First sign-in: the panel is at `PAGEBOX_ADMIN_HOST`, with the bootstrap credentials from
 `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`. That password is a handover
