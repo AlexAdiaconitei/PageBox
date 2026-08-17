@@ -112,13 +112,15 @@ run('serving a deployment', () => {
 		expect((await get(`/s/${slug}/`, { method: 'POST' })).status).toBe(405);
 	});
 
-	// M4 adds sessions and grants; until then "private" can only mean "not served".
-	it('keeps private sites unreachable and uncacheable, assets included', async () => {
+	// Who may read a private site is covered in private-sites.test.ts; here the point is
+	// that an anonymous request never gets bytes and never gets a cacheable response.
+	it('gives an anonymous caller nothing on a private site, assets included', async () => {
 		for (const path of ['/', '/style.css', '/assets/app-4f3a91b2.js']) {
 			const res = await get(`/s/${slug}-private${path}`);
-			expect(res.status).toBe(404);
-			expect(res.headers.get('cache-control')).toBe('private, no-store');
-			expect(res.headers.get('cdn-cache-control')).toBe('no-store');
+			expect([401, 302, 404], path).toContain(res.status);
+			expect(res.headers.get('content-type') ?? '', path).not.toContain('text/css');
+			expect(res.headers.get('cache-control'), path).toBe('private, no-store');
+			expect(res.headers.get('cdn-cache-control'), path).toBe('no-store');
 		}
 	});
 
