@@ -45,6 +45,9 @@ services:
       POSTGRES_DB: pagebox
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Published so `pnpm dev` and the seed script can reach it from the host.
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U pagebox -d pagebox']
       interval: 5s
@@ -61,6 +64,7 @@ services:
     volumes:
       - miniodata:/data
     ports:
+      - '${MINIO_PORT:-9000}:9000'
       - '${MINIO_CONSOLE_PORT:-9001}:9001'
     healthcheck:
       test: ['CMD-SHELL', 'mc ready local || exit 1']
