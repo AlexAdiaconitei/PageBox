@@ -62,6 +62,34 @@ function createAuth(kind: HostKind) {
 			schema: { user, session, account, verification, apikey, rateLimit }
 		}),
 
+		/**
+		 * Which origins may drive this instance.
+		 *
+		 * better-auth defaults to its `baseURL`, which carries no port — so a dev server on
+		 * :5173, or anything behind a proxy that terminates elsewhere, is refused with
+		 * INVALID_ORIGIN. PageBox already has an origin rule (hooks.server.ts): the hostname
+		 * must be one of the two configured hosts, and scheme and port are not compared,
+		 * because behind a tunnel neither survives. This applies the same rule here rather
+		 * than keeping a second, stricter one that only fails in development.
+		 */
+		trustedOrigins: (request) => {
+			const canonical = [
+				`${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_ADMIN_HOST}`,
+				`${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_SITES_HOST}`
+			];
+			const ours = [config.PAGEBOX_ADMIN_HOST, config.PAGEBOX_SITES_HOST].map(
+				(name) => name.split(':')[0]
+			);
+
+			const origin = request?.headers.get('origin');
+			if (!origin) return canonical;
+			try {
+				return ours.includes(new URL(origin).hostname) ? [...canonical, origin] : canonical;
+			} catch {
+				return canonical;
+			}
+		},
+
 		emailAndPassword: {
 			enabled: true,
 			// Accounts are created by a superadmin, never by whoever finds the login page.

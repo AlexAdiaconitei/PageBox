@@ -152,6 +152,22 @@ run('panel sessions', () => {
 		}
 	});
 
+	// The dev server runs on :5173 and better-auth's baseURL carries no port, so trusting
+	// only the exact baseURL made every local sign-in fail with INVALID_ORIGIN.
+	it('accepts our own hostname on any port', async () => {
+		const jarWithPort: Jar = new Map();
+		store(
+			jarWithPort,
+			await request('/login', {
+				jar: jarWithPort,
+				method: 'POST',
+				form: { email: email!, password: password! },
+				origin: `http://${adminHost}:5173`
+			})
+		);
+		expect([...jarWithPort.keys()].some((name) => name.startsWith('pb_admin'))).toBe(true);
+	});
+
 	it('refuses a form POST from another origin', async () => {
 		const res = await request('/login', {
 			method: 'POST',

@@ -7,6 +7,13 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — sign-in refused its own origin outside the container
+
+- better-auth trusted only its `baseURL`, which carries no port, so signing in from the dev
+  server on `:5173` failed with `INVALID_ORIGIN`. It now applies PageBox's own rule: the
+  hostname must be one of the two configured hosts, and scheme and port are not compared,
+  because behind a tunnel neither survives.
+
 ### Fixed — the password change form reported a wrong password when the call was wrong
 
 - Credential calls made through better-auth's handler now forward `Origin`. Without it
