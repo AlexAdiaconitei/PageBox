@@ -52,11 +52,18 @@ X-Deployment-Notes: commit abc1234
   "totalBytes": 4711234,
   "reused": false,
   "skipped": [],
+  "root": "",
   "activated": true,
+  "brokenAssets": 0,
+  "brokenAssetSamples": [],
   "url": "https://pages.example.com/s/docs-a/"
 }
 ```
 
+- If every path in the archive sits inside one directory, that directory becomes the site
+  root and the response says which one (`"root": "out"`). `zip -r site.zip out` is the
+  command people actually run, and deploying it verbatim gives a site whose root holds a
+  folder and no `index.html`.
 - `?activate=false` uploads without moving the live pointer.
 - Re-uploading a byte-identical archive returns the existing deployment with
   `"reused": true` instead of storing a second copy — that is what a retrying CI job does.

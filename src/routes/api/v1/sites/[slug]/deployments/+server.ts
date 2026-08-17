@@ -78,6 +78,7 @@ export const POST: RequestHandler = async (event) => {
 			fileCount: outcome.fileCount,
 			totalBytes: outcome.totalBytes,
 			activated: activate,
+			root: outcome.root || undefined,
 			source: caller.kind === 'token' ? 'api' : 'panel-upload',
 			warnings: warnings.length ? warnings : undefined,
 			skipped: outcome.skipped.length
@@ -98,6 +99,9 @@ export const POST: RequestHandler = async (event) => {
 		totalBytes: outcome.totalBytes,
 		reused: outcome.reused,
 		skipped: outcome.skipped,
+		// Says so out loud: an archive made with `zip -r site.zip out` is deployed as the
+		// contents of out/, not as a folder called out.
+		root: outcome.root,
 		activated: activate,
 		brokenAssets: verification?.brokenAssetCount ?? null,
 		// Named, not just counted: "3 broken" sends you hunting, "/logo.svg is missing" does not.

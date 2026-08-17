@@ -32,6 +32,8 @@ export type IngestOutcome =
 			/** True when an identical archive was already deployed and got reused. */
 			reused: boolean;
 			skipped: string[];
+			/** Directory the archive was rebased onto, '' when it was already at the root. */
+			root: string;
 	  }
 	| { ok: false; status: 400 | 413; message: string; reason?: string };
 
@@ -70,7 +72,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 				fileCount: existing.fileCount,
 				totalBytes: existing.totalBytes,
 				reused: true,
-				skipped: []
+				skipped: [],
+				root: ''
 			};
 		}
 
@@ -116,7 +119,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			fileCount: result.fileCount,
 			totalBytes: result.totalBytes,
 			reused: false,
-			skipped: result.skipped
+			skipped: result.skipped,
+			root: result.root
 		};
 	} catch (err) {
 		if (deploymentId) await markFailed(input.siteRef.id, deploymentId);

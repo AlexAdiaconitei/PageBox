@@ -136,6 +136,30 @@ run('deploy API', () => {
 		expect(await (await site(`/s/${slug}/`)).text()).toContain(marker);
 	});
 
+	// `zip -r site.zip out` is what people actually run, and it puts every path under out/.
+	// Deploying that verbatim gives a site whose root holds a folder and no index.html.
+	it('rebases an archive that wraps everything in one directory', async () => {
+		const marker = `wrapped-${Date.now()}`;
+		const res = await upload(
+			buildZip({
+				'out/index.html': `<!doctype html><h1>${marker}</h1>`,
+				'out/assets/app.js': 'console.log(1)'
+			})
+		);
+		expect(res.status).toBe(201);
+
+		const body = await res.json();
+		expect(body.root).toBe('out');
+		expect(body.fileCount).toBe(2);
+		expect(await (await site(`/s/${slug}/`)).text()).toContain(marker);
+		expect((await site(`/s/${slug}/assets/app.js`)).status).toBe(200);
+	});
+
+	it('leaves an archive that is already at the root alone', async () => {
+		const res = await upload(buildZip({ 'index.html': '<h1>flat</h1>' }));
+		expect((await res.json()).root).toBe('');
+	});
+
 	it('reuses the deployment when the same archive is uploaded again', async () => {
 		const archive = buildZip({ 'index.html': '<!doctype html><h1>idempotent</h1>' });
 		const first = await (await upload(archive)).json();

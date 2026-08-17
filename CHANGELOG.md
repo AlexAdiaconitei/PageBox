@@ -7,6 +7,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — an archive wrapping everything in one folder deployed a broken site
+
+- `zip -r site.zip out` puts every path under `out/`, and the API stored it verbatim: the
+  site root held one directory and no `index.html`, so the site answered Not Found. The API
+  now rebases onto a single top-level directory, the way the panel's drop area already did,
+  and reports which one in `root`.
+- Directory entries no longer appear in `skipped` — they are not files, and listing them
+  read like something had gone wrong.
+
 ### Fixed — post-deploy verification called working links broken
 
 - It checked each reference as a literal object key, so a link to another page —

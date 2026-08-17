@@ -1,6 +1,7 @@
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import yauzl, { type Entry, type ZipFile } from 'yauzl';
+import { chooseRoot } from '$lib/preflight';
 import { objectKey, putObject } from '../s3';
 import { contentTypeFor } from '../sites/mime';
 
@@ -21,8 +22,10 @@ export type ZipLimits = {
 export type ZipResult = {
 	fileCount: number;
 	totalBytes: number;
-	/** Entries deliberately not stored (directories, junk, dotfiles at any depth). */
+	/** Entries deliberately not stored: junk and dotfiles. Directories are not entries. */
 	skipped: string[];
+	/** Directory the archive was rebased onto, '' when it was already at the root. */
+	root: string;
 };
 
 export class ZipRejected extends Error {
@@ -87,15 +90,23 @@ export async function extractZipToS3(
 	target: { siteId: string; deploymentId: string },
 	limits: ZipLimits
 ): Promise<ZipResult> {
+	// `zip -r site.zip out` is the obvious command and puts every path under `out/`, which
+	// would deploy a site whose root holds one directory and no index.html. The browser
+	// already rebases a dropped folder; the API has to do the same or the friendliest
+	// possible mistake produces a site that 404s and says nothing about why.
+	const root = chooseRoot(await listEntryPaths(zipPath)).root;
+
 	const zip = await openZip(zipPath);
-	const result: ZipResult = { fileCount: 0, totalBytes: 0, skipped: [] };
+	const result: ZipResult = { fileCount: 0, totalBytes: 0, skipped: [], root };
 	let compressedTotal = 0;
 
 	try {
 		for await (const entry of entries(zip)) {
-			const path = safeEntryPath(entry.fileName);
+			const path = rebase(safeEntryPath(entry.fileName), root);
 			if (path === null) {
-				result.skipped.push(entry.fileName);
+				// Directory entries are not files and saying they were "skipped" reads like
+				// something went wrong.
+				if (!entry.fileName.endsWith('/')) result.skipped.push(entry.fileName);
 				continue;
 			}
 			if (isSymlinkEntry(entry.externalFileAttributes)) {
@@ -148,6 +159,27 @@ export async function extractZipToS3(
 
 	if (result.fileCount === 0) throw new ZipRejected('archive contains no files', 'empty');
 	return result;
+}
+
+/** Entry names only: the central directory is read, no file data. */
+async function listEntryPaths(zipPath: string): Promise<string[]> {
+	const zip = await openZip(zipPath);
+	const paths: string[] = [];
+	try {
+		for await (const entry of entries(zip)) {
+			const path = safeEntryPath(entry.fileName);
+			if (path !== null) paths.push(path);
+		}
+	} finally {
+		zip.close();
+	}
+	return paths;
+}
+
+function rebase(path: string | null, root: string): string | null {
+	if (path === null || root === '') return path;
+	const prefix = root + '/';
+	return path.startsWith(prefix) ? path.slice(prefix.length) || null : null;
 }
 
 function openZip(path: string): Promise<ZipFile> {
