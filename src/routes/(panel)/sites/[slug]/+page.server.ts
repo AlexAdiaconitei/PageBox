@@ -2,7 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { audit } from '$lib/server/audit';
-import { adminUrl, siteUrl } from '$lib/server/config';
+import { adminUrl, config, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
 import {
 	apikey,
@@ -91,6 +91,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		},
 		permission,
 		canManage: atLeast(permission, 'owner'),
+		canDeploy: atLeast(permission, 'deployer'),
+		limits: {
+			maxFiles: config.MAX_FILES,
+			// Below the server's own cap: packing a build in browser memory scales badly,
+			// and past this the answer is a deploy token and CI, not a bigger browser.
+			maxBrowserBytes: Math.min(config.MAX_UPLOAD_BYTES, 90 * 1024 * 1024)
+		},
 		deployments: deployments.map((entry) => ({
 			id: entry.id,
 			status: entry.status,
@@ -99,6 +106,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			source: entry.source,
 			notes: entry.notes,
 			createdAt: entry.createdAt,
+			brokenAssetCount: entry.brokenAssetCount,
 			live: entry.id === row.activeDeploymentId
 		})),
 		grants: grants.map((entry) => ({

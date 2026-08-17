@@ -5,6 +5,7 @@
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import Users from '@lucide/svelte/icons/users';
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import Dropzone from '$lib/components/Dropzone.svelte';
 
 	let { data, form } = $props();
 
@@ -83,6 +84,17 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 	</div>
 {/if}
 
+{#if data.canDeploy}
+	<section class="section">
+		<Dropzone
+			slug={data.site.slug}
+			basePath={data.site.basePath}
+			maxFiles={data.limits.maxFiles}
+			maxBytes={data.limits.maxBrowserBytes}
+		/>
+	</section>
+{/if}
+
 <section class="section">
 	<div class="mb-3 flex items-center gap-2">
 		<History size={15} strokeWidth={1.75} class="text-faint" />
@@ -123,6 +135,15 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 							{/if}
 							{#if deployment.notes}
 								<span class="text-faint ml-2 text-[12px]">{deployment.notes}</span>
+							{/if}
+							{#if deployment.brokenAssetCount}
+								<span
+									class="tag ml-2"
+									style="color: var(--pb-warn)"
+									title="Assets referenced by index.html that are not in this deployment"
+								>
+									{deployment.brokenAssetCount} broken
+								</span>
 							{/if}
 						</td>
 						<td class="text-muted">{when(deployment.createdAt)}</td>
