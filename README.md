@@ -70,9 +70,19 @@ two domains → environment variables → health check path `/healthz`.
 ```bash
 pnpm install
 cp .env.example .env
+cp .env.local.example .env.local      # host-side overrides for the compose services
 docker compose up -d postgres minio   # dependencies only
-pnpm dev                              # http://pagebox.localhost:5173
+pnpm dev
 ```
+
+Then open **http://pagebox.localhost:5173** for the panel and
+**http://pages.localhost:5173** for the sites. Plain `localhost` answers 404 on purpose:
+PageBox routes by hostname, and a request that is neither host is not its business.
+
+`.env` holds container hostnames, which only resolve inside the compose network; `.env.local`
+points the same variables at the published ports and is loaded after it. Both are read by
+the `dev` and `db:*` scripts through Node's `--env-file-if-exists` — Vite does not put
+`.env` into `process.env`, so without this the app starts and then refuses to serve.
 
 `pnpm check` type-checks, `pnpm test` runs the unit tests, `pnpm db:generate` writes a new
 migration after a schema change.
