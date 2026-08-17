@@ -8,7 +8,26 @@
 
 ---
 
-## Estado: M0 + M1 implementados (2026-08-17)
+## Estado: M0 + M1 + M2 implementados (2026-08-17)
+
+### M2 — API de despliegue
+
+Verificado contra el stack real: 11 tests de integración de API + 8 unitarios de guardas
+del zip (66 tests en total), más `scripts/verify-real-build.mjs`, que construye un sitio
+Vite real con el `basePath` que devuelve `/whoami`, lo despliega por API y comprueba que
+**todas** las referencias del HTML servido resuelven 200.
+
+- `whoami`, `POST/GET deployments`, `activate` (rollback), `GET/DELETE` de un deployment.
+- Guardas §6.4 comprobadas *durante* la lectura: zip-slip (incluida la que detecta yauzl,
+  mapeada a su `reason` real), rutas absolutas, symlinks, cap de ficheros, cap de bytes
+  descomprimidos y ratio. Cada rechazo devuelve su `reason`.
+- Tokens `pbx_` solo hasheados; un token de otro sitio recibe **404**, no 403.
+- Reutilización por checksum: subir el mismo archivo dos veces no duplica objetos.
+- Barrido de deployments `uploading` colgados al arrancar y cada hora.
+- Documentado en `docs/deploy-api.md`, con el workflow de GitHub Actions.
+
+**Pendiente de M2 que se mueve a M3/M6:** emisión de tokens desde el panel (ahora
+`scripts/create-deploy-token.mjs`).
 
 ### M1 — servido desde S3
 

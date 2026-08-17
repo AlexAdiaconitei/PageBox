@@ -8,15 +8,17 @@ PageBox never builds anything — it receives already-built artifacts (a `dist/`
 lone `index.html`) over an API token or by drag & drop, stores them immutably in S3, and
 serves them. Rollback is switching a pointer.
 
+- Deploy API and CI setup: [`docs/deploy-api.md`](docs/deploy-api.md)
 - Design brief: [`docs/PLAN-static-hosting.md`](docs/PLAN-static-hosting.md)
 - Implementation plan and milestones: [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md)
 
 ## Status
 
-**M0 and M1 complete** — deployable skeleton (two-host dispatch, schema + migrations,
-health check, Docker image, compose stack, Dokploy guide) and serving: a deployment is
-streamed from S3 with the full resolution, caching and range semantics. The upload API
-(M2) is next; see the milestone table in the implementation plan.
+**M0–M2 complete** — deployable skeleton (two-host dispatch, schema + migrations, health
+check, Docker image, compose stack, Dokploy guide), serving from S3 with the full
+resolution, caching and range semantics, and the deploy API: token-authenticated zip
+uploads, rollback and audit trail. The panel and users (M3) are next; see the milestone
+table in the implementation plan.
 
 Private sites currently answer 404 for everyone — sessions and grants arrive in M4, and
 serving them before that would be the one unrecoverable mistake here.
@@ -81,6 +83,14 @@ PAGEBOX_E2E_BASE=http://127.0.0.1:3000 pnpm test
 
 `scripts/seed-demo.mjs --dir path/to/dist` publishes a real build instead of the generated
 one. Both read `.env`, rewriting the compose hostnames to localhost.
+
+To exercise the deploy API instead, issue a token and run the whole suite:
+
+```bash
+node scripts/create-deploy-token.mjs --site demo-api --name e2e
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_... pnpm test
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_... node scripts/verify-real-build.mjs
+```
 
 ## Startup behaviour
 

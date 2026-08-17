@@ -7,6 +7,27 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — M2: deploy API
+
+- `GET /api/v1/whoami`: CI asks for its own `basePath` before building, so the prefix is
+  never hardcoded in a workflow.
+- `POST /api/v1/sites/{slug}/deployments`: the request body is the zip. Streamed to a temp
+  file, hashed, then walked entry by entry into S3; the live pointer moves only once every
+  object is stored. `?activate=false` uploads without switching.
+- Re-uploading a byte-identical archive reuses the existing deployment (`reused: true`)
+  instead of storing a second copy.
+- `GET` history, `GET` one deployment, `POST .../activate` (rollback and roll-forward), and
+  `DELETE` — refused with 409 on the live deployment.
+- Zip guards, all enforced while reading: zip-slip and absolute paths, symlink entries,
+  file-count cap, uncompressed-size cap and compression ratio. Each rejection reports its
+  own `reason`.
+- Bearer deploy tokens, stored as sha256 with a visible prefix, revocable and expirable;
+  a token scoped to another site gets a 404, never a 403.
+- Audit entries for every create, reuse, activate, delete and rejection.
+- Sweeper for uploads that died mid-flight: at boot and hourly.
+- `scripts/create-deploy-token.mjs` and `scripts/verify-real-build.mjs` (builds a real Vite
+  site against the API's base path, deploys it, and checks every reference resolves).
+
 ### Added — M1: serving deployments
 
 - `serveSite`: resolves a request subpath against the active deployment following the six
