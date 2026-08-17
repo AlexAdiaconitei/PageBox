@@ -1,4 +1,5 @@
-import type { Handle, HandleServerError, ServerInit } from '@sveltejs/kit';
+import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
+import { loadSession } from '$lib/server/auth/session';
 import { config, hostKind } from '$lib/server/config';
 import { probeHealth } from '$lib/server/health';
 import { resolveSite } from '$lib/server/sites/resolve';
@@ -17,6 +18,9 @@ export const init: ServerInit = async () => {
  * become reachable from the origin that hosts untrusted-ish static content (PLAN §7).
  */
 const SITES_HOST_ROUTES = new Set(['/', '/login', '/logout', '/healthz']);
+
+/** Admin-host paths reachable without a session. */
+const PUBLIC_ADMIN_ROUTES = new Set(['/login', '/logout', '/healthz']);
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const kind = hostKind(event.url.host);
@@ -37,9 +41,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.hostKind = kind;
 
 	// Never serve internal paths from either host.
-	if (event.url.pathname.startsWith('/__pb/')) {
-		return notFound();
-	}
+	if (event.url.pathname.startsWith('/__pb/')) return notFound();
 
 	if (kind === 'sites') {
 		const hit = await resolveSite(event.url.host, event.url.pathname);
@@ -54,14 +56,32 @@ export const handle: Handle = async ({ event, resolve }) => {
 			return serveSite(event, hit);
 		}
 		if (!SITES_HOST_ROUTES.has(event.url.pathname)) return notFound();
-	} else {
+	} else if (event.url.pathname.startsWith(config.PAGEBOX_SITES_PREFIX + '/')) {
 		// The admin host must never answer on the site prefix: one path, one meaning.
-		if (event.url.pathname.startsWith(config.PAGEBOX_SITES_PREFIX + '/')) return notFound();
+		return notFound();
+	}
+
+	event.locals.user = await loadSession(event, kind);
+
+	if (kind === 'admin' && !PUBLIC_ADMIN_ROUTES.has(event.url.pathname)) {
+		if (!event.locals.user) {
+			const next = event.url.pathname + event.url.search;
+			redirect(303, `/login?next=${encodeURIComponent(next)}`);
+		}
+		// A bootstrap or admin-reset password is a first-login credential, not a password:
+		// nothing else in the panel opens until it has been replaced.
+		if (event.locals.user.mustChangePassword && event.url.pathname !== '/account/password') {
+			redirect(303, '/account/password');
+		}
 	}
 
 	const response = await resolve(event);
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'same-origin');
+	if (kind === 'admin') {
+		// The panel holds the credentials of the whole instance; it is never framed.
+		response.headers.set('X-Frame-Options', 'DENY');
+	}
 	return response;
 };
 
