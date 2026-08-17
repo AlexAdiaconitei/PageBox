@@ -42,6 +42,9 @@ export type IngestInput = {
 	source: 'api' | 'panel-upload';
 	notes?: string | null;
 	activate: boolean;
+	/** Preflight warnings the uploader was shown and accepted (§6.3). */
+	warnings?: string[];
+	acknowledgedAt?: Date | null;
 };
 
 export async function ingestDeployment(input: IngestInput): Promise<IngestOutcome> {
@@ -79,6 +82,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			checksum: written.checksum,
 			source: input.source,
 			notes: input.notes ?? null,
+			warnings: input.warnings?.length ? input.warnings : null,
+			acknowledgedAt: input.acknowledgedAt ?? null,
 			createdByUserId: input.actor.userId ?? null,
 			createdByTokenId: input.actor.tokenId ?? null
 		});
