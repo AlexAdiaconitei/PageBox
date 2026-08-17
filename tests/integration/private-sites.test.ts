@@ -196,6 +196,18 @@ run('private sites', () => {
 		expect((await asset(`/s/${slug}/style.css`, reader)).status).toBe(404);
 	});
 
+	// A superadmin needs no grant — but only if the site host can see that they are one.
+	// It could not: the admin plugin declares `role`, and it does not run on that instance,
+	// so every superadmin arrived there as an ordinary user and got a 404.
+	it('serves a private site to a superadmin with no grant', async () => {
+		await setGrant(null);
+		const superadmin = await signIn(adminEmail!, adminPassword!, sitesHost);
+
+		const res = await navigation(`/s/${slug}/`, superadmin);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toContain('demo root');
+	});
+
 	it('keeps the public twin unaffected', async () => {
 		const res = await navigation(`/s/${process.env.PAGEBOX_E2E_SLUG ?? 'demo'}/`);
 		expect(res.status).toBe(200);

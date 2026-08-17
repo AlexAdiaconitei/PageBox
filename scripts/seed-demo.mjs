@@ -14,6 +14,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
 import { S3Client, PutObjectCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
+import { hashPassword } from 'better-auth/crypto';
 import postgres from 'postgres';
 import { ulid } from 'ulidx';
 
@@ -42,6 +43,7 @@ const sql = postgres(DATABASE_URL, { max: 2, onnotice: () => {} });
 const files = dir ? readBuild(dir) : demoBuild();
 
 await ensureBucket();
+await seedTestSuperadmin();
 await seed(slug, 'public', files);
 await seed(`${slug}-private`, 'private', files);
 // Separate target for the deploy-API tests, which replace the active deployment and
@@ -85,6 +87,42 @@ async function seed(siteSlug, visibility, entries) {
 
 	await sql`update site set active_deployment_id = ${deploymentId} where id = ${site.id}`;
 	console.log(`${siteSlug}: deployment ${deploymentId} active (${entries.length} files)`);
+}
+
+/**
+ * An account for the integration suite, so the tests never touch the credentials a person
+ * is actually using. Idempotent: the password is put back on every seed.
+ */
+async function seedTestSuperadmin() {
+	const email = env.PAGEBOX_E2E_EMAIL ?? 'e2e-admin@example.com';
+	const password = env.PAGEBOX_E2E_PASSWORD ?? 'e2e-admin-password';
+	const hash = await hashPassword(password);
+
+	const [existing] = await sql`select id from "user" where email = ${email}`;
+	const id = existing?.id ?? ulid();
+
+	if (existing) {
+		await sql`update "user" set role = 'superadmin', banned = false, must_change_password = false where id = ${id}`;
+	} else {
+		await sql`
+			insert into "user" (id, email, name, email_verified, role, must_change_password)
+			values (${id}, ${email}, 'E2E admin', true, 'superadmin', false)
+		`;
+	}
+
+	const [account] = await sql`
+		select id from account where user_id = ${id} and provider_id = 'credential'
+	`;
+	if (account) {
+		await sql`update account set password = ${hash} where id = ${account.id}`;
+	} else {
+		await sql`
+			insert into account (id, account_id, provider_id, user_id, password)
+			values (${ulid()}, ${id}, 'credential', ${id}, ${hash})
+		`;
+	}
+
+	console.log(`test superadmin: ${email}`);
 }
 
 async function ensureBucket() {

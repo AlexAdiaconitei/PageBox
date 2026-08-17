@@ -100,7 +100,7 @@ export const POST: RequestHandler = async (event) => {
 		skipped: outcome.skipped,
 		activated: activate,
 		brokenAssets: verification?.brokenAssetCount ?? null,
-		url: siteUrl(siteRef.basePath)
+		url: siteUrl(siteRef.basePath, event.url.port)
 	});
 };
 
@@ -121,7 +121,7 @@ export const GET: RequestHandler = async (event) => {
 	return json(200, {
 		slug: siteRef.slug,
 		basePath: siteRef.basePath,
-		siteUrl: siteUrl(siteRef.basePath),
+		siteUrl: siteUrl(siteRef.basePath, event.url.port),
 		activeDeploymentId: siteRef.activeDeploymentId,
 		maxUploadBytes: config.MAX_UPLOAD_BYTES,
 		deployments: rows.map((row) => ({

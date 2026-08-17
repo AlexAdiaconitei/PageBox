@@ -44,7 +44,7 @@ async function loadSite(slug: string, sessionUser: App.Locals['user']) {
 	return { siteRef, permission: permission! };
 }
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { siteRef, permission } = await loadSite(params.slug, locals.user);
 
 	const [row] = await db.select().from(site).where(eq(site.id, siteRef.id)).limit(1);
@@ -78,7 +78,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			: (groups.find((entry) => entry.id === id)?.slug ?? id);
 
 	return {
-		adminOrigin: adminUrl('').replace(/\/$/, ''),
+		adminOrigin: adminUrl('', url.port).replace(/\/$/, ''),
 		site: {
 			id: row.id,
 			slug: row.slug,
@@ -87,7 +87,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			basePath: row.basePath,
 			spaFallback: row.spaFallback,
 			activeDeploymentId: row.activeDeploymentId,
-			url: siteUrl(row.basePath)
+			url: siteUrl(row.basePath, url.port)
 		},
 		permission,
 		canManage: atLeast(permission, 'owner'),

@@ -7,6 +7,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — a superadmin got 404 on private sites, and boots could hang before the first log line
+
+- The site host runs its own auth instance, without the admin plugin — so the `role` and
+  `banned` fields it declares were missing there, and every superadmin read a private site
+  as an ordinary user (404) while a banned user read it as clean. Both fields are now
+  declared on that instance too.
+- Migrations took their advisory lock from a connection pool: the lock was acquired on one
+  connection and released on another, so it stayed held and every later start blocked
+  forever on `pg_advisory_lock`, before any log line. It now reserves a single connection,
+  waits with `pg_try_advisory_lock`, and fails after a minute with the query to find a
+  stale holder. The startup log says it is applying migrations before it starts.
+- Links printed by the panel and the API keep the port of the request they answer, so they
+  work on a dev server or any deployment not on 80/443.
+- `scripts/seed-demo.mjs` creates the integration suite's own superadmin, so tests stop
+  using — and resetting — a real person's account.
+
 ### Fixed — sign-in refused its own origin outside the container
 
 - better-auth trusted only its `baseURL`, which carries no port, so signing in from the dev

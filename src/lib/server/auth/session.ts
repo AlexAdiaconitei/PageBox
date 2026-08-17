@@ -15,8 +15,15 @@ export async function loadSession(
 	event: RequestEvent,
 	kind: HostKind
 ): Promise<SessionUser | null> {
-	const auth = authFor(kind);
-	const result = await auth.api.getSession({ headers: event.request.headers });
+	// The two instances carry different user shapes on purpose — only the admin one runs
+	// the admin plugin — so this is the boundary that flattens them into one type.
+	const result = (await authFor(kind).api.getSession({
+		headers: event.request.headers
+	})) as {
+		user?: Partial<SessionUser> & { id: string; email: string; name: string };
+		session?: { id: string; scope?: string };
+	} | null;
+
 	if (!result?.user || !result.session) return null;
 
 	const scope = (result.session as { scope?: string }).scope ?? 'admin';
@@ -32,7 +39,7 @@ export async function loadSession(
 		return null;
 	}
 
-	const user = result.user as unknown as SessionUser;
+	const user = result.user;
 	// A banned user keeps a valid cookie until it expires; the ban has to bite here.
 	if (user.banned) return null;
 

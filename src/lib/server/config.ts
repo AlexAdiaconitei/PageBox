@@ -175,13 +175,25 @@ export function hostKind(host: string): HostKind | null {
 	return null;
 }
 
-/** Absolute URL of a site, built from config — never from request headers. */
-export function siteUrl(basePath: string): string {
-	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_SITES_HOST}${basePath}`;
+/**
+ * Absolute URL of a site, built from config — never from request headers.
+ *
+ * `port` is the one thing worth taking from the current request: both hosts are served by
+ * the same process, so a link printed without it is dead on a dev server or any deployment
+ * that does not sit on 80/443. It is a port number, not a hostname: it cannot redirect a
+ * link somewhere else.
+ */
+export function siteUrl(basePath: string, port?: string | null): string {
+	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_SITES_HOST}${suffix(port)}${basePath}`;
 }
 
-export function adminUrl(path = '/'): string {
-	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_ADMIN_HOST}${path}`;
+export function adminUrl(path = '/', port?: string | null): string {
+	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_ADMIN_HOST}${suffix(port)}${path}`;
+}
+
+function suffix(port?: string | null): string {
+	if (!port || config.PAGEBOX_SITES_HOST.includes(':')) return '';
+	return port === '80' || port === '443' ? '' : `:${port}`;
 }
 
 export function basePathFor(slug: string): string {

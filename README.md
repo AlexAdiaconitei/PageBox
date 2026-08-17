@@ -102,8 +102,12 @@ To exercise the deploy API and the panel, run the suite with an account: it issu
 deploy token through the panel, the same way a person would.
 
 ```bash
-PAGEBOX_E2E_BASE=http://127.0.0.1:3000   PAGEBOX_E2E_EMAIL=admin@example.com PAGEBOX_E2E_PASSWORD=... pnpm test
+node scripts/seed-demo.mjs     # also creates e2e-admin@example.com for the suite
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000   PAGEBOX_E2E_EMAIL=e2e-admin@example.com PAGEBOX_E2E_PASSWORD=e2e-admin-password pnpm test
 ```
+
+Point it at your own account if you prefer, but the seeded one exists so the suite never
+resets a password somebody is using.
 
 `scripts/verify-real-build.mjs` takes a token directly:
 

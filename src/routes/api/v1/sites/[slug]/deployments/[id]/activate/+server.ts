@@ -42,6 +42,6 @@ export const POST: RequestHandler = async (event) => {
 	return json(200, {
 		deploymentId: row.id,
 		previousDeploymentId: previous,
-		url: siteUrl(siteRef.basePath)
+		url: siteUrl(siteRef.basePath, event.url.port)
 	});
 };

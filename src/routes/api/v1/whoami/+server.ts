@@ -30,7 +30,7 @@ export const GET: RequestHandler = async (event) => {
 		siteId: row.id,
 		slug: row.slug,
 		basePath: row.basePath,
-		siteUrl: siteUrl(row.basePath),
+		siteUrl: siteUrl(row.basePath, event.url.port),
 		visibility: row.visibility,
 		mode: row.hostname ? 'subdomain' : 'path',
 		maxUploadBytes: config.MAX_UPLOAD_BYTES

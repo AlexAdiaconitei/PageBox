@@ -21,6 +21,9 @@ export async function startup(): Promise<void> {
 	const t0 = Date.now();
 	try {
 		if (config.PAGEBOX_MIGRATE_ON_START) {
+			// Said before the work, not after: if this step blocks, the last line printed is
+			// the one that tells you where it is stuck.
+			log('applying migrations…');
 			await runMigrations();
 			log('migrations applied');
 		}

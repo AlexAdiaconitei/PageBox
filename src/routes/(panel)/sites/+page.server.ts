@@ -8,10 +8,10 @@ import { site } from '$lib/server/db/schema';
 import { isValidSlug, newId } from '$lib/server/ids';
 import { sitesForUser } from '$lib/server/perms';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const sites = await sitesForUser(locals.user!);
 	return {
-		sites: sites.map((entry) => ({ ...entry, url: siteUrl(entry.basePath) })),
+		sites: sites.map((entry) => ({ ...entry, url: siteUrl(entry.basePath, url.port) })),
 		sitesHost: config.PAGEBOX_SITES_HOST,
 		sitesPrefix: config.PAGEBOX_SITES_PREFIX,
 		canCreate: locals.user!.role === 'superadmin'

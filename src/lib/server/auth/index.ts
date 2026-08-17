@@ -115,7 +115,26 @@ function createAuth(kind: HostKind) {
 					required: false,
 					defaultValue: false,
 					input: false
-				}
+				},
+				// The admin plugin declares `role` and `banned`, and it only runs on the admin
+				// instance — so without this the site host reads a user with neither, and a
+				// superadmin arrives as an ordinary user while a banned one arrives clean.
+				...(kind === 'admin'
+					? {}
+					: {
+							role: {
+								type: 'string',
+								required: false,
+								defaultValue: 'user',
+								input: false
+							},
+							banned: {
+								type: 'boolean',
+								required: false,
+								defaultValue: false,
+								input: false
+							}
+						})
 			}
 		},
 
