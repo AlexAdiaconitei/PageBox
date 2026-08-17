@@ -16,6 +16,7 @@ export type WarningCode =
 	| 'root-guessed'
 	| 'missing-index'
 	| 'absolute-paths'
+	| 'base-path-ok'
 	| 'generator-base-path'
 	| 'too-many-files'
 	| 'too-large'
@@ -195,27 +196,41 @@ export function preflight(input: PreflightInput): PreflightResult {
 		});
 	}
 
+	// A root-absolute reference is only wrong when it points *outside* this site. A build
+	// configured with the right base path emits /s/<slug>/… everywhere, and calling that
+	// broken is how a correct build gets told to fix itself.
 	const absolute = new Set<string>();
 	for (const html of Object.values(input.htmlSamples)) {
 		for (const reference of findAbsoluteReferences(html)) absolute.add(reference);
 	}
-	if (absolute.size > 0) {
-		const sample = [...absolute].slice(0, 3).join(', ');
+	const outside = [...absolute].filter((reference) => !reference.startsWith(input.basePath));
+	const onBasePath = absolute.size - outside.length;
+
+	if (outside.length > 0) {
 		warnings.push({
 			code: 'absolute-paths',
 			title: 'This build points at the server root',
 			detail:
-				`References like ${sample} resolve outside ${input.basePath} and will 404. ` +
-				'Rebuild with the base path below, or use relative paths.',
+				`References like ${outside.slice(0, 3).join(', ')} resolve outside ${input.basePath} ` +
+				'and will 404. Rebuild with the base path below, or use relative paths.',
 			blocking: true
 		});
-	}
 
-	if (generator) {
+		if (generator) {
+			warnings.push({
+				code: 'generator-base-path',
+				title: `${generator.label} build detected`,
+				detail: generator.fix(input.basePath),
+				blocking: false
+			});
+		}
+	} else if (onBasePath > 0) {
+		// Worth saying out loud: it is the check people most often get wrong, and knowing it
+		// passed is the difference between deploying and second-guessing the config.
 		warnings.push({
-			code: 'generator-base-path',
-			title: `${generator.label} build detected`,
-			detail: generator.fix(input.basePath),
+			code: 'base-path-ok',
+			title: `Built for ${input.basePath}`,
+			detail: `${onBasePath} reference(s) already point at this site's base path.`,
 			blocking: false
 		});
 	}

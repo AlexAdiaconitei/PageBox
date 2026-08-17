@@ -4,6 +4,7 @@
 	import CloudUpload from '@lucide/svelte/icons/cloud-upload';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Info from '@lucide/svelte/icons/info';
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import { formatBytes, preflight, type PreflightResult } from '$lib/preflight';
 
 	/**

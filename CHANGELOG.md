@@ -7,6 +7,16 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — the drop preflight called correct Next.js builds broken
+
+- A root-absolute reference is only wrong when it points outside the site. A build made
+  with the right base path emits `/s/<slug>/…` everywhere, and the preflight was flagging
+  exactly that as "this build points at the server root", with a generator hint telling it
+  to set the base path it already had.
+- References that carry the site's base path now produce a confirmation instead
+  (`Built for /s/<slug>/`), and the generator hint only appears when there is something to
+  fix. Mixed builds still block, listing only the references that are actually wrong.
+
 ### Fixed — a superadmin got 404 on private sites, and boots could hang before the first log line
 
 - The site host runs its own auth instance, without the admin plugin — so the `role` and

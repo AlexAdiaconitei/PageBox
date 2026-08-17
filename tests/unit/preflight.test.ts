@@ -73,7 +73,7 @@ describe('detectGenerator', () => {
 });
 
 describe('preflight', () => {
-	it('accepts a clean build with no warnings', () => {
+	it('accepts a build with relative references and says nothing', () => {
 		const result = run([file('index.html'), file('style.css')], {
 			'index.html': '<link href="style.css">'
 		});
@@ -101,6 +101,30 @@ describe('preflight', () => {
 		const warning = result.warnings.find((w) => w.code === 'absolute-paths');
 		expect(warning?.blocking).toBe(true);
 		expect(warning?.detail).toContain('/app.js');
+	});
+
+	// A build configured with the right base path emits /s/<slug>/… everywhere. Calling
+	// that "points at the server root" tells a correct build to fix itself.
+	it('accepts absolute references that already carry the base path', () => {
+		const result = run([file('index.html'), file('_next/static/app.js')], {
+			'index.html':
+				'<link href="/s/docs-a/_next/static/app.css"><script src="/s/docs-a/_next/static/app.js"></script>'
+		});
+		expect(result.warnings.map((w) => w.code)).not.toContain('absolute-paths');
+		expect(result.warnings.map((w) => w.code)).not.toContain('generator-base-path');
+
+		const confirmation = result.warnings.find((w) => w.code === 'base-path-ok');
+		expect(confirmation?.blocking).toBe(false);
+		expect(confirmation?.title).toContain('/s/docs-a/');
+	});
+
+	it('still blocks when only some references carry the base path', () => {
+		const result = run([file('index.html')], {
+			'index.html': '<link href="/s/docs-a/app.css"><script src="/vendor.js"></script>'
+		});
+		const warning = result.warnings.find((w) => w.code === 'absolute-paths');
+		expect(warning?.detail).toContain('/vendor.js');
+		expect(warning?.detail).not.toContain('/s/docs-a/app.css');
 	});
 
 	it('excludes junk instead of uploading it', () => {
