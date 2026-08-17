@@ -1,0 +1,23 @@
+# Only needed when PageBox is deployed as a Dokploy *Compose* stack, where "Add Domain"
+# does not create routers. With the Application/Dockerfile deployment this file is not used.
+#
+# Drop it in Dokploy's dynamic config directory (usually
+# /etc/dokploy/traefik/dynamic/pagebox.yml) and replace the two hostnames plus the
+# container name if you changed it.
+
+http:
+  routers:
+    pagebox-admin:
+      rule: 'Host(`pagebox.example.com`)'
+      entryPoints: [web]
+      service: pagebox
+    pagebox-sites:
+      rule: 'Host(`pages.example.com`)'
+      entryPoints: [web]
+      service: pagebox
+
+  services:
+    pagebox:
+      loadBalancer:
+        servers:
+          - url: 'http://pagebox-pagebox-1:3000'

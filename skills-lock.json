@@ -1,0 +1,29 @@
+{
+	"version": 1,
+	"skills": {
+		"better-auth-security-best-practices": {
+			"source": "better-auth/skills",
+			"sourceType": "github",
+			"skillPath": "security/SKILL.md",
+			"computedHash": "087c1094fa5f1834af4785c058dcc8c9abe4c1321b853883c76ea46c93a21cfe"
+		},
+		"drizzle-best-practices": {
+			"source": "honra-io/drizzle-best-practices",
+			"sourceType": "github",
+			"skillPath": "SKILL.md",
+			"computedHash": "646cfd3db3dbb28211f87112f53db3f5bfa8aea824e1d5214bcb0e09f16cb1bc"
+		},
+		"email-and-password-best-practices": {
+			"source": "better-auth/skills",
+			"sourceType": "github",
+			"skillPath": "better-auth/emailAndPassword/SKILL.md",
+			"computedHash": "7786d722fa682b3d6a99793e73a9d51b59becefa595676134a993020633e068f"
+		},
+		"multi-stage-dockerfile": {
+			"source": "github/awesome-copilot",
+			"sourceType": "github",
+			"skillPath": "skills/multi-stage-dockerfile/SKILL.md",
+			"computedHash": "698bf93a84dae18fd7bd0b1d35c21427307fde78fbdf4624be9726f5f98189ca"
+		}
+	}
+}

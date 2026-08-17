@@ -1,0 +1,26 @@
+# Dokploy "Compose" deployment: only the app, every service supplied externally
+# (Postgres from provision-pg.sh, Garage for S3, Valkey optional).
+#
+# Prefer the Application/Dockerfile route documented in deploy/dokploy.md: Compose stacks
+# in Dokploy do NOT get routed by "Add Domain" — you must write a Traefik dynamic file by
+# hand (deploy/traefik-dynamic.example.yml) and attach the app to the Traefik network.
+
+services:
+  pagebox:
+    build:
+      context: .
+    # image: ghcr.io/OWNER/pagebox:latest
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:3000/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+
+networks:
+  dokploy-network:
+    external: true

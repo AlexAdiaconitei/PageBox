@@ -1,0 +1,8 @@
+node_modules
+.svelte-kit
+build
+drizzle
+pnpm-lock.yaml
+.claude
+.agents
+*.md

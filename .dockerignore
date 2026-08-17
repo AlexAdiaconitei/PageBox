@@ -1,0 +1,14 @@
+node_modules
+.svelte-kit
+build
+.git
+.env
+.env.*
+!.env.example
+*.md
+!README.md
+tests
+.vscode
+.claude
+.agents
+skills-lock.json
