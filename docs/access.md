@@ -19,10 +19,13 @@ interface, and there is no email delivery yet. The way back is physical access t
 deployment:
 
 ```bash
-node scripts/set-password.mjs                              # restores the .env bootstrap credentials
 node scripts/set-password.mjs --email you@example.com --password "…"
 node scripts/set-password.mjs --email you@example.com --password "…" --keep
+node scripts/set-password.mjs --from-env    # put the .env bootstrap credentials back
 ```
+
+The `.env` fallback needs `--from-env`: run by accident it replaces a password its owner
+chose, which is a bad thing for a recovery tool to do quietly.
 
 It revokes every session of that account, and flags the password as one that must be
 changed at next sign-in — a password typed on a command line has been in a shell history.

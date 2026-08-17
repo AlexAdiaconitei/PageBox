@@ -6,9 +6,12 @@
  * password, those variables are inert and a forgotten password has no way back. There is
  * no email delivery yet, so this is the way back: physical access to the deployment.
  *
- *   node scripts/set-password.mjs                          # restores the .env bootstrap credentials
  *   node scripts/set-password.mjs --email a@b.com --password "…"
  *   node scripts/set-password.mjs --email a@b.com --password "…" --keep   # do not force a change
+ *   node scripts/set-password.mjs --from-env    # put the .env bootstrap credentials back
+ *
+ * The .env fallback is behind --from-env on purpose: run by accident, it silently replaces
+ * whatever password the account's owner had chosen.
  *
  * The account is flagged `must_change_password` unless --keep is given: a password typed
  * on a command line has been in a shell history.
@@ -28,13 +31,14 @@ const env = { ...readEnvFile('.env'), ...readEnvFile('.env.local'), ...process.e
 const DATABASE_URL =
 	env.DATABASE_URL_HOST ?? env.DATABASE_URL?.replace('@postgres:', '@127.0.0.1:');
 
-const email = (argOf('email', env.BOOTSTRAP_ADMIN_EMAIL) ?? '').toLowerCase();
-const password = argOf('password', env.BOOTSTRAP_ADMIN_PASSWORD);
+const fromEnv = args.includes('--from-env');
+const email = (argOf('email', fromEnv ? env.BOOTSTRAP_ADMIN_EMAIL : null) ?? '').toLowerCase();
+const password = argOf('password', fromEnv ? env.BOOTSTRAP_ADMIN_PASSWORD : null);
 const keep = args.includes('--keep');
 
 if (!DATABASE_URL) fail('no DATABASE_URL — set it in .env, .env.local or the environment');
-if (!email) fail('no --email and no BOOTSTRAP_ADMIN_EMAIL to fall back on');
-if (!password) fail('no --password and no BOOTSTRAP_ADMIN_PASSWORD to fall back on');
+if (!email) fail('--email is required (or --from-env to use BOOTSTRAP_ADMIN_EMAIL)');
+if (!password) fail('--password is required (or --from-env to use BOOTSTRAP_ADMIN_PASSWORD)');
 if (password.length < 10) fail('use at least 10 characters');
 
 const sql = postgres(DATABASE_URL, { max: 2, onnotice: () => {} });
