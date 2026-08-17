@@ -23,7 +23,7 @@ const sitesHost = process.env.PAGEBOX_E2E_SITES_HOST ?? 'pages.localhost';
 const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-host';
 
 if (!token) {
-	console.error('PAGEBOX_E2E_TOKEN is required (scripts/create-deploy-token.mjs)');
+	console.error('PAGEBOX_E2E_TOKEN is required — issue one from the site page in the panel');
 	process.exit(1);
 }
 

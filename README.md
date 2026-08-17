@@ -88,11 +88,16 @@ PAGEBOX_E2E_BASE=http://127.0.0.1:3000 pnpm test
 `scripts/seed-demo.mjs --dir path/to/dist` publishes a real build instead of the generated
 one. Both read `.env`, rewriting the compose hostnames to localhost.
 
-To exercise the deploy API instead, issue a token and run the whole suite:
+To exercise the deploy API and the panel, run the suite with an account: it issues its own
+deploy token through the panel, the same way a person would.
 
 ```bash
-node scripts/create-deploy-token.mjs --site demo-api --name e2e
-PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_... pnpm test
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000   PAGEBOX_E2E_EMAIL=admin@example.com PAGEBOX_E2E_PASSWORD=... pnpm test
+```
+
+`scripts/verify-real-build.mjs` takes a token directly:
+
+```bash
 PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_... node scripts/verify-real-build.mjs
 ```
 

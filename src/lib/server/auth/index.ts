@@ -1,14 +1,15 @@
 import { getRequestEvent } from '$app/server';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { apiKey } from '@better-auth/api-key';
 import { admin } from 'better-auth/plugins/admin';
 import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getConfig, type HostKind } from '../config';
 import { db } from '../db';
-import { account, session, user, verification } from '../db/schema';
-import { newId } from '../ids';
+import { account, apikey, rateLimit, session, user, verification } from '../db/schema';
+import { newId, TOKEN_PREFIX } from '../ids';
 import { lazy } from '../lazy';
 
 /**
@@ -58,7 +59,7 @@ function createAuth(kind: HostKind) {
 
 		database: drizzleAdapter(db, {
 			provider: 'pg',
-			schema: { user, session, account, verification }
+			schema: { user, session, account, verification, apikey, rateLimit }
 		}),
 
 		emailAndPassword: {
@@ -91,6 +92,9 @@ function createAuth(kind: HostKind) {
 		},
 
 		advanced: {
+			// The rate limiter and the session rows record the caller's address, and behind
+			// Traefik or a tunnel the socket address is the proxy's.
+			ipAddress: { ipAddressHeaders: ['x-forwarded-for', 'cf-connecting-ip'] },
 			// Yields `pb_admin.session_token` / `pb_view.session_token`, both host-only:
 			// no Domain attribute, so neither travels to any other subdomain.
 			cookiePrefix: kind === 'admin' ? 'pb_admin' : 'pb_view',
@@ -106,14 +110,25 @@ function createAuth(kind: HostKind) {
 			}
 		},
 
+		// better-auth's own limiter, which is why sign-in goes through `auth.handler`
+		// instead of `auth.api` (see signIn in auth/credentials.ts): the limiter lives in
+		// the handler pipeline, so calling the endpoint function directly skips it.
+		//
+		// Counters live in Postgres: a restart must not hand an attacker a fresh budget,
+		// and replicas have to share one window.
 		rateLimit: {
 			enabled: true,
+			storage: 'database',
+			modelName: 'rateLimit',
 			window: 60,
-			max: 60,
+			max: 120,
 			customRules: {
-				// Password guessing is the attack this endpoint has.
-				'/sign-in/email': { window: 300, max: 10 },
-				'/change-password': { window: 300, max: 10 }
+				// Password guessing is the attack these endpoints have.
+				'/sign-in/email': { window: config.LOGIN_WINDOW_SECONDS, max: config.LOGIN_MAX_ATTEMPTS },
+				'/change-password': {
+					window: config.LOGIN_WINDOW_SECONDS,
+					max: config.LOGIN_MAX_ATTEMPTS
+				}
 			}
 		},
 
@@ -121,6 +136,23 @@ function createAuth(kind: HostKind) {
 			kind === 'admin'
 				? [
 						admin({ ac, roles, adminRoles: ['superadmin'], defaultRole: 'user' }),
+						// Deploy tokens. The plugin owns generation, hashing, expiry,
+						// enable/disable and per-key throttling; PageBox only records which
+						// site a key may deploy to, in its metadata.
+						apiKey({
+							defaultPrefix: TOKEN_PREFIX,
+							defaultKeyLength: 40,
+							enableMetadata: true,
+							// A deploy token must never turn into a panel session: it is held
+							// by CI, not by a person.
+							enableSessionForAPIKeys: false,
+							storage: 'database',
+							rateLimit: {
+								enabled: true,
+								timeWindow: config.API_KEY_WINDOW_SECONDS * 1000,
+								maxRequests: config.API_KEY_MAX_REQUESTS
+							}
+						}),
 						sveltekitCookies(getRequestEvent)
 					]
 				: [sveltekitCookies(getRequestEvent)]

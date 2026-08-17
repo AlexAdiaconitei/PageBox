@@ -68,6 +68,11 @@ const schema = z.object({
 	LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
 	LOGIN_WINDOW_SECONDS: z.coerce.number().int().positive().default(300),
 
+	// Per deploy token, enforced by the api-key plugin on every verification. A CI job
+	// uploads a handful of times an hour; this only stops a leaked token being useful.
+	API_KEY_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
+	API_KEY_WINDOW_SECONDS: z.coerce.number().int().positive().default(3600),
+
 	// --- startup tasks -------------------------------------------------------
 	PAGEBOX_MIGRATE_ON_START: z.stringbool().default(true),
 	PAGEBOX_ENSURE_BUCKET_ON_START: z.stringbool().default(true),

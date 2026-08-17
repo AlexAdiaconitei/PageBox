@@ -1,17 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
 
 /**
  * Deploy API against a running stack.
  *
- *   docker compose up -d
- *   node scripts/seed-demo.mjs
- *   node scripts/create-deploy-token.mjs --site demo-api --name e2e
- *   PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_... pnpm test
+ *   docker compose up -d && node scripts/seed-demo.mjs
+ *   PAGEBOX_E2E_BASE=http://127.0.0.1:3000  *   PAGEBOX_E2E_EMAIL=admin@example.com PAGEBOX_E2E_PASSWORD=... pnpm test
+ *
+ * The token is issued through the panel, the same path a person would use. Set
+ * PAGEBOX_E2E_TOKEN to bring your own instead.
  */
 
 const base = process.env.PAGEBOX_E2E_BASE;
-const token = process.env.PAGEBOX_E2E_TOKEN;
+const adminEmail = process.env.PAGEBOX_E2E_EMAIL;
+const adminPassword = process.env.PAGEBOX_E2E_PASSWORD;
+let token = process.env.PAGEBOX_E2E_TOKEN;
 const adminHost = process.env.PAGEBOX_E2E_ADMIN_HOST ?? 'pagebox.localhost';
 const sitesHost = process.env.PAGEBOX_E2E_SITES_HOST ?? 'pages.localhost';
 // Its own site: these tests replace the active deployment repeatedly, and the serving
@@ -19,15 +22,15 @@ const sitesHost = process.env.PAGEBOX_E2E_SITES_HOST ?? 'pages.localhost';
 const slug = process.env.PAGEBOX_E2E_API_SLUG ?? `${process.env.PAGEBOX_E2E_SLUG ?? 'demo'}-api`;
 const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-host';
 
-const run = base && token ? describe : describe.skip;
+const run = base && (token || (adminEmail && adminPassword)) ? describe : describe.skip;
 
-const api = (path: string, init: RequestInit = {}, bearer: string | null = token!) =>
+const api = (path: string, init: RequestInit = {}, bearer: string | null | undefined = undefined) =>
 	fetch(`${base}/api/v1${path}`, {
 		...init,
 		redirect: 'manual',
 		headers: {
 			[hostHeader]: adminHost,
-			...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
+			...(bearer === null ? {} : { authorization: `Bearer ${bearer ?? token}` }),
 			...(init.headers ?? {})
 		}
 	});
@@ -54,7 +57,46 @@ const upload = (body: Uint8Array, query = '') =>
 		body: body as unknown as BodyInit
 	});
 
+/** Issues a deploy token the way the panel does, so the tested path is the real one. */
+async function issueToken(): Promise<string> {
+	const cookies = new Map<string, string>();
+	const remember = (res: Response) => {
+		for (const raw of res.headers.getSetCookie()) {
+			const [pair] = raw.split(';');
+			const index = pair.indexOf('=');
+			cookies.set(pair.slice(0, index).trim(), pair.slice(index + 1).trim());
+		}
+	};
+	const panel = (path: string, form?: Record<string, string>) =>
+		fetch(`${base}${path}`, {
+			method: form ? 'POST' : 'GET',
+			redirect: 'manual',
+			headers: {
+				[hostHeader]: adminHost,
+				'x-forwarded-proto': 'http',
+				'x-forwarded-for': '198.51.100.13',
+				origin: `http://${adminHost}`,
+				cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join('; '),
+				...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {})
+			},
+			body: form ? new URLSearchParams(form).toString() : undefined
+		});
+
+	remember(await panel('/login', { email: adminEmail!, password: adminPassword! }));
+	const created = await panel(`/sites/${slug}?/createToken`, {
+		name: 'integration',
+		expiresInDays: '0'
+	});
+	const issued = /pbx_[A-Za-z0-9_-]+/.exec(await created.text())?.[0];
+	if (!issued) throw new Error('the panel did not return a deploy token');
+	return issued;
+}
+
 run('deploy API', () => {
+	beforeAll(async () => {
+		token ??= await issueToken();
+	});
+
 	it('tells CI which base path to build for', async () => {
 		const res = await api('/whoami');
 		expect(res.status).toBe(200);

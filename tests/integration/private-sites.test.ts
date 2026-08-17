@@ -54,6 +54,7 @@ function request(
 	const base_headers: Record<string, string> = {
 		[hostHeader]: host,
 		'x-forwarded-proto': 'http',
+		'x-forwarded-for': '198.51.100.12',
 		origin: `http://${host}`,
 		...headers
 	};

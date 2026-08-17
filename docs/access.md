@@ -84,20 +84,39 @@ failure this design has.
 
 ## Throttling
 
-Sign-in and password change count failed attempts per IP and per account: ten per five
-minutes by default, `LOGIN_MAX_ATTEMPTS` and `LOGIN_WINDOW_SECONDS` to change it — raise
-the count for a team that shares one public address. Successful sign-ins never count
-against the limit.
+better-auth's own rate limiter does the work, with counters in Postgres (`rate_limit`) so
+a restart does not hand an attacker a fresh budget and replicas share one window.
 
-better-auth's own rate limiter is not in play here: it lives in its HTTP handler, and
-PageBox calls the auth API directly so the site host does not expose better-auth's routes.
+| What | Default | Setting |
+| --- | --- | --- |
+| sign-in and password change | 10 attempts / 5 min per IP | `LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_SECONDS` |
+| every other auth endpoint | 120 / min per IP | — |
+| a deploy token | 120 calls / hour per key | `API_KEY_MAX_REQUESTS`, `API_KEY_WINDOW_SECONDS` |
+
+The limiter lives in better-auth's handler pipeline, not in its endpoint functions, so
+PageBox sends credential calls *through the handler* in-process
+(`src/lib/server/auth/credentials.ts`) instead of calling `auth.api.signInEmail`. Calling
+the endpoint directly, which is the obvious way to write it, silently skips throttling —
+a loop against the login form was answered unlimited until this was fixed.
+
+Deploy tokens are throttled by the api-key plugin itself, on every verification, and the
+limit is stored on the key. A token over its limit gets `429`, never `401`: a CI job
+should retry, not rotate its credentials.
+
+**The proxy must send `X-Forwarded-For`.** The limiter refuses to trust a socket address
+behind a proxy, so without that header every caller shares one bucket and a single
+attacker can lock everyone out of sign-in. Traefik and Cloudflare set it; a bare
+`docker run -p` does not.
 
 ## Deploy tokens
 
-Issued per site from the site's page, or unscoped from the command line
-(`scripts/create-deploy-token.mjs`). Only the sha256 is stored; the plaintext is shown once
-and cannot be recovered, only reissued. Every token shows its prefix and when it was last
-used, and can be revoked at any time.
+Deploy tokens are [better-auth api keys](https://better-auth.com/docs/plugins/api-key):
+the plugin owns generation, hashing, expiry, enable/disable and per-key throttling. PageBox
+adds one thing — which site a key may deploy to, stored in the key's metadata.
+
+Issue one from the site's page in the panel. The plaintext is shown once and only a hash is
+kept, so a lost token is reissued, never recovered. The table shows the first characters of
+each key, when it was last used and how many calls it has made; revoking deletes the key.
 
 Tokens bypass the cookie session entirely, which is why the API is exempt from the CSRF
 check: a bearer call cannot be made by a browser carrying somebody else's session.

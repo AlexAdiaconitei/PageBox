@@ -128,31 +128,6 @@ export const siteGrant = pgTable(
 	]
 );
 
-export const deployToken = pgTable(
-	'deploy_token',
-	{
-		id: t.text('id').primaryKey(),
-		/** null = valid for every site the creator can deploy to. */
-		siteId: t.text('site_id').references(() => site.id, { onDelete: 'cascade' }),
-		name: t.text('name').notNull(),
-		/** sha256 of the token; the plaintext is shown once and never stored. */
-		tokenHash: t.text('token_hash').notNull(),
-		/** First characters of the token, to identify it in the UI. */
-		prefix: t.text('prefix').notNull(),
-		createdByUserId: t.text('created_by_user_id').references(() => user.id, {
-			onDelete: 'set null'
-		}),
-		lastUsedAt: t.timestamp('last_used_at', { withTimezone: true }),
-		expiresAt: t.timestamp('expires_at', { withTimezone: true }),
-		revokedAt: t.timestamp('revoked_at', { withTimezone: true }),
-		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-	},
-	(table) => [
-		t.uniqueIndex('deploy_token_hash_key').on(table.tokenHash),
-		t.index('deploy_token_site_idx').on(table.siteId)
-	]
-);
-
 export const auditLog = pgTable(
 	'audit_log',
 	{

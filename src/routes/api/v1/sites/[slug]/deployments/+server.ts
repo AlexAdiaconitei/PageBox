@@ -31,7 +31,7 @@ export const POST: RequestHandler = async (event) => {
 	const outcome = await ingestDeployment({
 		body: event.request.body,
 		siteRef,
-		actor: { tokenId: auth.tokenId, userId: auth.createdByUserId },
+		actor: { tokenId: auth.tokenId, userId: auth.ownerUserId || null },
 		source: 'api',
 		notes: event.request.headers.get('x-deployment-notes'),
 		activate

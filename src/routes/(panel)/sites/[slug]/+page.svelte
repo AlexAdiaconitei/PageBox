@@ -228,7 +228,14 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 		{#if data.tokens.length > 0}
 			<table class="table mb-4">
 				<thead>
-					<tr><th>Name</th><th>Prefix</th><th>Last used</th><th>Expires</th><th></th></tr>
+					<tr>
+						<th>Name</th>
+						<th>Starts with</th>
+						<th>Last used</th>
+						<th class="num">Requests</th>
+						<th>Expires</th>
+						<th></th>
+					</tr>
 				</thead>
 				<tbody>
 					{#each data.tokens as token (token.id)}
@@ -236,6 +243,7 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 							<td>{token.name}</td>
 							<td class="mono text-muted">{token.prefix}…</td>
 							<td class="text-muted">{when(token.lastUsedAt)}</td>
+							<td class="num text-muted">{token.requestCount}</td>
 							<td class="text-muted">{token.expiresAt ? when(token.expiresAt) : 'never'}</td>
 							<td class="num">
 								<form method="POST" action="?/revokeToken">

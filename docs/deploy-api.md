@@ -3,18 +3,13 @@
 Lives on the admin host, under `/api/v1`. Authentication is a bearer deploy token; the
 site host never exposes any of it.
 
-Issue a token from the site's page in the panel, or from the command line when you want an
-unscoped one (or have no panel session at hand):
+Issue a token from the site's page in the panel. It is shown once and stored only as a
+hash, so a lost token is reissued, never recovered. A token scoped to one site cannot see
+or touch another: it gets a 404, the same answer as a slug that does not exist.
 
-```bash
-node scripts/create-deploy-token.mjs --site docs-a --name "github actions"
-# node scripts/create-deploy-token.mjs --name "all sites"     # unscoped
-# --expires-in-days 90
-```
-
-The token is printed once. Only its sha256 is stored, so a lost token is reissued, never
-recovered. A token scoped to one site cannot see or touch another: it gets a 404, the same
-answer as a slug that does not exist.
+Tokens are better-auth api keys, so each one is rate limited on its own: 120 calls an hour
+by default (`API_KEY_MAX_REQUESTS`, `API_KEY_WINDOW_SECONDS`). Over the limit the API
+answers `429` — retry, do not rotate the token.
 
 ## Ask for your base path, then build
 
@@ -80,6 +75,9 @@ Rejections come back as `400` with a `reason`, or `413` when the body is over
 | `ratio`          | compression ratio over `MAX_ZIP_RATIO`:1 — treated as a bomb    |
 | `empty`          | the archive holds no files                                      |
 | `unreadable`     | not a zip, or corrupt                                           |
+
+`401` means the token is unknown, disabled or expired. `429` means this token has made too
+many calls in its window.
 
 ## The rest
 

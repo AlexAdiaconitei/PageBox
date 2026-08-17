@@ -48,7 +48,11 @@ function request(
 		origin?: string | null;
 	} = {}
 ) {
-	const headers: Record<string, string> = { [hostHeader]: host, 'x-forwarded-proto': 'http' };
+	const headers: Record<string, string> = {
+		[hostHeader]: host,
+		'x-forwarded-proto': 'http',
+		'x-forwarded-for': '198.51.100.11'
+	};
 	if (jar && jar.size) headers.cookie = cookieHeader(jar);
 	if (form) headers['content-type'] = 'application/x-www-form-urlencoded';
 	if (origin !== null) headers.origin = origin ?? `http://${host}`;

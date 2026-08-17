@@ -1,24 +1,24 @@
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import type { RequestEvent } from '@sveltejs/kit';
-import { db } from '../db';
-import { deployToken } from '../db/schema';
-import { hashToken, TOKEN_PREFIX } from '../ids';
+import { adminAuth } from '../auth';
+import { TOKEN_PREFIX } from '../ids';
 
 /**
- * Bearer authentication for the deploy API.
+ * Bearer authentication for the deploy API, backed by the `@better-auth/api-key` plugin.
  *
- * Tokens are stored as sha256 only, so the lookup is by hash — there is nothing to leak
- * from the table and nothing to compare in constant time beyond the hash itself.
+ * Verification is one call: the plugin checks the hash, whether the key is enabled, its
+ * expiry and its own rate limit, and records the request. Nothing about key storage or
+ * throttling is reimplemented here — the only PageBox-specific part is which site a key
+ * may deploy to, which lives in its metadata.
  */
 
 export type TokenAuth = {
 	tokenId: string;
-	/** null = the token may deploy to any site. */
+	/** null = the token may deploy to any site its owner can. */
 	siteId: string | null;
-	createdByUserId: string | null;
+	ownerUserId: string;
 };
 
-export type AuthFailure = { status: 401 | 403; message: string };
+export type AuthFailure = { status: 401 | 429; message: string };
 
 export async function authenticateToken(
 	event: RequestEvent
@@ -33,30 +33,39 @@ export async function authenticateToken(
 		return { error: { status: 401, message: 'invalid token' } };
 	}
 
-	const now = new Date();
-	const [row] = await db
-		.select()
-		.from(deployToken)
-		.where(
-			and(
-				eq(deployToken.tokenHash, hashToken(token)),
-				isNull(deployToken.revokedAt),
-				or(isNull(deployToken.expiresAt), gt(deployToken.expiresAt, now))
-			)
-		)
-		.limit(1);
-
-	if (!row) return { error: { status: 401, message: 'invalid token' } };
-
-	// Best-effort: a failed touch must not fail the deploy.
-	db.update(deployToken)
-		.set({ lastUsedAt: now })
-		.where(eq(deployToken.id, row.id))
-		.catch((err: unknown) => console.error('[pagebox] token touch failed:', err));
+	const result = await adminAuth.api.verifyApiKey({ body: { key: token } });
+	if (!result.valid || !result.key) {
+		// The plugin distinguishes an unknown key from one that has been used too often;
+		// everything else collapses into the same answer.
+		const code = result.error?.code;
+		return code === 'RATE_LIMITED' || code === 'RATE_LIMIT_EXCEEDED'
+			? { error: { status: 429, message: 'too many requests for this token' } }
+			: { error: { status: 401, message: 'invalid token' } };
+	}
 
 	return {
-		auth: { tokenId: row.id, siteId: row.siteId, createdByUserId: row.createdByUserId }
+		auth: {
+			tokenId: result.key.id,
+			siteId: siteIdOf(result.key.metadata),
+			ownerUserId: result.key.referenceId ?? ''
+		}
 	};
+}
+
+/** Metadata comes back parsed or as a JSON string depending on the storage path. */
+function siteIdOf(metadata: unknown): string | null {
+	if (!metadata) return null;
+	const parsed = typeof metadata === 'string' ? safeParse(metadata) : metadata;
+	const siteId = (parsed as { siteId?: unknown } | null)?.siteId;
+	return typeof siteId === 'string' && siteId.length > 0 ? siteId : null;
+}
+
+function safeParse(value: string): unknown {
+	try {
+		return JSON.parse(value);
+	} catch {
+		return null;
+	}
 }
 
 /** A token scoped to one site may not touch another. */

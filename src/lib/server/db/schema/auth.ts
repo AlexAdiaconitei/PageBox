@@ -96,3 +96,58 @@ export const verification = pgTable(
 	},
 	(table) => [t.index('verification_identifier_idx').on(table.identifier)]
 );
+
+/**
+ * `@better-auth/api-key` table. PageBox deploy tokens are api keys: the plugin owns
+ * generation, hashing, expiry, enable/disable and per-key rate limiting, so none of that
+ * is reimplemented here. Which site a key may deploy to lives in `metadata`.
+ */
+export const apikey = pgTable(
+	'apikey',
+	{
+		id: t.text('id').primaryKey(),
+		configId: t.text('config_id').notNull().default('default'),
+		name: t.text('name'),
+		/** First characters of the key, kept to identify it in the UI. */
+		start: t.text('start'),
+		prefix: t.text('prefix'),
+		/** Hashed by the plugin; the plaintext exists only in the response that created it. */
+		key: t.text('key').notNull(),
+		/** Owner — the user who issued the key. */
+		referenceId: t.text('reference_id').notNull(),
+
+		refillInterval: t.integer('refill_interval'),
+		refillAmount: t.integer('refill_amount'),
+		lastRefillAt: t.timestamp('last_refill_at', { withTimezone: true }),
+
+		enabled: t.boolean('enabled').notNull().default(true),
+		rateLimitEnabled: t.boolean('rate_limit_enabled').notNull().default(true),
+		rateLimitTimeWindow: t.integer('rate_limit_time_window'),
+		rateLimitMax: t.integer('rate_limit_max'),
+		requestCount: t.integer('request_count').notNull().default(0),
+		remaining: t.integer('remaining'),
+		lastRequest: t.timestamp('last_request', { withTimezone: true }),
+
+		expiresAt: t.timestamp('expires_at', { withTimezone: true }),
+		permissions: t.text('permissions'),
+		metadata: t.text('metadata'),
+
+		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: t.timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(table) => [
+		t.index('apikey_reference_idx').on(table.referenceId),
+		t.index('apikey_start_idx').on(table.start)
+	]
+);
+
+/**
+ * better-auth's rate limit counters. Stored in Postgres rather than in memory so a restart
+ * does not hand an attacker a fresh budget, and so replicas share one window.
+ */
+export const rateLimit = pgTable('rate_limit', {
+	id: t.text('id').primaryKey(),
+	key: t.text('key').notNull(),
+	count: t.integer('count').notNull().default(0),
+	lastRequest: t.bigint('last_request', { mode: 'number' })
+});

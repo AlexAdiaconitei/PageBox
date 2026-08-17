@@ -5,7 +5,7 @@ import { audit } from '$lib/server/audit';
 import { adminUrl, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
 import {
-	deployToken,
+	apikey,
 	deployment,
 	group,
 	site,
@@ -13,11 +13,24 @@ import {
 	user,
 	type SiteRole
 } from '$lib/server/db/schema';
+import { adminAuth } from '$lib/server/auth';
 import { activate } from '$lib/server/deploy/ingest';
-import { newDeployToken, newId } from '$lib/server/ids';
+import { newId } from '$lib/server/ids';
 import { atLeast, permissionFor } from '$lib/server/perms';
 import { deletePrefix, deploymentPrefix } from '$lib/server/s3';
 import { invalidateSite, lookupSiteBySlug } from '$lib/server/sites/resolve';
+
+/** Which site a deploy token is scoped to, as stored by the api-key plugin. */
+function metadataSiteId(metadata: unknown): string | null {
+	if (!metadata) return null;
+	try {
+		const parsed = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+		const siteId = (parsed as { siteId?: unknown }).siteId;
+		return typeof siteId === 'string' ? siteId : null;
+	} catch {
+		return null;
+	}
+}
 
 /** Loads the site and the caller's permission on it, or 404 if they may not see it. */
 async function loadSite(slug: string, sessionUser: App.Locals['user']) {
@@ -48,11 +61,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		.where(eq(siteGrant.siteId, siteRef.id))
 		.orderBy(siteGrant.createdAt);
 
-	const tokens = await db
-		.select()
-		.from(deployToken)
-		.where(and(eq(deployToken.siteId, siteRef.id), isNull(deployToken.revokedAt)))
-		.orderBy(desc(deployToken.createdAt));
+	// Deploy tokens are api keys; the one scoped to this site carries its id in metadata.
+	const tokens = (
+		await db.select().from(apikey).where(eq(apikey.enabled, true)).orderBy(desc(apikey.createdAt))
+	).filter((row) => metadataSiteId(row.metadata) === siteRef.id);
 
 	const users = await db
 		.select({ id: user.id, email: user.email, name: user.name })
@@ -98,10 +110,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		})),
 		tokens: tokens.map((entry) => ({
 			id: entry.id,
-			name: entry.name,
-			prefix: entry.prefix,
-			lastUsedAt: entry.lastUsedAt,
+			name: entry.name ?? 'deploy token',
+			prefix: entry.start ?? entry.prefix ?? '',
+			lastUsedAt: entry.lastRequest,
 			expiresAt: entry.expiresAt,
+			requestCount: entry.requestCount,
 			createdAt: entry.createdAt
 		})),
 		users,
@@ -238,16 +251,15 @@ export const actions: Actions = {
 		const name = String(data.get('name') ?? '').trim() || 'deploy token';
 		const days = Number(data.get('expiresInDays') ?? 0);
 
-		const { token, hash, prefix } = newDeployToken();
-		const id = newId();
-		await db.insert(deployToken).values({
-			id,
-			siteId: siteRef.id,
-			name,
-			tokenHash: hash,
-			prefix,
-			createdByUserId: locals.user!.id,
-			expiresAt: days > 0 ? new Date(Date.now() + days * 86_400_000) : null
+		const created = await adminAuth.api.createApiKey({
+			body: {
+				name,
+				userId: locals.user!.id,
+				// Scope: the token may only deploy to this site (see api/auth.ts).
+				metadata: { siteId: siteRef.id, siteSlug: siteRef.slug },
+				expiresIn: days > 0 ? days * 86_400 : null
+			},
+			headers: request.headers
 		});
 
 		await audit({
@@ -255,12 +267,12 @@ export const actions: Actions = {
 			actorUserId: locals.user!.id,
 			targetType: 'site',
 			targetId: siteRef.id,
-			meta: { tokenId: id, name, expiresInDays: days || null }
+			meta: { tokenId: created.id, name, expiresInDays: days || null }
 		});
 
-		// The only time the plaintext exists. It is returned to this one response and
-		// never stored: a lost token is reissued, not recovered.
-		return { token, tokenName: name };
+		// The only time the plaintext exists: the plugin stores a hash. A lost token is
+		// reissued, never recovered.
+		return { token: created.key, tokenName: name };
 	},
 
 	revokeToken: async ({ locals, params, request }) => {
@@ -269,15 +281,13 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const id = String(data.get('tokenId') ?? '');
-		await db
-			.update(deployToken)
-			.set({ revokedAt: new Date() })
-			.where(
-				and(
-					eq(deployToken.id, id),
-					or(eq(deployToken.siteId, siteRef.id), isNull(deployToken.siteId))
-				)
-			);
+
+		// Only keys belonging to this site may be revoked from this page.
+		const [row] = await db.select().from(apikey).where(eq(apikey.id, id)).limit(1);
+		if (!row || metadataSiteId(row.metadata) !== siteRef.id) {
+			return fail(404, { message: 'That token is not on this site' });
+		}
+		await adminAuth.api.deleteApiKey({ body: { keyId: id }, headers: request.headers });
 
 		await audit({
 			action: 'token.revoked',

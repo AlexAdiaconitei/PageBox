@@ -7,6 +7,23 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Changed — deploy tokens and throttling now come from better-auth
+
+- Deploy tokens are `@better-auth/api-key` keys: generation, hashing, expiry,
+  enable/disable and per-key rate limiting are the plugin's, and PageBox only records which
+  site a key may deploy to, in the key's metadata. The `deploy_token` table is gone;
+  `apikey` replaces it.
+- A token over its own limit gets `429` instead of `401`, so a CI job retries rather than
+  rotating credentials.
+- Sign-in and password change go through better-auth's HTTP handler in-process, which is
+  where its rate limiter lives — calling the endpoint functions directly skipped it. The
+  hand-written limiter added in M4 is gone.
+- Rate limit counters live in Postgres (`rate_limit`), so a restart does not reset them and
+  replicas share one window. The proxy must send `X-Forwarded-For`, or every caller shares
+  one bucket.
+- `scripts/create-deploy-token.mjs` is removed: tokens are issued from the panel, which is
+  also the path the tests now exercise.
+
 ### Added — M4: private sites
 
 - Private sites are authorised per file, HTML and assets alike, against the reader's
