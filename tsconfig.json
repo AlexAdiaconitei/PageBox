@@ -11,7 +11,11 @@
 		"sourceMap": true,
 		"strict": true,
 		"moduleResolution": "bundler"
-	}
+	},
+	// Fixture builds are generator output, not project code: type-checking them says
+	// nothing about PageBox. (Extending `include`/`exclude` here overrides the generated
+	// config's, so node_modules is repeated on purpose.)
+	"exclude": ["node_modules/**", "tests/fixtures/**"]
 	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
 	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
 	//
