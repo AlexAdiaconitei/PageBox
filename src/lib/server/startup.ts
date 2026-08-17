@@ -7,6 +7,7 @@ import { account, user } from './db/schema';
 import { newId } from './ids';
 import { ensureBucket } from './s3';
 import { cache } from './cache';
+import { startSweeper } from './deploy/cleanup';
 
 /**
  * Everything that must be true before the first request is served.
@@ -30,6 +31,9 @@ export async function startup(): Promise<void> {
 		}
 
 		await bootstrapAdmin();
+
+		// Sweeps deployments whose upload died mid-flight, now and once an hour.
+		startSweeper();
 
 		log(
 			`ready in ${Date.now() - t0}ms · admin=${config.PAGEBOX_ADMIN_HOST} ` +
