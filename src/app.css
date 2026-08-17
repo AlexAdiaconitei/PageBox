@@ -1,22 +1,323 @@
 @import 'tailwindcss';
 
-@theme {
-	--color-ink: oklch(0.22 0.02 260);
-	--color-paper: oklch(0.98 0.005 260);
-	--font-sans:
-		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Inter, Helvetica, Arial, sans-serif;
-	--font-mono: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
-}
+/**
+ * PageBox panel — an operator console, not a marketing surface.
+ *
+ * The screens are lists of deployments, grants and tokens: things with ids, sizes,
+ * timestamps and states. So the design is built around dense tables with hairline rules,
+ * monospace for anything the user will copy (slugs, ULIDs, paths, tokens), and exactly one
+ * accent colour, spent only on the state that matters — which deployment is live.
+ * Everything else stays neutral so that colour keeps meaning something.
+ */
 
-html {
-	background: var(--color-paper);
-	color: var(--color-ink);
-	font-family: var(--font-sans);
+:root {
+	--pb-page: oklch(0.985 0.002 250);
+	--pb-rail: oklch(0.955 0.003 250);
+	--pb-panel: oklch(1 0 0);
+	--pb-ink: oklch(0.22 0.012 260);
+	--pb-muted: oklch(0.52 0.012 260);
+	--pb-faint: oklch(0.66 0.01 260);
+	--pb-line: oklch(0.22 0.012 260 / 0.11);
+	--pb-line-soft: oklch(0.22 0.012 260 / 0.06);
+	--pb-accent: oklch(0.55 0.11 172);
+	--pb-accent-ink: oklch(0.99 0 0);
+	--pb-accent-soft: oklch(0.55 0.11 172 / 0.12);
+	--pb-danger: oklch(0.53 0.19 25);
+	--pb-danger-soft: oklch(0.53 0.19 25 / 0.1);
+	--pb-warn: oklch(0.62 0.13 70);
 }
 
 @media (prefers-color-scheme: dark) {
-	html {
-		background: oklch(0.18 0.015 260);
-		color: oklch(0.93 0.01 260);
+	:root {
+		--pb-page: oklch(0.19 0.008 260);
+		--pb-rail: oklch(0.165 0.008 260);
+		--pb-panel: oklch(0.215 0.008 260);
+		--pb-ink: oklch(0.93 0.006 260);
+		--pb-muted: oklch(0.7 0.012 260);
+		--pb-faint: oklch(0.58 0.012 260);
+		--pb-line: oklch(1 0 0 / 0.1);
+		--pb-line-soft: oklch(1 0 0 / 0.06);
+		--pb-accent: oklch(0.74 0.13 172);
+		--pb-accent-ink: oklch(0.17 0.02 172);
+		--pb-accent-soft: oklch(0.74 0.13 172 / 0.16);
+		--pb-danger: oklch(0.68 0.16 25);
+		--pb-danger-soft: oklch(0.68 0.16 25 / 0.14);
+		--pb-warn: oklch(0.78 0.12 75);
+	}
+}
+
+@theme inline {
+	--color-page: var(--pb-page);
+	--color-rail: var(--pb-rail);
+	--color-panel: var(--pb-panel);
+	--color-ink: var(--pb-ink);
+	--color-muted: var(--pb-muted);
+	--color-faint: var(--pb-faint);
+	--color-line: var(--pb-line);
+	--color-line-soft: var(--pb-line-soft);
+	--color-accent: var(--pb-accent);
+	--color-accent-ink: var(--pb-accent-ink);
+	--color-accent-soft: var(--pb-accent-soft);
+	--color-danger: var(--pb-danger);
+	--color-danger-soft: var(--pb-danger-soft);
+	--color-warn: var(--pb-warn);
+
+	--font-sans:
+		'Inter var', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono:
+		'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
+}
+
+html {
+	background: var(--pb-page);
+	color: var(--pb-ink);
+	font-family: var(--font-sans);
+	font-size: 15px;
+	-webkit-font-smoothing: antialiased;
+}
+
+body {
+	min-height: 100dvh;
+}
+
+/* Numbers in tables must line up: sizes, counts, timestamps. */
+table {
+	font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+	outline: 2px solid var(--pb-accent);
+	outline-offset: 2px;
+	border-radius: 2px;
+}
+
+@layer components {
+	/* --- text roles ------------------------------------------------------- */
+	.eyebrow {
+		font-size: 10.5px;
+		font-weight: 600;
+		letter-spacing: 0.09em;
+		text-transform: uppercase;
+		color: var(--pb-faint);
+	}
+
+	.mono {
+		font-family: var(--font-mono);
+		font-size: 0.86em;
+	}
+
+	/* --- controls ---------------------------------------------------------- */
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		border-radius: 5px;
+		border: 1px solid transparent;
+		padding: 0.34rem 0.7rem;
+		font-size: 13px;
+		font-weight: 500;
+		line-height: 1.3;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			background-color 0.12s ease,
+			border-color 0.12s ease,
+			color 0.12s ease;
+	}
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-primary {
+		background: var(--pb-ink);
+		color: var(--pb-page);
+	}
+	.btn-primary:hover:not(:disabled) {
+		background: color-mix(in oklch, var(--pb-ink) 86%, var(--pb-accent));
+	}
+
+	.btn-ghost {
+		border-color: var(--pb-line);
+		color: var(--pb-ink);
+		background: transparent;
+	}
+	.btn-ghost:hover:not(:disabled) {
+		background: var(--pb-line-soft);
+	}
+
+	.btn-danger {
+		color: var(--pb-danger);
+		background: transparent;
+		border-color: transparent;
+	}
+	.btn-danger:hover:not(:disabled) {
+		background: var(--pb-danger-soft);
+	}
+
+	.btn-xs {
+		padding: 0.18rem 0.45rem;
+		font-size: 12px;
+	}
+
+	.input,
+	.select {
+		width: 100%;
+		border: 1px solid var(--pb-line);
+		border-radius: 5px;
+		background: var(--pb-panel);
+		padding: 0.36rem 0.55rem;
+		font-size: 13.5px;
+		color: var(--pb-ink);
+	}
+	.input::placeholder {
+		color: var(--pb-faint);
+	}
+	.input:focus,
+	.select:focus {
+		outline: none;
+		border-color: var(--pb-accent);
+	}
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.28rem;
+		font-size: 12.5px;
+		color: var(--pb-muted);
+	}
+
+	/* --- surfaces ---------------------------------------------------------- */
+	/* Sections are separated by space and a hairline rule, never by boxes with
+	   heavy borders: the data is the object, the container is not. */
+	.section {
+		border-top: 1px solid var(--pb-line);
+		padding-top: 1.1rem;
+		margin-top: 1.9rem;
+	}
+	.section:first-of-type {
+		border-top: 0;
+		padding-top: 0;
+		margin-top: 0;
+	}
+
+	.card {
+		background: var(--pb-panel);
+		border: 1px solid var(--pb-line);
+		border-radius: 7px;
+	}
+
+	/* --- tables ------------------------------------------------------------ */
+	.table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 13.5px;
+	}
+	.table thead th {
+		text-align: left;
+		font-size: 10.5px;
+		font-weight: 600;
+		letter-spacing: 0.09em;
+		text-transform: uppercase;
+		color: var(--pb-faint);
+		padding: 0 0.7rem 0.5rem;
+		border-bottom: 1px solid var(--pb-line);
+	}
+	.table tbody td {
+		padding: 0.55rem 0.7rem;
+		border-bottom: 1px solid var(--pb-line-soft);
+		vertical-align: middle;
+	}
+	.table tbody tr:hover td {
+		background: var(--pb-line-soft);
+	}
+	.table td.num,
+	.table th.num {
+		text-align: right;
+	}
+
+	/* --- status ------------------------------------------------------------ */
+	.dot {
+		display: inline-block;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--pb-faint);
+	}
+	.dot-live {
+		background: var(--pb-accent);
+		box-shadow: 0 0 0 3px var(--pb-accent-soft);
+	}
+	.dot-failed {
+		background: var(--pb-danger);
+	}
+	.dot-uploading {
+		background: var(--pb-warn);
+	}
+
+	.tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		border: 1px solid var(--pb-line);
+		border-radius: 3px;
+		padding: 0.05rem 0.35rem;
+		font-size: 10.5px;
+		font-weight: 600;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--pb-muted);
+	}
+	.tag-live {
+		border-color: transparent;
+		background: var(--pb-accent-soft);
+		color: var(--pb-accent);
+	}
+	.tag-private {
+		border-color: transparent;
+		background: var(--pb-line-soft);
+	}
+
+	/* --- navigation rail ---------------------------------------------------- */
+	/* No border between rail and content: the surfaces differ, that is enough. */
+	.rail-link {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		border-radius: 5px;
+		padding: 0.4rem 0.6rem;
+		font-size: 13.5px;
+		color: var(--pb-muted);
+	}
+	.rail-link:hover {
+		background: var(--pb-line-soft);
+		color: var(--pb-ink);
+	}
+	.rail-link[aria-current='page'] {
+		background: var(--pb-line-soft);
+		color: var(--pb-ink);
+		font-weight: 500;
+	}
+	.rail-link[aria-current='page']::before {
+		content: '';
+		position: absolute;
+		left: -0.6rem;
+		top: 0.45rem;
+		bottom: 0.45rem;
+		width: 2px;
+		border-radius: 1px;
+		background: var(--pb-accent);
+	}
+
+	.notice {
+		border-left: 2px solid var(--pb-danger);
+		background: var(--pb-danger-soft);
+		padding: 0.5rem 0.7rem;
+		font-size: 13px;
+	}
+	.notice-ok {
+		border-left-color: var(--pb-accent);
+		background: var(--pb-accent-soft);
 	}
 }

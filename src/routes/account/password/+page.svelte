@@ -6,31 +6,32 @@
 	<title>Change password — PageBox</title>
 </svelte:head>
 
-<main class="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 px-6">
+<main class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-7 px-6">
 	<div>
-		<h1 class="text-xl font-semibold tracking-tight">Change password</h1>
+		<p class="eyebrow">Account</p>
+		<h1 class="text-[17px] font-semibold tracking-tight">Change password</h1>
 		{#if data.forced}
-			<p class="text-sm opacity-70">
+			<p class="text-muted mt-1 text-[13px]">
 				This account still uses the password it was created with. Replace it to continue.
 			</p>
 		{/if}
 	</div>
 
-	<form method="POST" class="flex flex-col gap-3">
-		<label class="flex flex-col gap-1 text-sm">
+	<form method="POST" class="flex flex-col gap-4">
+		<label class="field">
 			Current password
 			<input
-				class="rounded border px-2 py-1"
+				class="input"
 				type="password"
 				name="currentPassword"
 				autocomplete="current-password"
 				required
 			/>
 		</label>
-		<label class="flex flex-col gap-1 text-sm">
+		<label class="field">
 			New password
 			<input
-				class="rounded border px-2 py-1"
+				class="input"
 				type="password"
 				name="newPassword"
 				autocomplete="new-password"
@@ -38,10 +39,10 @@
 				required
 			/>
 		</label>
-		<label class="flex flex-col gap-1 text-sm">
+		<label class="field">
 			Repeat new password
 			<input
-				class="rounded border px-2 py-1"
+				class="input"
 				type="password"
 				name="confirm"
 				autocomplete="new-password"
@@ -50,10 +51,8 @@
 			/>
 		</label>
 		{#if form?.message}
-			<p class="text-sm text-red-600">{form.message}</p>
+			<p class="notice">{form.message}</p>
 		{/if}
-		<button class="rounded bg-current/90 px-3 py-1.5 text-sm text-white" type="submit">
-			Save
-		</button>
+		<button class="btn btn-primary justify-center" type="submit">Save</button>
 	</form>
 </main>

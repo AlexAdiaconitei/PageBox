@@ -17,7 +17,14 @@ export default defineConfig({
 			// from the proxy headers (HOST_HEADER/PROTOCOL_HEADER) — never from a fixed
 			// ORIGIN, which would collapse both hosts into one and disable the host split
 			// (see docs/IMPLEMENTATION-PLAN.md §1.1 B3).
-			adapter: adapter()
+			adapter: adapter(),
+
+			// SvelteKit's built-in check compares Origin against that derived URL, so a
+			// proxy that forwards the host but not x-forwarded-proto turns every form POST
+			// into a confusing 403 — and `trustedOrigins` cannot help, since our hostnames
+			// are runtime configuration. hooks.server.ts enforces same-origin itself
+			// against PAGEBOX_ADMIN_HOST / PAGEBOX_SITES_HOST instead.
+			csrf: { checkOrigin: false }
 		})
 	],
 	test: {

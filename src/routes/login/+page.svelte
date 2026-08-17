@@ -1,4 +1,6 @@
 <script lang="ts">
+	import LogIn from '@lucide/svelte/icons/log-in';
+
 	let { data, form } = $props();
 </script>
 
@@ -7,20 +9,20 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<main class="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 px-6">
+<main class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-7 px-6">
 	<div>
-		<h1 class="text-xl font-semibold tracking-tight">PageBox</h1>
-		<p class="text-sm opacity-70">
+		<p class="text-[17px] font-semibold tracking-tight">PageBox</p>
+		<p class="eyebrow mt-1">
 			{data.hostKind === 'admin' ? 'Admin panel' : 'Site access'} · {data.host}
 		</p>
 	</div>
 
-	<form method="POST" class="flex flex-col gap-3">
+	<form method="POST" class="flex flex-col gap-4">
 		<input type="hidden" name="next" value={data.next} />
-		<label class="flex flex-col gap-1 text-sm">
+		<label class="field">
 			Email
 			<input
-				class="rounded border px-2 py-1"
+				class="input"
 				type="email"
 				name="email"
 				autocomplete="username"
@@ -28,21 +30,30 @@
 				required
 			/>
 		</label>
-		<label class="flex flex-col gap-1 text-sm">
+		<label class="field">
 			Password
 			<input
-				class="rounded border px-2 py-1"
+				class="input"
 				type="password"
 				name="password"
 				autocomplete="current-password"
 				required
 			/>
 		</label>
+
 		{#if form?.message}
-			<p class="text-sm text-red-600">{form.message}</p>
+			<p class="notice">{form.message}</p>
 		{/if}
-		<button class="rounded bg-current/90 px-3 py-1.5 text-sm text-white" type="submit">
+
+		<button class="btn btn-primary justify-center" type="submit">
+			<LogIn size={14} strokeWidth={2} />
 			Sign in
 		</button>
 	</form>
+
+	<p class="text-faint text-[12.5px]">
+		{data.hostKind === 'admin'
+			? 'Accounts are issued by a superadmin.'
+			: 'Signing in here only unlocks the private sites you were granted.'}
+	</p>
 </main>

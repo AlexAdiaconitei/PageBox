@@ -1,6 +1,12 @@
-import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
+import {
+	redirect,
+	type Handle,
+	type HandleServerError,
+	type RequestEvent,
+	type ServerInit
+} from '@sveltejs/kit';
 import { loadSession } from '$lib/server/auth/session';
-import { config, hostKind } from '$lib/server/config';
+import { config, hostKind, type HostKind } from '$lib/server/config';
 import { probeHealth } from '$lib/server/health';
 import { resolveSite } from '$lib/server/sites/resolve';
 import { serveSite } from '$lib/server/sites/serve';
@@ -19,8 +25,15 @@ export const init: ServerInit = async () => {
  */
 const SITES_HOST_ROUTES = new Set(['/', '/login', '/logout', '/healthz']);
 
-/** Admin-host paths reachable without a session. */
+/** Admin-host paths reachable without a panel session. */
 const PUBLIC_ADMIN_ROUTES = new Set(['/login', '/logout', '/healthz']);
+
+/**
+ * The deploy API authenticates with a bearer token and answers in JSON. Redirecting it to
+ * a login page would turn every unauthenticated call into a 303 that a CI job reads as
+ * success, so it opts out of the session gate and does its own 401.
+ */
+const isApiPath = (pathname: string) => pathname === '/api' || pathname.startsWith('/api/');
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const kind = hostKind(event.url.host);
@@ -61,9 +74,23 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return notFound();
 	}
 
+	// CSRF: cookie-authenticated mutations must come from our own origin. Done here, and
+	// not by SvelteKit's built-in check, because that one compares against a URL rebuilt
+	// from proxy headers (see vite.config.ts).
+	if (!sameOriginMutation(event, kind)) {
+		return new Response('Cross-site form submissions are forbidden', {
+			status: 403,
+			headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }
+		});
+	}
+
 	event.locals.user = await loadSession(event, kind);
 
-	if (kind === 'admin' && !PUBLIC_ADMIN_ROUTES.has(event.url.pathname)) {
+	if (
+		kind === 'admin' &&
+		!PUBLIC_ADMIN_ROUTES.has(event.url.pathname) &&
+		!isApiPath(event.url.pathname)
+	) {
 		if (!event.locals.user) {
 			const next = event.url.pathname + event.url.search;
 			redirect(303, `/login?next=${encodeURIComponent(next)}`);
@@ -91,6 +118,40 @@ export const handleError: HandleServerError = ({ error, event }) => {
 	// Never leak internals to a request that may come from hosted content.
 	return { message: 'Internal error', id };
 };
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * True when the request is safe, token-authenticated, or carries an Origin whose hostname
+ * is the host it is addressing.
+ *
+ * Ports and scheme are deliberately not compared: behind a tunnel the browser sees
+ * https://pagebox.example.com while the app sees http://…:3000, and it is the *hostname*
+ * that decides which origin a cookie came from.
+ */
+function sameOriginMutation(event: RequestEvent, kind: HostKind): boolean {
+	if (SAFE_METHODS.has(event.request.method)) return true;
+
+	// The deploy API authenticates with a bearer token and no cookie, so it cannot be
+	// driven by a browser holding somebody's session. CI sends no Origin header.
+	const authorization = event.request.headers.get('authorization');
+	if (authorization?.toLowerCase().startsWith('bearer ')) return true;
+
+	const origin = event.request.headers.get('origin');
+	if (!origin) return false;
+
+	let originHost: string;
+	try {
+		originHost = new URL(origin).hostname.toLowerCase();
+	} catch {
+		return false;
+	}
+
+	const expected = (kind === 'admin' ? config.PAGEBOX_ADMIN_HOST : config.PAGEBOX_SITES_HOST).split(
+		':'
+	)[0];
+	return originHost === expected;
+}
 
 function notFound(): Response {
 	return new Response('Not found', {
