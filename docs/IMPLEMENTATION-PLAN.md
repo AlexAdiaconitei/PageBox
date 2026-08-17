@@ -10,6 +10,27 @@
 
 ## Estado: M0 → M4 implementados (2026-08-17)
 
+### Cambio posterior: tokens y throttling con better-auth
+
+A petición explícita, los deploy tokens y el rate limiting dejan de ser código propio:
+
+- **Tokens = api keys** de `@better-auth/api-key` (paquete aparte, versión 1.6.26 para
+  casar con el pin de better-auth). El plugin genera, hashea, caduca, habilita/deshabilita
+  y limita **por clave**; PageBox solo guarda a qué sitio puede desplegar la clave, en su
+  `metadata`. Tabla `deploy_token` eliminada, `apikey` en su lugar.
+  Token pasado de vueltas → **429**, no 401: CI debe reintentar, no rotar credenciales.
+- **Throttling = el de better-auth**, con contadores en Postgres (`rate_limit`). Como su
+  limiter está en el pipeline del handler, las llamadas de credenciales van ahora **a
+  través de `auth.handler`** en proceso (`src/lib/server/auth/credentials.ts`) sin montar
+  las rutas. Verificado: 12 intentos → 10 pasan, 2 devuelven 429, y con
+  `API_KEY_MAX_REQUESTS=3` una key hace 3 llamadas y luego 429.
+- **Arista que mordió a los propios tests:** better-auth no se fía de la IP del socket
+  cuando le has dicho que lea una cabecera, así que **sin `X-Forwarded-For` todos comparten
+  un cubo** y un atacante bloquea el login de todos. Se rellena desde la conexión cuando el
+  proxy no lo puso, y los tests simulan proxy con su propia IP.
+- `scripts/create-deploy-token.mjs` eliminado: los tokens se emiten desde el panel, que es
+  además el camino que ahora ejercitan los tests.
+
 ### M4 — sitios privados
 
 85 tests (44 unitarios + 41 de integración). El test de acceso privado da de alta un lector
@@ -23,11 +44,10 @@ comprueba que deja de servir.
   `private, no-store` + `CDN-Cache-Control: no-store` + `Vary: Cookie`.
 - Los sitios públicos no pagan lookup de sesión: es el hot path.
 
-**Hallazgo:** el rate limit de better-auth vive en su handler HTTP, que no montamos (usamos
-`auth.api.*` directamente), así que **el login estaba sin límite** — 12 contraseñas
-erróneas seguidas se respondían todas. Ahora hay contador propio de intentos fallidos por
-IP y por cuenta (10 / 5 min, configurable con `LOGIN_MAX_ATTEMPTS` y
-`LOGIN_WINDOW_SECONDS`); los aciertos no consumen cupo.
+**Hallazgo:** el rate limit de better-auth vive en su handler HTTP, y llamando
+`auth.api.*` se lo salta — **el login estaba sin límite** (12 contraseñas erróneas
+seguidas, las 12 respondidas). Resuelto después con el propio limiter de better-auth (ver
+abajo).
 
 **Compromiso documentado:** un anónimo puede deducir que un sitio privado *existe* porque
 recibe redirect al login en vez de 404. Ocultarlo obligaría a devolver 404 al lector
