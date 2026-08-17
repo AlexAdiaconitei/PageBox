@@ -7,6 +7,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — post-deploy verification called working links broken
+
+- It checked each reference as a literal object key, so a link to another page —
+  `href="docs"`, served from `docs.html` or `docs/index.html` — counted as a missing asset.
+  It now resolves references with the same rules the site serves them by, and ignores the
+  404 page as a match.
+- The upload response names the first missing files (`brokenAssetSamples`) instead of only
+  counting them, and the server logs them.
+
 ### Fixed — the drop preflight called correct Next.js builds broken
 
 - A root-absolute reference is only wrong when it points outside the site. A build made

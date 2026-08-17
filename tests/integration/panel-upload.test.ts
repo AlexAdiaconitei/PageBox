@@ -161,6 +161,30 @@ run('panel uploads', () => {
 		expect((await res.json()).brokenAssets).toBe(1);
 	});
 
+	// Half of what a page links to are other pages, and a page is served from <name>.html
+	// or <name>/index.html — checking for a file with that exact name calls working links
+	// broken, which is what a real Fumadocs export ran into.
+	it('follows the resolution rules the site itself uses', async () => {
+		const res = await upload(
+			archive({
+				'index.html':
+					'<a href="docs">docs</a><a href="guide/">guide</a><a href="/s/demo-panel/api">api</a>',
+				'docs.html': '<h1>docs</h1>',
+				'guide/index.html': '<h1>guide</h1>',
+				'api.html': '<h1>api</h1>'
+			})
+		);
+		const body = await res.json();
+		expect(body.brokenAssets, JSON.stringify(body.brokenAssetSamples)).toBe(0);
+	});
+
+	it('names what is missing, not just how many', async () => {
+		const res = await upload(archive({ 'index.html': '<img src="logo.svg">' }));
+		const body = await res.json();
+		expect(body.brokenAssets).toBe(1);
+		expect(body.brokenAssetSamples).toContain('logo.svg');
+	});
+
 	it('counts nothing broken for a complete build', async () => {
 		const res = await upload(
 			archive({ 'index.html': '<script src="app.js"></script>', 'app.js': 'console.log(1)' })

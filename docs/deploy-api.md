@@ -91,9 +91,10 @@ differs in three ways:
 - `?warnings=<codes>&acknowledged=1` records what the preflight reported and that someone
   accepted it. Warnings without an acknowledgement are refused with `400`.
 
-The response adds `brokenAssets`: after activation PageBox reads the deployed `index.html`
-back and checks the files it references, so a build with a wrong base path reports the
-count instead of looking fine.
+The response adds `brokenAssets` and `brokenAssetSamples`: after activation PageBox reads
+the deployed `index.html` back and checks what it references, resolving each one the way
+the site serves it — so a link to another page counts as found, and a genuinely missing
+file is named rather than only counted.
 
 ## The rest
 

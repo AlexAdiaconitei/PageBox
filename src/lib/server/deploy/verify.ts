@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { deployment } from '../db/schema';
 import { getObject, headObject, objectKey } from '../s3';
-import { normaliseSubpath } from '../sites/paths';
+import { candidatePaths, normaliseSubpath } from '../sites/paths';
 import type { SiteRef } from '../sites/resolve';
 
 /**
@@ -35,8 +35,19 @@ export async function verifyDeployment(input: {
 	for (const reference of references) {
 		const path = resolveAgainstRoot(reference, input.siteRef.basePath);
 		if (path === null) continue;
-		const found = await headObject(objectKey(input.siteRef.id, input.deploymentId, path));
+
+		// Resolved the way the site serves it, not as a bare key. Half of what a page links
+		// to are other pages: `href="docs"` is answered by docs.html or docs/index.html, and
+		// checking for a file called `docs` reports a working link as broken.
+		const found = await exists(input, path, input.siteRef.spaFallback);
 		if (!found) broken.push(reference);
+	}
+
+	if (broken.length > 0) {
+		console.warn(
+			`[pagebox] deployment ${input.deploymentId} references ${broken.length} missing file(s):`,
+			broken.slice(0, 5).join(', ')
+		);
 	}
 
 	await db
@@ -46,6 +57,20 @@ export async function verifyDeployment(input: {
 		.catch(() => {});
 
 	return { checked: references.length, brokenAssetCount: broken.length, broken };
+}
+
+async function exists(
+	input: { siteRef: SiteRef; deploymentId: string },
+	path: string,
+	spaFallback: boolean
+): Promise<boolean> {
+	for (const candidate of candidatePaths(path, { spaFallback })) {
+		// The site's 404 page is a candidate for anything; it proves nothing about the link.
+		if (candidate.status === 404) continue;
+		const head = await headObject(objectKey(input.siteRef.id, input.deploymentId, candidate.path));
+		if (head) return true;
+	}
+	return false;
 }
 
 async function readIndex(key: string): Promise<string | null> {

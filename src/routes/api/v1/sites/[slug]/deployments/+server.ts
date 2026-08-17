@@ -100,6 +100,8 @@ export const POST: RequestHandler = async (event) => {
 		skipped: outcome.skipped,
 		activated: activate,
 		brokenAssets: verification?.brokenAssetCount ?? null,
+		// Named, not just counted: "3 broken" sends you hunting, "/logo.svg is missing" does not.
+		brokenAssetSamples: verification?.broken.slice(0, 5) ?? [],
 		url: siteUrl(siteRef.basePath, event.url.port)
 	});
 };
