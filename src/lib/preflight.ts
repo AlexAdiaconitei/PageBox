@@ -9,6 +9,7 @@
  * Pure on purpose: the DOM side (reading a dropped folder) lives in the component, the
  * rules live here where every one of them is a test.
  */
+import { formatBytes } from '$lib/format';
 
 export type DroppedFile = { path: string; size: number };
 
@@ -271,15 +272,4 @@ export function preflight(input: PreflightInput): PreflightResult {
 		warnings,
 		fatal: included.length === 0
 	};
-}
-
-export function formatBytes(n: number): string {
-	const units = ['B', 'KB', 'MB', 'GB'];
-	let value = n;
-	let unit = 0;
-	while (value >= 1024 && unit < units.length - 1) {
-		value /= 1024;
-		unit++;
-	}
-	return `${Math.round(value * 10) / 10} ${units[unit]}`;
 }

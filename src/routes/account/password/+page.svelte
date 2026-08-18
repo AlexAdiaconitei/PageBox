@@ -9,9 +9,9 @@
 <main class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-7 px-6">
 	<div>
 		<p class="eyebrow">Account</p>
-		<h1 class="text-[17px] font-semibold tracking-tight">Change password</h1>
+		<h1 class="text-[1.2rem] font-semibold tracking-tight">Change password</h1>
 		{#if data.forced}
-			<p class="text-muted mt-1 text-[13px]">
+			<p class="text-muted mt-1 text-[0.85rem]">
 				This account still uses the password it was created with. Replace it to continue.
 			</p>
 		{/if}

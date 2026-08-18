@@ -11,7 +11,7 @@
 
 <main class="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-7 px-6">
 	<div>
-		<p class="text-[17px] font-semibold tracking-tight">PageBox</p>
+		<p class="text-[1.2rem] font-semibold tracking-tight">PageBox</p>
 		<p class="eyebrow mt-1">
 			{data.hostKind === 'admin' ? 'Admin panel' : 'Site access'} · {data.host}
 		</p>
@@ -51,7 +51,7 @@
 		</button>
 	</form>
 
-	<p class="text-faint text-[12.5px]">
+	<p class="text-faint text-[0.8rem]">
 		{data.hostKind === 'admin'
 			? 'Accounts are issued by a superadmin.'
 			: 'Signing in here only unlocks the private sites you were granted.'}

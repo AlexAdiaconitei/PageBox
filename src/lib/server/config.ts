@@ -1,5 +1,10 @@
 import { z } from 'zod';
+import { formatBytes } from '$lib/format';
 import { lazy } from './lazy';
+
+// Re-exported because the config module is where callers already reach for the byte
+// limits it prints; the implementation is shared with the panel (see $lib/format).
+export { formatBytes };
 
 /**
  * Single source of truth for runtime configuration.
@@ -150,17 +155,6 @@ export function getConfig(): Config {
 		loaded = config;
 	}
 	return loaded;
-}
-
-export function formatBytes(n: number): string {
-	const units = ['B', 'KB', 'MB', 'GB'];
-	let v = n;
-	let u = 0;
-	while (v >= 1024 && u < units.length - 1) {
-		v /= 1024;
-		u++;
-	}
-	return `${Math.round(v * 10) / 10} ${units[u]}`;
 }
 
 export const config: Config = lazy(getConfig);

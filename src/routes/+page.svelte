@@ -10,10 +10,10 @@
 
 <main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-3 px-6">
 	<p class="eyebrow">{data.sitesHost}</p>
-	<h1 class="text-[20px] font-semibold tracking-tight">Static sites</h1>
+	<h1 class="text-[1.4rem] font-semibold tracking-tight">Static sites</h1>
 	<!-- Deliberately says nothing about which sites exist: listing them would leak the
 	     existence of the private ones. -->
-	<p class="text-muted text-[13.5px]">
+	<p class="text-muted text-[0.9rem]">
 		Sites live under <span class="mono">{data.sitesPrefix}/&lt;slug&gt;/</span>. Follow the link you
 		were given.
 	</p>

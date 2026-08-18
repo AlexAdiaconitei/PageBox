@@ -2,19 +2,38 @@
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { formatBytes, fullDate, timeAgo } from '$lib/format';
 
 	let { data, form } = $props();
 	let creating = $state(false);
+
+	/**
+	 * The overview. Four figures, and every one of them is something an operator does
+	 * something about: how much there is to look after, how much of it is actually serving,
+	 * how much of it is dark, and how much is on disk. Nothing here is a restatement of the
+	 * table below — the table says which sites, the strip says how the fleet stands.
+	 */
+	const fleet = $derived.by(() => {
+		const live = data.sites.filter((entry) => entry.activeDeploymentId !== null);
+		return {
+			total: data.sites.length,
+			live: live.length,
+			dark: data.sites.length - live.length,
+			bytes: live.reduce((sum, entry) => sum + (entry.liveBytes ?? 0), 0)
+		};
+	});
 </script>
 
 <svelte:head><title>Sites — PageBox</title></svelte:head>
 
-<header class="mb-7 flex items-start justify-between gap-4">
-	<div>
+<header class="mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+	<div class="min-w-0">
 		<p class="eyebrow">Hosting</p>
-		<h1 class="text-[22px] font-semibold tracking-tight">Sites</h1>
-		<p class="text-muted mt-1 text-[13px]">
-			Served from <span class="mono">{data.sitesHost}{data.sitesPrefix}/&lt;slug&gt;/</span>
+		<h1 class="text-[1.75rem] font-semibold tracking-tight">Sites</h1>
+		<p class="text-muted mt-1 text-[0.85rem]">
+			Served from <span class="mono break-all"
+				>{data.sitesHost}{data.sitesPrefix}/&lt;slug&gt;/</span
+			>
 		</p>
 	</div>
 	{#if data.canCreate}
@@ -25,8 +44,33 @@
 	{/if}
 </header>
 
+{#if data.sites.length > 0}
+	<div class="figures mb-6">
+		<div class="figure">
+			<span class="eyebrow">Sites</span>
+			<span class="figure-value">{fleet.total}</span>
+		</div>
+		<div class="figure figure-live">
+			<span class="eyebrow">Live</span>
+			<span class="figure-value">{fleet.live}</span>
+		</div>
+		<div class="figure figure-dark" data-zero={fleet.dark === 0}>
+			<span class="eyebrow">No deployment</span>
+			<span class="figure-value">{fleet.dark}</span>
+		</div>
+		<div class="figure">
+			<span class="eyebrow">Serving</span>
+			<span class="figure-value">{formatBytes(fleet.bytes)}</span>
+		</div>
+	</div>
+{/if}
+
 {#if creating || form?.message}
-	<form method="POST" action="?/create" class="card mb-6 grid gap-4 p-4 md:grid-cols-4">
+	<form
+		method="POST"
+		action="?/create"
+		class="card mb-6 grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-4"
+	>
 		<label class="field">
 			Slug
 			<input
@@ -49,75 +93,103 @@
 			</select>
 		</label>
 		<div class="flex items-end justify-between gap-3">
-			<label class="text-muted flex items-center gap-2 text-[13px]">
-				<input type="checkbox" name="spaFallback" />
+			<label class="text-muted flex items-center gap-2 text-[0.85rem]">
+				<input class="check" type="checkbox" name="spaFallback" />
 				SPA fallback
 			</label>
 			<button class="btn btn-primary" type="submit">Create</button>
 		</div>
 		{#if form?.message}
-			<p class="notice md:col-span-4">{form.message}</p>
+			<p class="notice sm:col-span-2 xl:col-span-4">{form.message}</p>
 		{/if}
 	</form>
 {/if}
 
 {#if data.sites.length === 0}
 	<div class="border-line rounded-md border border-dashed px-6 py-12 text-center">
-		<p class="text-[14px] font-medium">No sites yet</p>
-		<p class="text-muted mt-1 text-[13px]">
+		<p class="text-[0.95rem] font-medium">No sites yet</p>
+		<p class="text-muted mt-1 text-[0.85rem]">
 			{data.canCreate
 				? 'Create one, then push a build to it with a deploy token.'
 				: 'Ask a superadmin to grant you access to a site.'}
 		</p>
 	</div>
 {:else}
-	<table class="table">
-		<thead>
-			<tr>
-				<th>Site</th>
-				<th>Address</th>
-				<th>Access</th>
-				<th>Your role</th>
-				<th class="num">Live</th>
-			</tr>
-		</thead>
-		<tbody>
-			{#each data.sites as site (site.id)}
+	<div class="overflow-x-auto">
+		<table class="table table-stack sm:min-w-[38rem]">
+			<thead>
 				<tr>
-					<td>
-						<a class="font-medium hover:underline" href="/sites/{site.slug}">{site.name}</a>
-						{#if site.name !== site.slug}
-							<span class="mono text-faint ml-2">{site.slug}</span>
-						{/if}
-					</td>
-					<td>
-						<a
-							class="mono text-muted inline-flex items-center gap-1 hover:underline"
-							href={site.url}
-							target="_blank"
-							rel="noreferrer"
-						>
-							{site.basePath}
-							<ArrowUpRight size={12} strokeWidth={1.75} />
-						</a>
-					</td>
-					<td>
-						{#if site.visibility === 'private'}
-							<span class="tag tag-private"><Lock size={10} strokeWidth={2} /> Private</span>
-						{:else}
-							<span class="tag">Public</span>
-						{/if}
-					</td>
-					<td class="text-muted">{site.permission}</td>
-					<td class="num">
-						{#if site.activeDeploymentId}
-							<span class="dot dot-live" title="A deployment is live"></span>
-						{:else}
-							<span class="text-faint text-[12px]">no deployment</span>
-						{/if}
-					</td>
+					<th>Site</th>
+					<th>Address</th>
+					<th>Access</th>
+					<th>Your role</th>
+					<th class="num">Live</th>
 				</tr>
-			{/each}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				{#each data.sites as site (site.id)}
+					<tr>
+						<td data-label="Site">
+							<span class="flex flex-wrap items-baseline gap-x-2">
+								{#if site.permission === 'viewer'}
+									<!-- A viewer cannot open the management screen (deployments, grants,
+								     tokens) — it 404s for them — so this goes straight to the site. -->
+									<a
+										class="inline-flex items-center gap-1 font-medium hover:underline"
+										href={site.url}
+										target="_blank"
+										rel="noreferrer"
+									>
+										{site.name}
+										<ArrowUpRight size={12} strokeWidth={1.75} class="text-faint" />
+									</a>
+								{:else}
+									<a class="font-medium hover:underline" href="/sites/{site.slug}">{site.name}</a>
+								{/if}
+								{#if site.name !== site.slug}
+									<span class="mono text-faint">{site.slug}</span>
+								{/if}
+							</span>
+						</td>
+						<td data-label="Address">
+							<a
+								class="mono text-muted inline-flex items-center gap-1 break-all hover:underline"
+								href={site.url}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{site.basePath}
+								<ArrowUpRight size={12} strokeWidth={1.75} class="shrink-0" />
+							</a>
+						</td>
+						<td data-label="Access">
+							{#if site.visibility === 'private'}
+								<span class="tag tag-private"><Lock size={10} strokeWidth={2} /> Private</span>
+							{:else}
+								<span class="tag">Public</span>
+							{/if}
+						</td>
+						<td class="text-muted" data-label="Your role">{site.permission}</td>
+						<td class="num" data-label="Live">
+							{#if site.activeDeploymentId}
+								<!-- One column for two facts that are only useful together: it is up, and
+							     this is how long the build it is serving has been there. -->
+								<span
+									class="inline-flex items-center gap-2"
+									title="Live since {fullDate(site.liveAt)}{site.liveFileCount !== null
+										? ` · ${site.liveFileCount} files · ${formatBytes(site.liveBytes ?? 0)}`
+										: ''}"
+								>
+									<span class="dot dot-live"></span>
+									{timeAgo(site.liveAt)}
+								</span>
+							{:else}
+								<span class="text-faint">no deployment</span>
+							{/if}
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
 {/if}
