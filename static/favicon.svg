@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="PageBox">
+	<!--
+		The PageBox mark. Geometry is kept in step with src/lib/components/PageboxMark.svelte —
+		that one paints in currentColor for the panel rail, this one carries its own palette so
+		it can stand alone as a file.
+
+		An SVG favicon is the only one that can answer the tab strip's theme, so the ink is set
+		here rather than baked per file. Rasterisers ignore the media query and take the light
+		value, which is what the PNG fallbacks want anyway.
+	-->
+	<style>
+		:root {
+			color: #171b20;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				color: #e5e8ec;
+			}
+		}
+	</style>
+	<g
+		fill="none"
+		stroke="currentColor"
+		stroke-width="1.75"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+	>
+		<circle cx="12" cy="6.6" r="4.6" />
+		<g stroke-width="1.3">
+			<path d="M7.4 6.6h9.2" />
+			<path d="M12 2a7 7 0 0 1 1.8 4.6 7 7 0 0 1-1.8 4.6 7 7 0 0 1-1.8-4.6 7 7 0 0 1 1.8-4.6z" />
+		</g>
+		<path d="M4.2 11.4 1.4 8.2 5.6 6.2" />
+		<path d="m19.8 11.4 2.8-3.2-4.2-2" />
+		<path d="M4.2 11.4 12 15.6l7.6-4.2" />
+		<path d="M4.2 11.4v6l7.8 4.2 7.6-4.2v-6" />
+		<path d="M12 15.6v6" />
+	</g>
+</svg>
