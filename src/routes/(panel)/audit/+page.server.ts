@@ -1,15 +1,38 @@
-import { desc, eq } from 'drizzle-orm';
+import { error } from '@sveltejs/kit';
+import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { auditLog, user } from '$lib/server/db/schema';
+import { hasOperatorAccess } from '$lib/server/perms';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	const action = url.searchParams.get('action');
+	// The trail spans every site, not just the ones a caller can act on — so it stays with
+	// deployers, owners and superadmins, same as Groups.
+	if (!(await hasOperatorAccess(locals.user!))) error(404, 'Not found');
+
+	const action = url.searchParams.get('action') ?? '';
+	const q = url.searchParams.get('q') ?? '';
 	const limit = Math.min(Number(url.searchParams.get('limit') ?? 100) || 100, 300);
 
-	// Everyone sees the trail: it is the record of what happened to shared infrastructure,
-	// and hiding it from the people it affects only slows down finding out why a site broke.
-	const base = db
+	const actionRows = await db
+		.selectDistinct({ action: auditLog.action })
+		.from(auditLog)
+		.orderBy(auditLog.action);
+
+	const conditions = [
+		action ? eq(auditLog.action, action) : undefined,
+		q
+			? or(
+					ilike(auditLog.action, `%${q}%`),
+					ilike(user.email, `%${q}%`),
+					ilike(auditLog.targetType, `%${q}%`),
+					ilike(auditLog.targetId, `%${q}%`),
+					ilike(auditLog.ip, `%${q}%`)
+				)
+			: undefined
+	].filter(Boolean);
+
+	const query = db
 		.select({
 			id: auditLog.id,
 			action: auditLog.action,
@@ -26,7 +49,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		.orderBy(desc(auditLog.createdAt))
 		.limit(limit);
 
-	const entries = action ? await base.where(eq(auditLog.action, action)) : await base;
+	const entries = conditions.length ? await query.where(and(...conditions)) : await query;
 
-	return { entries, action: action ?? '', viewer: locals.user!.email };
+	return {
+		entries,
+		actions: actionRows.map((row) => row.action),
+		action,
+		q,
+		viewer: locals.user!.email
+	};
 };

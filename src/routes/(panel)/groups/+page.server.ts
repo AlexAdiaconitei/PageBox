@@ -5,7 +5,7 @@ import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { group, groupMember, user } from '$lib/server/db/schema';
 import { isValidSlug, newId } from '$lib/server/ids';
-import { invalidateUserGroups } from '$lib/server/perms';
+import { hasOperatorAccess, invalidateUserGroups } from '$lib/server/perms';
 
 function requireSuperadmin(locals: App.Locals) {
 	if (locals.user?.role !== 'superadmin') error(404, 'Not found');
@@ -13,8 +13,10 @@ function requireSuperadmin(locals: App.Locals) {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	// Everyone can see which groups exist — grants reference them by name — but only a
-	// superadmin changes membership.
+	// Groups exist so deployers and owners can grant access by name. A viewer-only account
+	// manages nothing, so the page 404s for it the same way a site it cannot act on does.
+	if (!(await hasOperatorAccess(locals.user!))) error(404, 'Not found');
+
 	const groups = await db.select().from(group).orderBy(group.slug);
 	const members = await db
 		.select({
@@ -68,6 +70,8 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const groupId = String(data.get('groupId') ?? '');
 		const userId = String(data.get('userId') ?? '');
+		// Empty when the combobox's typed text did not match a real person.
+		if (!userId) return fail(400, { message: 'Pick someone to add' });
 
 		await db.insert(groupMember).values({ groupId, userId }).onConflictDoNothing();
 		// Membership feeds the permission cache, which is what private sites read.

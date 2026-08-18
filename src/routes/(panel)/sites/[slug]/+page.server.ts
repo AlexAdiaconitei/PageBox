@@ -39,7 +39,9 @@ async function loadSite(slug: string, sessionUser: App.Locals['user']) {
 
 	const permission = await permissionFor(sessionUser, siteRef);
 	// A site you cannot act on does not exist as far as the panel is concerned. Public
-	// sites give everyone `viewer`, which is not enough to open the panel page.
+	// sites give everyone `viewer`, which is not enough to open the panel page — a viewer
+	// reads the live site itself (the Sites list links there instead), not its management
+	// screen.
 	if (!atLeast(permission, 'deployer')) error(404, 'Site not found');
 	return { siteRef, permission: permission! };
 }

@@ -151,6 +151,18 @@ export async function sitesForUser(user: SessionUser): Promise<SiteSummary[]> {
 	return out;
 }
 
+/**
+ * True for a superadmin, or anyone who deploys or owns at least one site. Groups and the
+ * audit trail are operator surfaces — a viewer-only account has no grants to look up and no
+ * deploys to account for, so it gets neither the nav entry nor the page (see the /groups and
+ * /audit `load` guards).
+ */
+export async function hasOperatorAccess(user: SessionUser): Promise<boolean> {
+	if (user.role === 'superadmin') return true;
+	const sites = await sitesForUser(user);
+	return sites.some((entry) => atLeast(entry.permission, 'deployer'));
+}
+
 /** Group listing with member counts, for the panel. */
 export async function allGroups() {
 	const rows = await db.select().from(group).orderBy(group.slug);

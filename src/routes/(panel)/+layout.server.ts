@@ -1,6 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 import { config } from '$lib/server/config';
+import { hasOperatorAccess } from '$lib/server/perms';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	// The site host never routes into the panel, but a group layout is the wrong place to
@@ -10,6 +11,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	return {
 		user: locals.user,
 		adminHost: config.PAGEBOX_ADMIN_HOST,
-		sitesHost: config.PAGEBOX_SITES_HOST
+		sitesHost: config.PAGEBOX_SITES_HOST,
+		canSeeOps: await hasOperatorAccess(locals.user)
 	};
 };
