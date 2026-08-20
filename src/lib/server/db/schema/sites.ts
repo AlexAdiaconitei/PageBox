@@ -21,9 +21,21 @@ export const group = pgTable(
 		id: t.text('id').primaryKey(),
 		slug: t.text('slug').notNull(),
 		name: t.text('name').notNull(),
+		/**
+		 * The admin who owns this group, or null for one the superadmin made.
+		 *
+		 * A group is a shortcut for granting access, so whoever can change its membership can
+		 * change who reaches every site it was granted on. Left global, an admin could add
+		 * their own people to another admin's group and walk into their sites — so a group
+		 * belongs to the admin who created it, the same way an account does.
+		 */
+		ownerUserId: t.text('owner_user_id').references(() => user.id, { onDelete: 'set null' }),
 		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [t.uniqueIndex('group_slug_key').on(table.slug)]
+	(table) => [
+		t.uniqueIndex('group_slug_key').on(table.slug),
+		t.index('group_owner_idx').on(table.ownerUserId)
+	]
 );
 
 export const groupMember = pgTable(

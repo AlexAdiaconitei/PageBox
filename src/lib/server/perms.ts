@@ -2,7 +2,7 @@ import { and, eq, inArray, or } from 'drizzle-orm';
 import { cache, cacheKeys, CACHE_TTL_SECONDS } from './cache';
 import { db } from './db';
 import { group, groupMember, site, siteGrant, type SiteRole } from './db/schema';
-import type { SessionUser } from './auth';
+import { isAdmin, type SessionUser } from './auth';
 import type { SiteRef } from './sites/resolve';
 
 /**
@@ -16,6 +16,12 @@ import type { SiteRef } from './sites/resolve';
  * viewer   = read the site
  * deployer = viewer + create deployments + activate/rollback
  * owner    = deployer + manage grants, tokens and visibility
+ *
+ * `admin` is deliberately absent from that list. It is a global role about running your own
+ * patch, not a key to everyone else's: an admin reaches a site by having created it (which
+ * sets `owner_user_id`) or by being granted it, exactly like anybody else. Were `admin` to
+ * resolve to `owner` here the way `superadmin` does, the tier would be a second superadmin
+ * with a quieter name and the whole boundary would be decorative.
  */
 
 const RANK: Record<SiteRole, number> = { viewer: 1, deployer: 2, owner: 3 };
@@ -157,13 +163,17 @@ export async function sitesForUser(user: SessionUser): Promise<SiteSummary[]> {
 }
 
 /**
- * True for a superadmin, or anyone who deploys or owns at least one site. Groups and the
- * audit trail are operator surfaces — a viewer-only account has no grants to look up and no
- * deploys to account for, so it gets neither the nav entry nor the page (see the /groups and
- * /audit `load` guards).
+ * True for the superadmin and any admin, or for anyone who deploys or owns at least one
+ * site. Groups and the audit trail are operator surfaces — a viewer-only account has no
+ * grants to look up and no deploys to account for, so it gets neither the nav entry nor the
+ * page (see the /groups and /audit `load` guards).
+ *
+ * An admin qualifies before owning anything: a freshly seated one has a group list and a
+ * trail of its own to fill, and a surface that appears only once you have used it is a
+ * surface nobody finds.
  */
 export async function hasOperatorAccess(user: SessionUser): Promise<boolean> {
-	if (user.role === 'superadmin') return true;
+	if (isAdmin(user)) return true;
 	const sites = await sitesForUser(user);
 	return sites.some((entry) => atLeast(entry.permission, 'deployer'));
 }
@@ -176,4 +186,28 @@ export async function allGroups() {
 		...row,
 		memberCount: members.filter((member) => member.groupId === row.id).length
 	}));
+}
+
+/**
+ * Accounts `actor` may administer, and the single rule the admin tier rests on.
+ *
+ * - The superadmin administers everyone but itself. Its own seat is moved by handing it
+ *   over, not by editing the row (see the users route).
+ * - An admin administers the accounts it issued, and nothing else. Not its own row, not
+ *   its peers, not the superadmin, not the accounts another admin created — a password
+ *   reset on any of those is a way into somebody else's sites.
+ * - Everyone else administers nobody.
+ *
+ * `target.createdByUserId` is null for accounts that predate the column and for anything
+ * the superadmin made; both stay the superadmin's, which is the safe direction.
+ */
+export function manages(
+	actor: Pick<SessionUser, 'id' | 'role'>,
+	target: { id: string; role: string; createdByUserId: string | null }
+): boolean {
+	// The seat is never a target: not suspendable, not demotable, not resettable by anyone.
+	if (target.role === 'superadmin') return false;
+	if (target.id === actor.id) return false;
+	if (actor.role === 'superadmin') return true;
+	return actor.role === 'admin' && target.createdByUserId === actor.id;
 }

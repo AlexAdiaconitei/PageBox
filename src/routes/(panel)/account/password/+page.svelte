@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import ShieldHalf from '@lucide/svelte/icons/shield-half';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
 	let { data, form } = $props();
@@ -23,6 +24,10 @@
 		{#if data.user.role === 'superadmin'}
 			<span class="inline-flex items-center gap-1">
 				<ShieldCheck size={12} strokeWidth={1.75} /> Superadmin
+			</span>
+		{:else if data.user.role === 'admin'}
+			<span class="inline-flex items-center gap-1">
+				<ShieldHalf size={12} strokeWidth={1.75} /> Admin
 			</span>
 		{:else}
 			<span>User</span>

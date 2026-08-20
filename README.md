@@ -1,8 +1,9 @@
 # PageBox
 
-Self-hosted static site hosting with real access control: a superadmin creates users,
-groups and sites; sites are `public` or `private`, and for private ones **every asset**
-(`.js`, `.css`, `.png`) goes through the authorisation check, not just the HTML.
+Self-hosted static site hosting with real access control: one superadmin runs the
+instance and seats admins, each admin runs their own sites, accounts and groups; sites are
+`public` or `private`, and for private ones **every asset** (`.js`, `.css`, `.png`) goes
+through the authorisation check, not just the HTML.
 
 PageBox never builds anything — it receives already-built artifacts (a `dist/`, a zip, a
 lone `index.html`) over an API token or by drag & drop, stores them immutably in S3, and
@@ -123,7 +124,8 @@ The container does everything it needs on boot, because neither Dokploy nor
 1. applies pending migrations, under a Postgres advisory lock;
 2. creates the S3 bucket if it is missing (MinIO and Garage alike);
 3. creates the first superadmin when the instance has no users, flagged
-   `must_change_password`.
+   `must_change_password`. There is exactly one superadmin seat, enforced by a partial
+   unique index; it is handed over from the Users page rather than granted again.
 
 Any failure exits the process rather than serving half-configured traffic. Both migration
 and bucket steps can be turned off (`PAGEBOX_MIGRATE_ON_START`,

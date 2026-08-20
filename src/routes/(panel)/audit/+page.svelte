@@ -17,7 +17,11 @@
 	<div>
 		<p class="eyebrow">Record</p>
 		<h1 class="text-[1.75rem] font-semibold tracking-tight">Activity</h1>
-		<p class="text-muted mt-1 text-[0.85rem]">Every deploy, grant, token and sign-in attempt.</p>
+		<p class="text-muted mt-1 text-[0.85rem]">
+			{data.wholeInstance
+				? 'Every deploy, grant, token and sign-in attempt on this instance.'
+				: 'Deploys, grants, tokens and sign-ins on your sites and by the accounts you issued.'}
+		</p>
 	</div>
 	<form method="GET" class="flex w-full flex-wrap items-end gap-2 sm:w-auto">
 		<label class="field min-w-36 flex-1 sm:max-w-44">

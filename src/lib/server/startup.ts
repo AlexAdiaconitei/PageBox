@@ -55,6 +55,12 @@ export async function startup(): Promise<void> {
 /**
  * Creates the first superadmin when the instance is empty. Never touches an existing
  * user: once someone can log in, these env vars are inert.
+ *
+ * That inertness is also why the seat has to be movable from the panel — an instance whose
+ * superadmin is gone cannot be reopened from here, only by `scripts/set-password.mjs` with
+ * access to the deployment (see docs/access.md). And it is why this runs only on an empty
+ * instance: there is one seat, held by a partial unique index, so a second attempt would be
+ * a boot that dies on a constraint rather than one that quietly seats a rival.
  */
 async function bootstrapAdmin(): Promise<void> {
 	if (!config.BOOTSTRAP_ADMIN_EMAIL || !config.BOOTSTRAP_ADMIN_PASSWORD) return;

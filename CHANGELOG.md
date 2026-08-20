@@ -7,6 +7,45 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Changed — three roles, one superadmin, and a boundary between admins
+
+The instance had two global roles, `superadmin` and `user`, and any number of superadmins.
+That made "admin" and "owner of the platform" the same account: the only way to let someone
+issue accounts was to hand them every site on the instance. A middle tier now exists, and
+the top one is a single seat.
+
+- **`admin`.** Creates sites (becoming their owner), issues accounts, owns groups, and
+  administers all three. Closed upwards — `set-role` is not in its permission set, so it
+  cannot mint or promote a peer, nor demote whoever seated it. It resolves to **no**
+  per-site permission: an admin reaches a site by having created it or by being granted it,
+  exactly like anybody else. Only `superadmin` still short-circuits to `owner` everywhere.
+- **One superadmin, enforced by Postgres.** A partial unique index over `role = 'superadmin'`
+  rather than a guard somebody has to remember. The seat is not an editable row — nobody
+  suspends, demotes, resets or deletes it — and it moves by **Hand over seat**, which
+  demotes the holder and promotes the target in one transaction, so there is never a moment
+  with two or none. Without that, a superadmin who leaves takes the instance with them: the
+  bootstrap variables are inert once any account exists.
+- **`user.created_by_user_id`.** The single rule the tier rests on: an admin administers the
+  accounts it issued and nothing else. Any admin able to reset any password could sign in as
+  that person and reach whatever sites they reach, so this is what keeps two admins apart.
+  Every action on the Users page runs through one predicate (`manages()`), never through the
+  role alone.
+- **`group.owner_user_id`.** Membership is a grant with an extra step, so a shared group list
+  was the same hole by another route — an admin adding their own people to somebody else's
+  group walks into the sites it was granted on. A group now belongs to whoever made it, and
+  its members can only be accounts that admin administers.
+- **Scoped surfaces.** The grant picker on a site offers only accounts you administer and
+  groups you own, re-checked server-side because `principal` is a plain form field. The
+  activity trail an admin reads is its own — what it and its accounts did, and what was done
+  to sites it can act on — instead of every deploy, token and sign-in on the instance.
+- Deleting a site now takes `admin` or above *and* `owner` on that site, rather than
+  superadmin: it releases a slug on the shared hostname, so it needs standing plus ownership.
+
+Migration 0005 adds both columns and the index. An instance with several superadmins keeps
+the oldest — the account it was bootstrapped with — and steps the rest down to `admin`,
+which is the tier that describes what they were already doing. Accounts that predate
+`created_by_user_id` stay unattributed and remain the superadmin's to administer.
+
 ### Fixed — a deploy token outlived the permission it was issued under
 
 - Token authentication checked the key's hash, expiry, rate limit and site scope, and never

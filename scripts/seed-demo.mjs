@@ -92,6 +92,12 @@ async function seed(siteSlug, visibility, entries) {
 /**
  * An account for the integration suite, so the tests never touch the credentials a person
  * is actually using. Idempotent: the password is put back on every seed.
+ *
+ * The suite exercises superadmin-only screens, and there is exactly one superadmin seat —
+ * a partial unique index enforces it — so seeding *takes* the seat and steps the previous
+ * holder down to admin. On a dev instance that is the bootstrap account, which keeps its
+ * sites and its accounts and can take the seat back from the Users page. It is loud about
+ * it rather than quiet, because it is somebody's account.
  */
 async function seedTestSuperadmin() {
 	const email = env.PAGEBOX_E2E_EMAIL ?? 'e2e-admin@example.com';
@@ -100,6 +106,15 @@ async function seedTestSuperadmin() {
 
 	const [existing] = await sql`select id from "user" where email = ${email}`;
 	const id = existing?.id ?? ulid();
+
+	// Vacate before filling: the index permits one superadmin row, so the other order
+	// collides with whoever holds it.
+	const stepped = await sql`
+		update "user" set role = 'admin'
+		where role = 'superadmin' and email <> ${email}
+		returning email
+	`;
+	for (const row of stepped) console.log(`stepped down to admin: ${row.email}`);
 
 	if (existing) {
 		await sql`update "user" set role = 'superadmin', banned = false, must_change_password = false where id = ${id}`;

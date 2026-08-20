@@ -32,13 +32,32 @@ import { lazy } from '../lazy';
 const DAY = 60 * 60 * 24;
 
 /**
- * PageBox names its roles `superadmin` and `user`; the admin plugin only accepts role
- * names it can resolve to a permission set, so both are declared here over the plugin's
- * own statements. `superadmin` gets the full admin set, `user` the plain one.
+ * PageBox names its roles `superadmin`, `admin` and `user`; the admin plugin only accepts
+ * role names it can resolve to a permission set, so all three are declared here over the
+ * plugin's own statements (docs/access.md).
+ *
+ * `admin` is the interesting one, and it is deliberately not "the admin set minus a bit":
+ *
+ * - no `set-role`. No PageBox role has it: the plugin refuses to assign a role that is one
+ *   of its own `adminRoles` whoever asks, so role changes are written by the users route
+ *   itself, under guards stricter than anything expressible here. An admin cannot make
+ *   another admin, promote anyone, or demote the account that seated it.
+ * - no `delete`, because a deleted account takes its `created_by_user_id` attribution with
+ *   it, and suspending does everything an admin actually needs.
+ * - no `impersonate`, which would hand one admin another's session for the asking.
+ *
+ * What the plugin cannot express is *which* accounts an admin may reach — it has no notion
+ * of one admin's users versus another's. That half lives in `manages()` in the users route,
+ * and every action there goes through it. This list is the ceiling; that function is the
+ * boundary.
  */
 const ac = createAccessControl(defaultStatements);
 const roles = {
 	superadmin: ac.newRole(adminAc.statements),
+	admin: ac.newRole({
+		user: ['create', 'list', 'get', 'ban', 'set-password'],
+		session: ['list', 'revoke']
+	}),
 	user: ac.newRole(userAc.statements)
 };
 
@@ -92,7 +111,7 @@ function createAuth(kind: HostKind) {
 
 		emailAndPassword: {
 			enabled: true,
-			// Accounts are created by a superadmin, never by whoever finds the login page.
+			// Accounts are issued by an admin, never by whoever finds the login page.
 			disableSignUp: true,
 			minPasswordLength: 10,
 			maxPasswordLength: 200
@@ -117,8 +136,8 @@ function createAuth(kind: HostKind) {
 					input: false
 				},
 				// The admin plugin declares `role` and `banned`, and it only runs on the admin
-				// instance — so without this the site host reads a user with neither, and a
-				// superadmin arrives as an ordinary user while a banned one arrives clean.
+				// instance — so without this the site host reads a user with neither, and an
+				// admin arrives as an ordinary user while a banned one arrives clean.
 				...(kind === 'admin'
 					? {}
 					: {
@@ -182,7 +201,7 @@ function createAuth(kind: HostKind) {
 		plugins:
 			kind === 'admin'
 				? [
-						admin({ ac, roles, adminRoles: ['superadmin'], defaultRole: 'user' }),
+						admin({ ac, roles, adminRoles: ['superadmin', 'admin'], defaultRole: 'user' }),
 						// Deploy tokens. The plugin owns generation, hashing, expiry,
 						// enable/disable and per-key throttling; PageBox only records which
 						// site a key may deploy to, in its metadata.
@@ -222,4 +241,22 @@ export type SessionUser = {
 	mustChangePassword: boolean;
 };
 
+/**
+ * The three global roles, in order of standing. Anything per-site is a grant, not a role
+ * (see perms.ts) — these say what someone is on the *instance*, not on any one site.
+ */
+export const globalRoles = ['superadmin', 'admin', 'user'] as const;
+export type GlobalRole = (typeof globalRoles)[number];
+
 export const isSuperadmin = (user: SessionUser | null): boolean => user?.role === 'superadmin';
+
+/**
+ * True for the superadmin and for an admin — the accounts that run something rather than
+ * being granted access to it. Used for the surfaces that exist to administer: creating
+ * sites and groups, issuing accounts.
+ *
+ * It says nothing about *what* they may administer. An admin holds this and still reaches
+ * only their own sites and their own accounts.
+ */
+export const isAdmin = (user: SessionUser | null): boolean =>
+	user?.role === 'superadmin' || user?.role === 'admin';

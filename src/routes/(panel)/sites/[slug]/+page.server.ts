@@ -13,7 +13,7 @@ import {
 	user,
 	type SiteRole
 } from '$lib/server/db/schema';
-import { adminAuth } from '$lib/server/auth';
+import { adminAuth, isAdmin, isSuperadmin, type SessionUser } from '$lib/server/auth';
 import { activate } from '$lib/server/deploy/ingest';
 import {
 	MAX_RETENTION,
@@ -24,7 +24,7 @@ import {
 	siteStorage
 } from '$lib/server/deploy/retention';
 import { newId } from '$lib/server/ids';
-import { atLeast, permissionFor } from '$lib/server/perms';
+import { atLeast, manages, permissionFor } from '$lib/server/perms';
 import { deletePrefix, deploymentPrefix, sitePrefix } from '$lib/server/s3';
 import { invalidateSite, lookupSiteBySlug } from '$lib/server/sites/resolve';
 
@@ -54,6 +54,47 @@ async function loadSite(slug: string, sessionUser: App.Locals['user']) {
 	return { siteRef, permission: permission! };
 }
 
+/**
+ * The people and groups `actor` may hand this site to.
+ *
+ * The superadmin sees the whole directory. An admin sees the accounts it issued and the
+ * groups it owns — the same boundary the Users and Groups pages draw, applied here because
+ * a grant is how access actually moves. Anyone else (a plain user who owns a site by grant)
+ * gets nothing to add: they manage the site, not the directory.
+ */
+async function grantable(actor: SessionUser) {
+	if (isSuperadmin(actor)) {
+		return {
+			users: await db
+				.select({ id: user.id, email: user.email, name: user.name })
+				.from(user)
+				.orderBy(user.email),
+			groups: await db
+				.select({ id: group.id, slug: group.slug, name: group.name })
+				.from(group)
+				.orderBy(group.slug)
+		};
+	}
+	if (!isAdmin(actor)) return { users: [], groups: [] };
+
+	const candidates = await db
+		.select()
+		.from(user)
+		.where(eq(user.createdByUserId, actor.id))
+		.orderBy(user.email);
+
+	return {
+		users: candidates
+			.filter((row) => manages(actor, row))
+			.map((row) => ({ id: row.id, email: row.email, name: row.name })),
+		groups: await db
+			.select({ id: group.id, slug: group.slug, name: group.name })
+			.from(group)
+			.where(eq(group.ownerUserId, actor.id))
+			.orderBy(group.slug)
+	};
+}
+
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { siteRef, permission } = await loadSite(params.slug, locals.user);
 
@@ -76,20 +117,27 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		await db.select().from(apikey).where(eq(apikey.enabled, true)).orderBy(desc(apikey.createdAt))
 	).filter((row) => metadataSiteId(row.metadata) === siteRef.id);
 
-	const users = await db
-		.select({ id: user.id, email: user.email, name: user.name })
-		.from(user)
-		.orderBy(user.email);
-	const groups = await db.select({ id: group.id, slug: group.slug, name: group.name }).from(group);
+	// Who this actor may hand access to. Not the whole directory: an admin granting a site
+	// to somebody else's account, or to a group somebody else controls the membership of,
+	// reaches straight past the boundary the Users and Groups pages draw. The existing
+	// grants below are listed whatever they name — you can always see, and remove, what is
+	// already on your own site.
+	const { users, groups } = await grantable(locals.user!);
 
 	const stored = (await siteStorage([siteRef.id])).get(siteRef.id);
 	// `incoming: 1` — the build about to be uploaded takes a slot before it has a row.
 	const nextPrune = await prunablePlan(siteRef.id, row.retentionLimit, row.activeDeploymentId, 1);
 
+	// Falls back to the id for a principal outside the picker — a grant made by somebody
+	// else, or one whose account this actor does not administer.
+	const [allUsers, allGroups] = await Promise.all([
+		db.select({ id: user.id, email: user.email }).from(user),
+		db.select({ id: group.id, slug: group.slug }).from(group)
+	]);
 	const principalName = (type: string, id: string) =>
 		type === 'user'
-			? (users.find((entry) => entry.id === id)?.email ?? id)
-			: (groups.find((entry) => entry.id === id)?.slug ?? id);
+			? (allUsers.find((entry) => entry.id === id)?.email ?? id)
+			: (allGroups.find((entry) => entry.id === id)?.slug ?? id);
 
 	return {
 		adminOrigin: adminUrl('', url.port).replace(/\/$/, ''),
@@ -121,9 +169,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		retentionBounds: { min: MIN_RETENTION, max: MAX_RETENTION },
 		permission,
 		canManage: atLeast(permission, 'owner'),
-		// Deleting releases a slug on a shared hostname, the same claim creating one makes,
-		// so it sits with superadmins rather than with the site's owner.
-		canDelete: locals.user!.role === 'superadmin',
+		// Deleting releases a slug on a shared hostname, the same claim creating one makes —
+		// so it takes both halves: standing to run something on this instance, and ownership
+		// of this particular site. A plain user granted `owner` manages the site; releasing
+		// its name on the shared host is not theirs to do.
+		canDelete: isAdmin(locals.user) && atLeast(permission, 'owner'),
 		canDeploy: atLeast(permission, 'deployer'),
 		limits: {
 			maxFiles: config.MAX_FILES,
@@ -231,17 +281,17 @@ export const actions: Actions = {
 	 *
 	 * The counterpart to disabling, and the reason disabling exists — a site that is merely
 	 * in the way should be switched off, and only one that should never have existed gets
-	 * this. Three guards, because it is the one action here nothing undoes: superadmin only,
-	 * the slug has to be typed back, and the objects have to be gone before the row is.
+	 * this. Three guards, because it is the one action here nothing undoes: an admin who
+	 * owns it (or the superadmin), the slug typed back, and the objects gone before the row.
 	 *
 	 * The slug is released by it. That is deliberate: a name held forever by something that
 	 * no longer exists is how a slug nobody can explain ends up reserved.
 	 */
 	deleteSite: async ({ locals, params, request }) => {
-		const { siteRef } = await loadSite(params.slug, locals.user);
-		// Not `owner`: creating a site claims a slug on a shared hostname and stays with
-		// superadmins, so releasing one does too.
-		if (locals.user!.role !== 'superadmin') return fail(403, { message: 'Not allowed' });
+		const { siteRef, permission } = await loadSite(params.slug, locals.user);
+		if (!isAdmin(locals.user) || !atLeast(permission, 'owner')) {
+			return fail(403, { message: 'Not allowed' });
+		}
 
 		const data = await request.formData();
 		if (String(data.get('confirm') ?? '').trim() !== siteRef.slug) {
@@ -398,6 +448,15 @@ export const actions: Actions = {
 		if (!principalId || (principalType !== 'user' && principalType !== 'group')) {
 			return fail(400, { message: 'Pick someone to grant access to' });
 		}
+
+		// Re-checked here and not only in the picker: `principal` is a plain string in a
+		// form, and a grant is the thing that hands out access.
+		const allowed = await grantable(locals.user!);
+		const known =
+			principalType === 'user'
+				? allowed.users.some((entry) => entry.id === principalId)
+				: allowed.groups.some((entry) => entry.id === principalId);
+		if (!known) return fail(404, { message: 'That is not yours to grant access to' });
 
 		await db
 			.insert(siteGrant)

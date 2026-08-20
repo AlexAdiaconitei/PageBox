@@ -1,14 +1,19 @@
 <script lang="ts">
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import ShieldHalf from '@lucide/svelte/icons/shield-half';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
 	let { data, form } = $props();
 	let adding = $state(false);
 	let resetting = $state<string | null>(null);
+	let transferring = $state<string | null>(null);
 
 	const when = (value: string | Date) =>
 		new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
+
+	// Only the superadmin can hand the seat over, and only to an admin.
+	const canTransferTo = (role: string) => data.canSetRoles && role === 'admin';
 </script>
 
 <svelte:head><title>Users — PageBox</title></svelte:head>
@@ -18,7 +23,9 @@
 		<p class="eyebrow">Access</p>
 		<h1 class="text-[1.75rem] font-semibold tracking-tight">Users</h1>
 		<p class="text-muted mt-1 text-[0.85rem]">
-			Accounts are created here; there is no sign-up page.
+			{data.canSetRoles
+				? 'Every account on this instance. There is no sign-up page.'
+				: 'The accounts you issued. They are yours to administer, and nobody else’s.'}
 		</p>
 	</div>
 	<button class="btn btn-primary" onclick={() => (adding = !adding)}>
@@ -60,15 +67,25 @@
 			/>
 		</label>
 		<div class="flex items-end gap-3">
-			<label class="field flex-1">
-				Role
-				<select class="select" name="role">
-					<option value="user">user</option>
-					<option value="superadmin">superadmin</option>
-				</select>
-			</label>
+			{#if data.canSetRoles}
+				<label class="field flex-1">
+					Role
+					<select class="select" name="role">
+						<option value="user">user — per-site grants only</option>
+						<option value="admin">admin — own sites and accounts</option>
+					</select>
+				</label>
+			{/if}
 			<button class="btn btn-primary" type="submit">Create</button>
 		</div>
+		{#if !data.canSetRoles}
+			<!-- An admin's form has no role field, and the server forces `user` regardless:
+			     the tier is closed upwards, so there is nothing here to choose. -->
+			<p class="text-muted text-[0.8rem] sm:col-span-2 xl:col-span-4">
+				Accounts you create are plain users, and are yours to administer. Only the superadmin seats
+				an admin.
+			</p>
+		{/if}
 	</form>
 {/if}
 
@@ -98,9 +115,15 @@
 					</td>
 					<td class="text-muted" data-label="Name">{person.name}</td>
 					<td data-label="Role">
-						{#if person.isSelf}
+						{#if !person.manageable || !data.canSetRoles}
+							<!-- The seat, your own row, and everything an admin does not administer:
+							     stated, not editable. -->
 							<span class="inline-flex items-center gap-1">
-								{#if person.role === 'superadmin'}<ShieldCheck size={12} strokeWidth={1.75} />{/if}
+								{#if person.role === 'superadmin'}
+									<ShieldCheck size={12} strokeWidth={1.75} />
+								{:else if person.role === 'admin'}
+									<ShieldHalf size={12} strokeWidth={1.75} />
+								{/if}
 								{person.role}
 							</span>
 						{:else}
@@ -108,9 +131,7 @@
 								<input type="hidden" name="userId" value={person.id} />
 								<select class="select select-xs w-32" name="role">
 									<option value="user" selected={person.role === 'user'}>user</option>
-									<option value="superadmin" selected={person.role === 'superadmin'}>
-										superadmin
-									</option>
+									<option value="admin" selected={person.role === 'admin'}>admin</option>
 								</select>
 								<button class="btn btn-ghost btn-xs" type="submit">Set</button>
 							</form>
@@ -127,7 +148,7 @@
 					</td>
 					<td class="text-muted" data-label="Added">{when(person.createdAt)}</td>
 					<td class="num">
-						{#if !person.isSelf}
+						{#if person.manageable}
 							<div class="flex justify-end gap-1">
 								<button
 									class="btn btn-ghost btn-xs"
@@ -135,6 +156,14 @@
 								>
 									Reset password
 								</button>
+								{#if canTransferTo(person.role)}
+									<button
+										class="btn btn-ghost btn-xs"
+										onclick={() => (transferring = transferring === person.id ? null : person.id)}
+									>
+										Hand over seat
+									</button>
+								{/if}
 								<!-- The action names what it does, so a page rendered before someone
 								     else changed this row cannot flip it the wrong way. -->
 								<form method="POST" action={person.banned ? '?/restore' : '?/suspend'}>
@@ -164,6 +193,32 @@
 									/>
 								</label>
 								<button class="btn btn-ghost" type="submit">Replace</button>
+							</form>
+						</td>
+					</tr>
+				{/if}
+				{#if transferring === person.id}
+					<tr>
+						<td colspan="6" class="bg-line-soft">
+							<form method="POST" action="?/transferSeat" class="flex flex-wrap items-end gap-3">
+								<input type="hidden" name="userId" value={person.id} />
+								<div class="w-full">
+									<p class="text-[0.85rem] font-medium">
+										Hand the superadmin seat to {person.email}
+									</p>
+									<p class="text-muted mt-1 text-[0.8rem]">
+										There is one seat, so you step down to admin in the same moment they take it.
+										Your sites and the accounts you issued stay yours. Only they can hand it back.
+									</p>
+								</div>
+								<label class="field w-56 max-w-full">
+									Type <span class="mono">transfer</span> to confirm
+									<input class="input mono" name="confirm" autocomplete="off" required />
+								</label>
+								<button class="btn btn-danger" type="submit">Hand over</button>
+								<button class="btn btn-ghost" type="button" onclick={() => (transferring = null)}>
+									Cancel
+								</button>
 							</form>
 						</td>
 					</tr>

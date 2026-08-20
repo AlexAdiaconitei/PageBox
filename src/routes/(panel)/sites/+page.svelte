@@ -148,7 +148,7 @@
 		<p class="text-muted mt-1 text-[0.85rem]">
 			{data.canCreate
 				? 'Create one, then push a build to it with a deploy token.'
-				: 'Ask a superadmin to grant you access to a site.'}
+				: 'Ask an admin to grant you access to a site.'}
 		</p>
 	</div>
 {:else}

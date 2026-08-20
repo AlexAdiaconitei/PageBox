@@ -48,7 +48,7 @@
 
 	<p class="text-faint text-[0.8rem]">
 		{data.hostKind === 'admin'
-			? 'Accounts are issued by a superadmin.'
+			? 'Accounts are issued by an admin.'
 			: 'Signing in here only unlocks the private sites you were granted.'}
 	</p>
 </main>

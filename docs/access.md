@@ -10,8 +10,8 @@ The first boot creates a superadmin from `BOOTSTRAP_ADMIN_EMAIL` and
 history, so it is treated as a handover credential: the account is flagged
 `must_change_password`, and nothing in the panel opens until it has been replaced.
 
-The same flag is set on every account a superadmin creates or resets. There is no sign-up
-page — accounts only come from a superadmin.
+The same flag is set on every account an admin creates or resets. There is no sign-up
+page — accounts only come from somebody who already has one.
 
 Once anyone exists, those variables stop doing anything: a restart must not reopen a closed
 account. That also means a forgotten superadmin password has no way back through the
@@ -48,9 +48,48 @@ with the panel session attached.
 
 ## Roles
 
-**Global role** — `superadmin` or `user`. A superadmin can do everything on every site, and
-is the only role that can create accounts, change roles, suspend people, reset passwords,
-create sites and manage groups.
+**Global role** — `superadmin`, `admin` or `user`. It says what someone is on the
+*instance*; what they can do to any particular site is a grant, below.
+
+| Role         | Count | Is                                                                |
+| ------------ | ----- | ----------------------------------------------------------------- |
+| `superadmin` | one   | the platform. Every site, every account, every group.             |
+| `admin`      | many  | runs their own patch: the sites they create, the accounts they issue, the groups they own. |
+| `user`       | many  | no standing on the instance at all; everything comes from a grant. |
+
+### One superadmin
+
+There is exactly one, and Postgres enforces it — a partial unique index over
+`role = 'superadmin'`, not a check somebody has to remember. It is created at first boot
+and after that it *moves* rather than being granted: **Hand over seat** on the Users page
+demotes the holder to `admin` and promotes the target in the same transaction, so there is
+never a moment with two of them or none.
+
+That seat is not an editable row. Nobody suspends it, demotes it, resets its password or
+deletes it, including itself — the only way out is to hand it over, or `set-password.mjs`
+with access to the deployment. An instance whose superadmin has left is recovered by one of
+those two, and by nothing else.
+
+### What an admin can and cannot do
+
+An admin **creates sites** (becoming their owner), **issues accounts**, **owns groups**, and
+administers all three. It is closed upwards and sideways:
+
+- it cannot create or promote an admin, and cannot demote the account that seated it —
+  `set-role` is not in its permission set at all;
+- it **only administers the accounts it issued** (`user.created_by_user_id`). Not its peers,
+  not their users, not accounts that predate the column. Without that rule any admin could
+  reset any password, sign in as that person, and reach whatever sites they reach — so it is
+  the single boundary the tier rests on, and every action on the Users page runs through it;
+- a group belongs to the admin who created it, for the same reason: membership is a grant
+  with an extra step, so a shared group list would be a way into somebody else's sites;
+- it can only grant a site to accounts it administers and groups it owns;
+- the activity trail it reads is its own — what it and its accounts did, and what was done
+  to sites it can act on. The superadmin reads the whole instance.
+
+**`admin` is not a key to other people's sites.** It resolves to no per-site permission
+whatsoever: an admin reaches a site by having created it or by being granted it, exactly
+like anyone else. Only `superadmin` short-circuits to `owner` everywhere.
 
 **Per-site role**, granted to a person or a group:
 
@@ -62,7 +101,11 @@ create sites and manage groups.
 
 Effective permission on a site is the highest of: superadmin (owner), being the site's
 owner (owner), any grant to the person or to a group they belong to, and — for a public
-site — `viewer`.
+site — `viewer`. `admin` is deliberately absent from that list.
+
+Deleting a site releases its slug on the shared hostname, so it takes both halves: `admin`
+or above *and* `owner` on that site. A plain user granted `owner` manages the site and
+cannot delete it.
 
 The panel lists sites you can *act* on, so a public site does not appear in your list just
 for being public: `deployer` is the floor for opening a site's page. A site you cannot act
@@ -70,9 +113,12 @@ on answers 404, never 403, so the panel does not confirm which sites exist.
 
 ## Groups
 
-A group is a name and a list of members. Grant a site to the group once instead of to each
-person, and membership changes take effect immediately — the permission cache is dropped
-whenever a grant, a membership or a site's visibility changes.
+A group is a name, an owner and a list of members. Grant a site to the group once instead
+of to each person, and membership changes take effect immediately — the permission cache is
+dropped whenever a grant, a membership or a site's visibility changes.
+
+The owner is the admin who created it, and only they (or the superadmin) list it, change its
+membership or grant on it. Members can only be accounts that admin administers.
 
 ## Reading a private site
 

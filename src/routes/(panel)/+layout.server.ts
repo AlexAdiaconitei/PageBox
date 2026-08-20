@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import { isAdmin } from '$lib/server/auth';
 import { config } from '$lib/server/config';
 import { hasOperatorAccess } from '$lib/server/perms';
 
@@ -12,6 +13,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		user: locals.user,
 		adminHost: config.PAGEBOX_ADMIN_HOST,
 		sitesHost: config.PAGEBOX_SITES_HOST,
-		canSeeOps: await hasOperatorAccess(locals.user)
+		canSeeOps: await hasOperatorAccess(locals.user),
+		canAdminister: isAdmin(locals.user)
 	};
 };

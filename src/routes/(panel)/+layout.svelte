@@ -17,9 +17,9 @@
 			// to do with a grant list or an instance-wide audit trail, so both stay out of
 			// its nav (and are 404'd server-side too, see hasOperatorAccess).
 			...(data.canSeeOps ? [{ href: '/groups', label: 'Groups', icon: Layers }] : []),
-			...(data.user.role === 'superadmin'
-				? [{ href: '/users', label: 'Users', icon: UsersRound }]
-				: []),
+			// Users is for the tiers that issue accounts. An admin sees only the accounts it
+			// issued there, which is the boundary itself rather than a filter on the page.
+			...(data.canAdminister ? [{ href: '/users', label: 'Users', icon: UsersRound }] : []),
 			...(data.canSeeOps ? [{ href: '/audit', label: 'Activity', icon: ScrollText }] : [])
 		].map((item) => ({
 			...item,
@@ -28,6 +28,10 @@
 	);
 
 	const onAccount = $derived(page.url.pathname.startsWith('/account'));
+
+	const roleLabel = $derived(
+		data.user.role === 'superadmin' ? 'Superadmin' : data.user.role === 'admin' ? 'Admin' : 'User'
+	);
 </script>
 
 <!--
@@ -112,7 +116,7 @@
 				title="Account settings for {data.user.email}"
 			>
 				<p class="truncate text-[0.85rem]" class:font-medium={onAccount}>{data.user.email}</p>
-				<p class="eyebrow">{data.user.role === 'superadmin' ? 'Superadmin' : 'User'}</p>
+				<p class="eyebrow">{roleLabel}</p>
 			</a>
 			<div class="flex shrink-0 items-center gap-1">{@render signOut()}</div>
 		</div>

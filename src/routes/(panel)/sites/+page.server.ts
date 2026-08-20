@@ -5,6 +5,7 @@ import { audit } from '$lib/server/audit';
 import { basePathFor, config, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
 import { deployment, site } from '$lib/server/db/schema';
+import { isAdmin } from '$lib/server/auth';
 import { isValidSlug, newId } from '$lib/server/ids';
 import { sitesForUser } from '$lib/server/perms';
 import {
@@ -56,15 +57,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		sitesHost: config.PAGEBOX_SITES_HOST,
 		sitesPrefix: config.PAGEBOX_SITES_PREFIX,
 		retention: { min: MIN_RETENTION, max: MAX_RETENTION },
-		canCreate: locals.user!.role === 'superadmin'
+		canCreate: isAdmin(locals.user)
 	};
 };
 
 export const actions: Actions = {
 	create: async ({ locals, request }) => {
-		// Creating a site claims a slug on a shared hostname, so it stays with superadmins
-		// until there is a reason to delegate it.
-		if (locals.user!.role !== 'superadmin') return fail(403, { slug: '', message: 'Not allowed' });
+		// Creating a site claims a slug on a shared hostname, so it stays with the tiers that
+		// run something: the superadmin and the admins. The creator becomes its owner
+		// (`ownerUserId` below), which is the whole of how an admin comes to have sites —
+		// `admin` grants no standing on anybody else's (see perms.ts).
+		if (!isAdmin(locals.user)) return fail(403, { slug: '', message: 'Not allowed' });
 
 		const data = await request.formData();
 		const slug = String(data.get('slug') ?? '')

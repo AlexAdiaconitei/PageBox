@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import * as t from 'drizzle-orm/pg-core';
 import { pgTable } from 'drizzle-orm/pg-core';
 
@@ -18,8 +19,14 @@ export const user = pgTable(
 		emailVerified: t.boolean('email_verified').notNull().default(false),
 		image: t.text('image'),
 
-		// admin plugin
-		role: t.text('role').notNull().default('user'), // 'superadmin' | 'user'
+		// admin plugin. 'superadmin' | 'admin' | 'user' — see docs/access.md.
+		//
+		// There is exactly one superadmin: the platform account, created at first boot and
+		// moved only by handing the seat to somebody else. An `admin` runs their own patch —
+		// the sites they create and the accounts they issue — and has no standing on
+		// anybody else's. A `user` has no global standing at all; everything it can do comes
+		// from a per-site grant.
+		role: t.text('role').notNull().default('user'),
 		banned: t.boolean('banned').notNull().default(false),
 		banReason: t.text('ban_reason'),
 		banExpires: t.timestamp('ban_expires', { withTimezone: true }),
@@ -27,10 +34,38 @@ export const user = pgTable(
 		// PageBox: forces a password change on next login (bootstrap admin, admin resets)
 		mustChangePassword: t.boolean('must_change_password').notNull().default(false),
 
+		/**
+		 * PageBox: which admin issued this account, and therefore who may administer it.
+		 *
+		 * This is the whole boundary between two admins. Without it an admin can reset any
+		 * other account's password, sign in as them, and reach the sites of the admin who
+		 * created them — so "admins manage their own patch" would be a description of the
+		 * screen rather than a rule. Null for the superadmin and for anything the superadmin
+		 * created, which only the superadmin administers anyway.
+		 */
+		createdByUserId: t.text('created_by_user_id').references((): t.AnyPgColumn => user.id, {
+			onDelete: 'set null'
+		}),
+
 		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: t.timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
-	(table) => [t.uniqueIndex('user_email_key').on(table.email)]
+	(table) => [
+		t.uniqueIndex('user_email_key').on(table.email),
+		t.index('user_created_by_idx').on(table.createdByUserId),
+		/**
+		 * One superadmin, enforced by Postgres rather than by whoever remembered to check.
+		 *
+		 * A partial unique index over a constant column: every row with `role = 'superadmin'`
+		 * has the same value there, so a second one collides. The guards in the panel give a
+		 * readable error; this is what makes the invariant true — including for a migration,
+		 * a psql session, or a code path nobody has written yet.
+		 */
+		t
+			.uniqueIndex('user_single_superadmin')
+			.on(table.role)
+			.where(sql`role = 'superadmin'`)
+	]
 );
 
 export const session = pgTable(
