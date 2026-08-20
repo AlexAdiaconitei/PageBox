@@ -5,6 +5,9 @@
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import Users from '@lucide/svelte/icons/users';
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import Power from '@lucide/svelte/icons/power';
+	import PowerOff from '@lucide/svelte/icons/power-off';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Dropzone from '$lib/components/Dropzone.svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { formatBytes, fullDate, timeAgo } from '$lib/format';
@@ -30,6 +33,15 @@
 	// enough to tell rows apart, the full value stays in the tooltip and in the API.
 	const shortId = (id: string) => id.slice(0, 12);
 
+	// The delete form stays folded away until asked for: it is the one control on this page
+	// that nothing undoes, and a page that opens with it showing invites the accident.
+	let deleting = $state(false);
+
+	const liveDeployment = $derived(data.deployments.find((entry) => entry.live));
+	const prunableBytes = $derived(
+		data.storage.nextPrune.reduce((sum, entry) => sum + entry.totalBytes, 0)
+	);
+
 	// Written out with this site's own slug and base path, so it can be pasted as is.
 	const deployRecipe = $derived(`# 1. build against the base path this site is served under
 #    Docusaurus baseUrl · Next basePath + assetPrefix · Vite/Astro base · SvelteKit paths.base
@@ -54,6 +66,11 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 		{:else}
 			<span class="tag">Public</span>
 		{/if}
+		{#if data.site.disabled}
+			<span class="tag" style="color: var(--pb-danger)">
+				<PowerOff size={10} strokeWidth={2} /> Disabled
+			</span>
+		{/if}
 	</div>
 	<p class="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[0.85rem]">
 		<a
@@ -75,6 +92,24 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 	<p class="notice notice-ok mb-5">{form.message}</p>
 {/if}
 
+{#if data.site.disabled}
+	<!-- The one thing that explains every other panel on this screen: the deployment list
+	     says "live", the address is a link, and neither of them is serving a byte. -->
+	<div class="notice mb-5">
+		<p class="font-medium">This site is switched off</p>
+		<p class="text-muted mt-1 text-[0.85rem]">
+			Every request answers 404, for everyone — visibility and grants do not enter into it. Nothing
+			was deleted: turning it back on serves the same build.
+			{#if data.site.disabledReason}
+				<span class="block">Reason: {data.site.disabledReason}</span>
+			{/if}
+			{#if data.site.disabledAt}
+				<span class="block">Off since {fullDate(data.site.disabledAt)}.</span>
+			{/if}
+		</p>
+	</div>
+{/if}
+
 {#if form?.token}
 	<div class="notice notice-ok mb-5">
 		<p class="font-medium">Token “{form.tokenName}” created — copy it now</p>
@@ -92,9 +127,40 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 			basePath={data.site.basePath}
 			maxFiles={data.limits.maxFiles}
 			maxBytes={data.limits.maxBrowserBytes}
+			retention={{
+				limit: data.site.retentionLimit,
+				prunableBytes,
+				prunable: data.storage.nextPrune.map((entry) => shortId(entry.id))
+			}}
 		/>
 	</section>
 {/if}
+
+<!-- What the site weighs, which is not what it serves: the live build is one of the
+     copies under "Stored", and the gap between the two is what the retention limit is for. -->
+<div class="figures mb-6">
+	<div class="figure">
+		<span class="eyebrow">Stored</span>
+		<span class="figure-value">{formatBytes(data.storage.bytes)}</span>
+	</div>
+	<div class="figure">
+		<span class="eyebrow">Deployments</span>
+		<span class="figure-value">{data.storage.deployments}</span>
+	</div>
+	<div class="figure">
+		<span class="eyebrow">Live build</span>
+		<span class="figure-value">{formatBytes(liveDeployment?.totalBytes ?? 0)}</span>
+	</div>
+	<div
+		class="figure"
+		title={data.site.retentionLimit
+			? `Each upload deletes what falls past the newest ${data.site.retentionLimit}`
+			: 'Every deployment is kept until somebody deletes it'}
+	>
+		<span class="eyebrow">Keeping</span>
+		<span class="figure-value">{data.site.retentionLimit ?? 'all'}</span>
+	</div>
+</div>
 
 <section class="section">
 	<div class="mb-3 flex items-center gap-2">
@@ -327,11 +393,96 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 					<option value="public" selected={data.site.visibility === 'public'}>Public</option>
 				</select>
 			</label>
+			<label class="field w-52 max-w-full">
+				Keep last N deployments
+				<input
+					class="input"
+					type="number"
+					name="retentionLimit"
+					min={data.retentionBounds.min}
+					max={data.retentionBounds.max}
+					placeholder="all"
+					inputmode="numeric"
+					value={data.site.retentionLimit ?? ''}
+				/>
+			</label>
 			<label class="text-muted flex items-center gap-2 pb-1.5 text-[0.85rem]">
 				<input class="check" type="checkbox" name="spaFallback" checked={data.site.spaFallback} />
 				SPA fallback
 			</label>
 			<button class="btn btn-ghost" type="submit">Save</button>
 		</form>
+		<p class="text-muted mt-2 text-[0.8rem]">
+			Deployments are full copies of the build. A limit deletes the oldest ones past it on every
+			upload — never the live one — and saving a lower limit here applies it immediately.
+		</p>
+	</section>
+
+	<section class="section">
+		<div class="mb-3 flex items-center gap-2">
+			{#if data.site.disabled}
+				<PowerOff size={15} strokeWidth={1.75} class="text-faint" />
+			{:else}
+				<Power size={15} strokeWidth={1.75} class="text-faint" />
+			{/if}
+			<h2 class="text-[1.05rem] font-semibold">Serving</h2>
+		</div>
+		<p class="text-muted mb-3 text-[0.85rem]">
+			{data.site.disabled
+				? 'The site is off. Nothing has been deleted — enabling it serves the same build again.'
+				: 'A site with a deployment serves it. Switch it off to take it down without deleting anything: every request then answers 404, and its history, grants and tokens stay as they are.'}
+		</p>
+		<form method="POST" action="?/serving" class="flex flex-wrap items-end gap-3">
+			<input type="hidden" name="disabled" value={data.site.disabled ? 'false' : 'true'} />
+			{#if !data.site.disabled}
+				<label class="field w-80 max-w-full">
+					Reason <span class="text-faint">(optional)</span>
+					<input class="input" name="reason" placeholder="rebuilding, contract ended…" />
+				</label>
+			{/if}
+			<button class="btn {data.site.disabled ? 'btn-primary' : 'btn-danger'}" type="submit">
+				{#if data.site.disabled}
+					<Power size={14} strokeWidth={2} /> Enable serving
+				{:else}
+					<PowerOff size={14} strokeWidth={2} /> Disable serving
+				{/if}
+			</button>
+		</form>
+	</section>
+{/if}
+
+{#if data.canDelete}
+	<section class="section">
+		<div class="mb-3 flex items-center gap-2">
+			<TriangleAlert size={15} strokeWidth={1.75} class="text-[color:var(--pb-danger)]" />
+			<h2 class="text-[1.05rem] font-semibold">Delete this site</h2>
+		</div>
+		<p class="text-muted mb-3 text-[0.85rem]">
+			Removes the site and everything under it: {data.storage.deployments} deployment(s),
+			{formatBytes(data.storage.bytes)} of stored builds, every grant and every deploy token. Nothing
+			here comes back, and the slug
+			<span class="mono">{data.site.slug}</span> becomes free again. To take the site off the air without
+			losing any of it, disable serving above.
+		</p>
+
+		{#if !deleting}
+			<button class="btn btn-danger" onclick={() => (deleting = true)}>
+				<TriangleAlert size={14} strokeWidth={2} />
+				Delete site
+			</button>
+		{:else}
+			<form method="POST" action="?/deleteSite" class="flex flex-wrap items-end gap-3">
+				<label class="field w-72 max-w-full">
+					<!-- Typing the slug is the confirmation. A dialog is dismissed by reflex; a name
+					     has to be read off the page and copied, which is the pause this needs. -->
+					Type <span class="mono">{data.site.slug}</span> to confirm
+					<input class="input mono" name="confirm" autocomplete="off" required />
+				</label>
+				<button class="btn btn-danger" type="submit">Delete permanently</button>
+				<button class="btn btn-ghost" type="button" onclick={() => (deleting = false)}>
+					Cancel
+				</button>
+			</form>
+		{/if}
 	</section>
 {/if}

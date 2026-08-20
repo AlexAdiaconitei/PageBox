@@ -40,6 +40,11 @@ export function deploymentPrefix(siteId: string, deploymentId: string): string {
 	return `sites/${siteId}/${deploymentId}/`;
 }
 
+/** Everything a site holds, every deployment of it. Used when the site itself goes. */
+export function sitePrefix(siteId: string): string {
+	return `sites/${siteId}/`;
+}
+
 /**
  * Creates the bucket when missing, so `docker compose up` against a fresh MinIO works
  * with no manual step. On Garage the key usually lacks bucket-creation rights: that is

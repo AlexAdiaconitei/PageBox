@@ -7,6 +7,12 @@ import { db } from '$lib/server/db';
 import { deployment, site } from '$lib/server/db/schema';
 import { isValidSlug, newId } from '$lib/server/ids';
 import { sitesForUser } from '$lib/server/perms';
+import {
+	MAX_RETENTION,
+	MIN_RETENTION,
+	parseRetention,
+	siteStorage
+} from '$lib/server/deploy/retention';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const sites = await sitesForUser(locals.user!);
@@ -28,19 +34,28 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		: [];
 	const liveById = new Map(liveRows.map((row) => [row.id, row]));
 
+	// What the site *occupies*, not what it serves: every deployment it still holds is a
+	// full copy of a build, and the difference between the two figures is the reason the
+	// retention limit exists.
+	const storage = await siteStorage(sites.map((entry) => entry.id));
+
 	return {
 		sites: sites.map((entry) => {
 			const live = entry.activeDeploymentId ? liveById.get(entry.activeDeploymentId) : undefined;
+			const stored = storage.get(entry.id);
 			return {
 				...entry,
 				url: siteUrl(entry.basePath, url.port),
 				liveAt: live?.createdAt ?? null,
 				liveFileCount: live?.fileCount ?? null,
-				liveBytes: live?.totalBytes ?? null
+				liveBytes: live?.totalBytes ?? null,
+				storedBytes: stored?.bytes ?? 0,
+				deploymentCount: stored?.deployments ?? 0
 			};
 		}),
 		sitesHost: config.PAGEBOX_SITES_HOST,
 		sitesPrefix: config.PAGEBOX_SITES_PREFIX,
+		retention: { min: MIN_RETENTION, max: MAX_RETENTION },
 		canCreate: locals.user!.role === 'superadmin'
 	};
 };
@@ -58,6 +73,9 @@ export const actions: Actions = {
 		const name = String(data.get('name') ?? '').trim() || slug;
 		const visibility = data.get('visibility') === 'public' ? 'public' : 'private';
 		const spaFallback = data.get('spaFallback') === 'on';
+		const retention = parseRetention(data.get('retentionLimit'));
+
+		if (retention.error) return fail(400, { slug, message: retention.error });
 
 		if (!isValidSlug(slug)) {
 			return fail(400, {
@@ -77,6 +95,7 @@ export const actions: Actions = {
 			visibility,
 			basePath: basePathFor(slug),
 			spaFallback,
+			retentionLimit: retention.value,
 			ownerUserId: locals.user!.id
 		});
 
@@ -85,7 +104,7 @@ export const actions: Actions = {
 			actorUserId: locals.user!.id,
 			targetType: 'site',
 			targetId: id,
-			meta: { slug, visibility }
+			meta: { slug, visibility, retentionLimit: retention.value }
 		});
 
 		redirect(303, `/sites/${slug}`);

@@ -45,6 +45,13 @@ export const actions: Actions = {
 		await db.update(user).set({ mustChangePassword: false }).where(eq(user.id, current.id));
 		await audit({ action: 'password.changed', actorUserId: current.id });
 
-		redirect(303, '/');
+		// A forced change is a gate: clearing it opens the panel, so go there. A voluntary
+		// one is a task on this screen, and throwing the person to another one to tell them
+		// it worked is how they end up wondering whether it did.
+		if (current.mustChangePassword) redirect(303, '/');
+		return {
+			message: 'Password changed. Every other session on this account is signed out.',
+			ok: true
+		};
 	}
 };

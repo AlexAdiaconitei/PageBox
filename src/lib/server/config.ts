@@ -92,6 +92,51 @@ export type Config = z.infer<typeof schema> & {
 	maxUploadLabel: string;
 };
 
+/**
+ * Values that mean "I have not set this yet", in every spelling the example files, the
+ * README and the usual copy-paste have ever used. Matched loosely on purpose: a secret
+ * that reads as an instruction is a secret nobody chose.
+ */
+const PLACEHOLDERS = [
+	'change-me',
+	'changeme',
+	'change_me',
+	'replace-me',
+	'replaceme',
+	'your-secret',
+	'secret',
+	'password',
+	'pagebox',
+	'admin',
+	'xxx'
+];
+
+/**
+ * True when this configuration describes an instance somebody else could reach.
+ *
+ * `NODE_ENV` alone is the wrong test: the Docker image sets it to production, and the
+ * compose stack people run on their laptop uses that image. A `*.localhost` hostname
+ * resolves to the loopback address and nowhere else, so an instance served under one is
+ * not addressable no matter what mode it runs in.
+ */
+function isReachable(c: z.infer<typeof schema>): boolean {
+	if (c.NODE_ENV !== 'production') return false;
+	const local = (host: string) =>
+		host === 'localhost' ||
+		host.endsWith('.localhost') ||
+		host.endsWith('.local') ||
+		host.endsWith('.test');
+	return !(local(c.PAGEBOX_ADMIN_HOST.split(':')[0]) && local(c.PAGEBOX_SITES_HOST.split(':')[0]));
+}
+
+export function isPlaceholder(value: string | undefined): boolean {
+	if (!value) return false;
+	const normalised = value.trim().toLowerCase();
+	// A repeated single character ("xxxxxxxx", "aaaa…") is padding, not a password.
+	if (/^(.)\1+$/.test(normalised)) return true;
+	return PLACEHOLDERS.some((seed) => normalised === seed || normalised.startsWith(seed));
+}
+
 function fail(lines: string[]): never {
 	console.error('\n[pagebox] refusing to start — invalid configuration:\n');
 	for (const line of lines) console.error('  • ' + line);
@@ -134,6 +179,26 @@ export function parseConfig(env: Record<string, string | undefined>): {
 	}
 	if (Boolean(c.BOOTSTRAP_ADMIN_EMAIL) !== Boolean(c.BOOTSTRAP_ADMIN_PASSWORD)) {
 		errors.push('BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be set together');
+	}
+	// The credentials from `.env.example` open the whole instance, and they are the ones
+	// people actually ship — that is what an example file is for. They are a convenience on
+	// a machine nobody else can reach and a published credential anywhere else, so the
+	// process refuses to carry them once it is addressable under a real hostname. Never
+	// echoed back: an error message is a log line, and a log line is not a place for a
+	// secret, placeholder or not.
+	if (isReachable(c)) {
+		if (isPlaceholder(c.BOOTSTRAP_ADMIN_PASSWORD)) {
+			errors.push(
+				'BOOTSTRAP_ADMIN_PASSWORD is one of the example values — it is the first ' +
+					'superadmin credential of this instance, so set a real one'
+			);
+		}
+		if (isPlaceholder(c.AUTH_SECRET)) {
+			errors.push(
+				'AUTH_SECRET is one of the example values — generate one with ' +
+					'`openssl rand -base64 48`. Every session cookie is signed with it.'
+			);
+		}
 	}
 	if (errors.length) return { errors };
 

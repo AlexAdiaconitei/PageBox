@@ -63,6 +63,26 @@ export const site = pgTable(
 		activeDeploymentId: t.text('active_deployment_id'),
 		ownerUserId: t.text('owner_user_id').references(() => user.id, { onDelete: 'set null' }),
 
+		/**
+		 * Set = the site stops answering, without losing a byte of what it holds.
+		 *
+		 * Separate from `archivedAt` on purpose: archiving retires a site, this suspends
+		 * one. A site with content used to be live by the sole fact of having content, so
+		 * the only way to take it down was to delete the deployment that made it work.
+		 */
+		disabledAt: t.timestamp('disabled_at', { withTimezone: true }),
+		/** Shown to nobody but the panel — why it was taken down, for whoever finds it later. */
+		disabledReason: t.text('disabled_reason'),
+
+		/**
+		 * How many deployments to keep, the live one included. Null = keep everything.
+		 *
+		 * Storage is the reason: every deployment is a full copy of the build, so a site
+		 * deployed on each push grows without bound. Pruning happens after a successful
+		 * upload and never touches what is serving (see deploy/retention.ts).
+		 */
+		retentionLimit: t.integer('retention_limit'),
+
 		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		archivedAt: t.timestamp('archived_at', { withTimezone: true })
 	},

@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { signInWithPassword } from '$lib/server/auth/credentials';
 import { audit } from '$lib/server/audit';
 import { config } from '$lib/server/config';
+import type { HostKind } from '$lib/server/config';
 
 /**
  * One login page, two backends: the instance is chosen by the host the request arrived
@@ -69,9 +70,25 @@ function clientIp(event: { getClientAddress: () => string }): string | null {
 	}
 }
 
-/** Only same-site paths: an open redirect on a login page is a phishing primitive. */
-function safeNext(value: string | null, hostKind: 'admin' | 'sites'): string {
+/**
+ * Where a successful sign-in is allowed to land.
+ *
+ * Two rules, not one. The first is the usual: only a same-site path, because an open
+ * redirect on a login page is a phishing primitive. The second is what the host kind is
+ * for — the site host serves sites, so a `next` it was handed may only point at one. It
+ * used to take that argument and ignore it, which left a signature promising a check that
+ * was not there; the sites host would happily send a fresh viewer session at `/users` and
+ * rely on the route whitelist in hooks.server.ts to 404 it. Rely on the check instead.
+ */
+function safeNext(value: string | null, hostKind: HostKind): string {
 	const fallback = '/';
-	if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback;
+	// `//evil.com` is a protocol-relative URL, not a path; `/\evil.com` is treated as one
+	// by some browsers. Both have to go before anything else looks at the string.
+	if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) {
+		return fallback;
+	}
+	if (hostKind === 'sites') {
+		return value.startsWith(config.PAGEBOX_SITES_PREFIX + '/') ? value : fallback;
+	}
 	return value;
 }

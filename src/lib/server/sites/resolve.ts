@@ -30,6 +30,10 @@ export type SiteRef = {
 	activeDeploymentId: string | null;
 	ownerUserId: string | null;
 	archived: boolean;
+	/** Suspended by an operator: it keeps everything it has and answers nothing. */
+	disabled: boolean;
+	/** How many deployments to keep on the next upload; null = keep everything. */
+	retentionLimit: number | null;
 };
 
 /** Pure part: does this path look like a site path, and which slug/subpath is it? */
@@ -59,6 +63,8 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 	if (!parsed) return null;
 
 	const siteRef = await lookupSiteBySlug(parsed.slug);
+	// A disabled site is resolved but not served: `serveSite` answers the same 404 as a
+	// site that does not exist, so taking one down leaks nothing about what is hosted here.
 	if (!siteRef || siteRef.archived) return null;
 
 	return {
@@ -89,7 +95,9 @@ export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
 		spaFallback: row.spaFallback,
 		activeDeploymentId: row.activeDeploymentId,
 		ownerUserId: row.ownerUserId,
-		archived: row.archivedAt !== null
+		archived: row.archivedAt !== null,
+		disabled: row.disabledAt !== null,
+		retentionLimit: row.retentionLimit
 	};
 	await cache.set(key, ref, CACHE_TTL_SECONDS);
 	return ref;

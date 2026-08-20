@@ -129,6 +129,25 @@ Any failure exits the process rather than serving half-configured traffic. Both 
 and bucket steps can be turned off (`PAGEBOX_MIGRATE_ON_START`,
 `PAGEBOX_ENSURE_BUCKET_ON_START`).
 
+## Taking a site down, and keeping its history bounded
+
+A site with a deployment serves it — until somebody says otherwise. **Disable serving** on
+the site page takes it off the air without deleting anything: every request answers 404,
+for everyone, and the deployments, grants and tokens stay where they are. Enabling it
+serves the same build again.
+
+**Delete site** is the other end of that: it removes the site with every deployment,
+object, grant and deploy token it has, and releases the slug. It is superadmin-only and
+asks for the slug to be typed back, because nothing undoes it. Reach for disable first.
+
+Every deployment is a *full* copy of the build, which is what makes rollback a pointer
+move and what makes a site deployed on each push grow without bound. A site can carry a
+**retention limit** — set when it is created or later in its settings — and each upload
+then deletes the deployments that fall past it. Two things it never does: prune the live
+deployment, and prune before the new build is stored. It is never silent either — the
+panel names what the next deploy will delete before you press it, and the API answers with
+`pruned` and `prunedBytes`.
+
 ## Upload cap
 
 `MAX_UPLOAD_BYTES` defaults to **100 MB** and is configurable. The default exists because

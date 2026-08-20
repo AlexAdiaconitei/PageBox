@@ -12,6 +12,7 @@ import { deployment, site } from '../db/schema';
 import { newId } from '../ids';
 import { deletePrefix, deploymentPrefix, headObject, objectKey } from '../s3';
 import { invalidateSite, type SiteRef } from '../sites/resolve';
+import { pruneDeployments } from './retention';
 import { extractZipToS3, INGEST_VERSION, ZipRejected } from './zip';
 
 /**
@@ -34,6 +35,8 @@ export type IngestOutcome =
 			skipped: string[];
 			/** Directory the archive was rebased onto, '' when it was already at the root. */
 			root: string;
+			/** Older deployments the site's retention limit dropped to make room for this one. */
+			pruned: { ids: string[]; bytes: number };
 	  }
 	| { ok: false; status: 400 | 413; message: string; reason?: string };
 
@@ -66,6 +69,10 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 		const existing = await findReusable(input.siteRef.id, written.checksum);
 		if (existing) {
 			if (input.activate) await activate(input.siteRef, existing.id);
+			// Nothing new was stored, so nothing has to make room — but the deployment that
+			// just became live may have been the one retention was about to drop, and after
+			// the activation it is not. Re-running the rule keeps the two consistent.
+			const pruned = await applyRetention(input.siteRef, existing.id, input.activate);
 			return {
 				ok: true,
 				deploymentId: existing.id,
@@ -73,7 +80,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 				totalBytes: existing.totalBytes,
 				reused: true,
 				skipped: [],
-				root: ''
+				root: '',
+				pruned
 			};
 		}
 
@@ -114,6 +122,10 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 
 		if (input.activate) await activate(input.siteRef, deploymentId);
 
+		// Last, and only once the new build is safely in S3: pruning before the upload
+		// would trade a site's history for one that then failed to arrive.
+		const pruned = await applyRetention(input.siteRef, deploymentId, input.activate);
+
 		return {
 			ok: true,
 			deploymentId,
@@ -121,7 +133,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			totalBytes: result.totalBytes,
 			reused: false,
 			skipped: result.skipped,
-			root: result.root
+			root: result.root,
+			pruned
 		};
 	} catch (err) {
 		if (deploymentId) await markFailed(input.siteRef.id, deploymentId);
@@ -131,6 +144,34 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 		throw err;
 	} finally {
 		await rm(dir, { recursive: true, force: true }).catch(() => {});
+	}
+}
+
+/**
+ * Enforces the site's retention limit after a successful upload.
+ *
+ * Never throws: a bucket that will not delete is a housekeeping problem, and turning it
+ * into a failed deploy would mean a site cannot be updated because its old builds are
+ * stuck. The failure is loud in the log and the row stays listed in the panel.
+ */
+async function applyRetention(
+	siteRef: SiteRef,
+	justDeployedId: string,
+	activated: boolean
+): Promise<{ ids: string[]; bytes: number }> {
+	if (!siteRef.retentionLimit) return { ids: [], bytes: 0 };
+	try {
+		// `siteRef` is a snapshot taken before this upload; the live pointer moved a moment
+		// ago, and pruning must protect what is live *now*.
+		const activeDeploymentId = activated ? justDeployedId : siteRef.activeDeploymentId;
+		const outcome = await pruneDeployments(
+			{ id: siteRef.id, activeDeploymentId },
+			siteRef.retentionLimit
+		);
+		return { ids: outcome.prunedIds, bytes: outcome.reclaimedBytes };
+	} catch (err) {
+		console.error(`[pagebox] retention: could not prune ${siteRef.slug}:`, err);
+		return { ids: [], bytes: 0 };
 	}
 }
 

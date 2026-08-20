@@ -7,6 +7,7 @@ import { config, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
 import { deployment } from '$lib/server/db/schema';
 import { ingestDeployment } from '$lib/server/deploy/ingest';
+import { siteStorage } from '$lib/server/deploy/retention';
 import { verifyDeployment } from '$lib/server/deploy/verify';
 
 const ACCEPTED_TYPES = [
@@ -81,10 +82,30 @@ export const POST: RequestHandler = async (event) => {
 			root: outcome.root || undefined,
 			source: caller.kind === 'token' ? 'api' : 'panel-upload',
 			warnings: warnings.length ? warnings : undefined,
-			skipped: outcome.skipped.length
+			skipped: outcome.skipped.length,
+			pruned: outcome.pruned.ids.length || undefined
 		},
 		ip: clientIp(event)
 	});
+
+	// Its own entry, not a field on the deploy: what a retention rule deleted has to be
+	// findable by searching the trail for deletions, like every other deletion.
+	if (outcome.pruned.ids.length > 0) {
+		await audit({
+			action: 'deployment.pruned',
+			actorTokenId: caller.tokenId,
+			actorUserId: caller.userId,
+			targetType: 'site',
+			targetId: siteRef.id,
+			meta: {
+				retentionLimit: siteRef.retentionLimit,
+				deploymentIds: outcome.pruned.ids,
+				reclaimedBytes: outcome.pruned.bytes,
+				triggeredBy: outcome.deploymentId
+			},
+			ip: clientIp(event)
+		});
+	}
 
 	// Turns "we warned you about absolute paths" into "3 of its assets 404" — a fact
 	// instead of a caveat. Only worth doing for a deployment that is actually live.
@@ -106,6 +127,11 @@ export const POST: RequestHandler = async (event) => {
 		brokenAssets: verification?.brokenAssetCount ?? null,
 		// Named, not just counted: "3 broken" sends you hunting, "/logo.svg is missing" does not.
 		brokenAssetSamples: verification?.broken.slice(0, 5) ?? [],
+		// Never a surprise: whoever uploaded is told what the retention rule removed to fit
+		// this build in, in the same answer that says the build landed.
+		retentionLimit: siteRef.retentionLimit,
+		pruned: outcome.pruned.ids,
+		prunedBytes: outcome.pruned.bytes,
 		url: siteUrl(siteRef.basePath, event.url.port)
 	});
 };
@@ -124,11 +150,19 @@ export const GET: RequestHandler = async (event) => {
 		.orderBy(desc(deployment.createdAt))
 		.limit(limit);
 
+	const storage = (await siteStorage([siteRef.id])).get(siteRef.id);
+
 	return json(200, {
 		slug: siteRef.slug,
 		basePath: siteRef.basePath,
 		siteUrl: siteUrl(siteRef.basePath, event.url.port),
 		activeDeploymentId: siteRef.activeDeploymentId,
+		// Serving state, not just deployment state: a site can hold a live build and still
+		// answer 404 because an operator suspended it.
+		serving: !siteRef.disabled,
+		retentionLimit: siteRef.retentionLimit,
+		storageBytes: storage?.bytes ?? 0,
+		deploymentCount: storage?.deployments ?? 0,
 		maxUploadBytes: config.MAX_UPLOAD_BYTES,
 		deployments: rows.map((row) => ({
 			id: row.id,

@@ -7,7 +7,9 @@
  */
 
 export function formatBytes(n: number): string {
-	const units = ['B', 'KB', 'MB', 'GB'];
+	// Through PB, because the last unit is not a ceiling on the number — it is a ceiling on
+	// the *label*, and a fleet of a few terabytes rendered as "4096.0 GB" reads as a bug.
+	const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 	let value = n;
 	let unit = 0;
 	while (value >= 1024 && unit < units.length - 1) {

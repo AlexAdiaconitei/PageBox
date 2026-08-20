@@ -56,6 +56,9 @@ X-Deployment-Notes: commit abc1234
   "activated": true,
   "brokenAssets": 0,
   "brokenAssetSamples": [],
+  "retentionLimit": 5,
+  "pruned": ["01J…"],
+  "prunedBytes": 4693110,
   "url": "https://pages.example.com/s/docs-a/"
 }
 ```
@@ -65,6 +68,10 @@ X-Deployment-Notes: commit abc1234
   command people actually run, and deploying it verbatim gives a site whose root holds a
   folder and no `index.html`.
 - `?activate=false` uploads without moving the live pointer.
+- When the site has a retention limit, the upload deletes the deployments that fall past
+  it and says so: `pruned` names them and `prunedBytes` is what came back. The live
+  deployment is never among them, and a limit is never applied before the new build is
+  safely stored. Without a limit, `retentionLimit` is `null` and `pruned` is empty.
 - Re-uploading a byte-identical archive returns the existing deployment with
   `"reused": true` instead of storing a second copy — that is what a retrying CI job does.
 - The live pointer moves only after every object is in S3. A failed upload leaves the
@@ -103,10 +110,29 @@ the deployed `index.html` back and checks what it references, resolving each one
 the site serves it — so a link to another page counts as found, and a genuinely missing
 file is named rather than only counted.
 
+## What a token is worth
+
+A deploy token is a credential belonging to a person, so it can never outrank them. Every
+call resolves the owner's permission on the site as it stands *now*, not as it stood when
+the key was cut: revoke their grant, demote them or suspend the account and the token stops
+working immediately, with the same `404` as a site that does not exist. Revoking the key
+itself is still the direct route — this is what makes the grant the source of truth.
+
+A token is scoped to exactly one site, the one it was issued for. A key carrying no scope
+authorises nothing.
+
 ## The rest
 
 ```http
 GET    /api/v1/sites/{slug}/deployments?limit=20     # history, newest first
+```
+
+The history response also carries the site's own state: `serving` (false when an operator
+has switched the site off — it then answers 404 whatever is deployed), `retentionLimit`,
+`storageBytes` (every deployment it still holds, not just the live one) and
+`deploymentCount`.
+
+```http
 GET    /api/v1/sites/{slug}/deployments/{id}
 POST   /api/v1/sites/{slug}/deployments/{id}/activate   # rollback and roll-forward
 DELETE /api/v1/sites/{slug}/deployments/{id}            # 409 on the live one

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
 	let { data, form } = $props();
 	let adding = $state(false);
@@ -46,7 +47,17 @@
 		</label>
 		<label class="field">
 			Temporary password
-			<input class="input mono" name="password" minlength="10" required />
+			<!-- Visible from the start, unlike every other password field here: this one is
+			     not a secret being kept but a credential being read out to somebody else, and
+			     whoever types it has to be able to check what they typed. -->
+			<PasswordInput
+				name="password"
+				autocomplete="off"
+				minlength={10}
+				required
+				mono
+				visible={true}
+			/>
 		</label>
 		<div class="flex items-end gap-3">
 			<label class="field flex-1">
@@ -124,9 +135,10 @@
 								>
 									Reset password
 								</button>
-								<form method="POST" action="?/ban">
+								<!-- The action names what it does, so a page rendered before someone
+								     else changed this row cannot flip it the wrong way. -->
+								<form method="POST" action={person.banned ? '?/restore' : '?/suspend'}>
 									<input type="hidden" name="userId" value={person.id} />
-									<input type="hidden" name="banned" value={String(person.banned)} />
 									<button class="btn btn-danger btn-xs" type="submit">
 										{person.banned ? 'Restore' : 'Suspend'}
 									</button>
@@ -142,7 +154,14 @@
 								<input type="hidden" name="userId" value={person.id} />
 								<label class="field w-72 max-w-full">
 									New temporary password for {person.email}
-									<input class="input mono" name="password" minlength="10" required />
+									<PasswordInput
+										name="password"
+										autocomplete="off"
+										minlength={10}
+										required
+										mono
+										visible={true}
+									/>
 								</label>
 								<button class="btn btn-ghost" type="submit">Replace</button>
 							</form>

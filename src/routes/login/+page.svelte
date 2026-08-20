@@ -1,5 +1,6 @@
 <script lang="ts">
 	import LogIn from '@lucide/svelte/icons/log-in';
+	import PasswordInput from '$lib/components/PasswordInput.svelte';
 
 	let { data, form } = $props();
 </script>
@@ -32,13 +33,7 @@
 		</label>
 		<label class="field">
 			Password
-			<input
-				class="input"
-				type="password"
-				name="password"
-				autocomplete="current-password"
-				required
-			/>
+			<PasswordInput name="password" autocomplete="current-password" required />
 		</label>
 
 		{#if form?.message}

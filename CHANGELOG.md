@@ -7,6 +7,91 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — a deploy token outlived the permission it was issued under
+
+- Token authentication checked the key's hash, expiry, rate limit and site scope, and never
+  looked at the person it belongs to. Removing someone's grant, demoting them or suspending
+  the account left every token they had cut still deploying, which made those grants
+  unrevokable in practice. The owner's current permission is now resolved on every
+  token-authenticated call, `/whoami` included — which used to hand a site's slug, base path
+  and visibility to any valid key with no permission check at all.
+- A key carrying no site scope used to mean "any site its owner can reach". The panel is the
+  only thing that issues keys and always sets the scope, so the only key reaching that branch
+  came from somewhere else. Default-deny.
+- Revoking a deploy token somebody else issued threw: better-auth's `deleteApiKey` scopes
+  deletion to the caller's own keys and answers `KEY_NOT_FOUND` for anyone else's, so an
+  owner pressing Revoke on a co-owner's token got a 500 and a token that still worked. A
+  deploy token belongs to the site it was cut for, and the site's owners revoke it.
+
+### Fixed — the grant picker did not exist without JavaScript
+
+- The searchable picker rendered a text input and built its option list only while open, so
+  the server sent a page whose only control could never resolve a principal: granting access
+  with JavaScript off was impossible, and the page's HTML did not say what the choices were.
+  The server now renders a plain `<select>` over the same options, grouped by kind, and the
+  search box replaces it once the component mounts.
+
+### Fixed — a deleted deployment could leave the panel offering a rollback to nothing
+
+- Objects were dropped before the row, and a storage failure was not checked: the deployment
+  stayed listed, stayed rollback-able, and served nothing. The row is now removed only once
+  its objects are actually gone, and a refusal from storage says so instead of half-deleting.
+
+### Fixed — the suspend button posted the state and let the server invert it
+
+- A page rendered before somebody else changed the row suspended the account it meant to
+  restore. `?/suspend` and `?/restore` each do one thing and are idempotent.
+
+### Fixed — smaller things
+
+- `formatBytes` stopped at GB, so a few terabytes of stored builds read as `4096.0 GB`.
+- The login page's `safeNext` took a host kind and ignored it. The site host now accepts only
+  a path under the sites prefix, instead of leaning on the route whitelist to 404 the rest.
+- The example `AUTH_SECRET` and `BOOTSTRAP_ADMIN_PASSWORD` are refused once the instance is
+  addressable under a real hostname — the credentials in an example file are the ones people
+  ship. Checked on reachability rather than `NODE_ENV`, because the Docker image sets
+  production and a laptop running it under `*.localhost` is not a deployment. The values are
+  never echoed into the error.
+- There was no `+error.svelte`, so the id `handleError` logs beside every stack trace never
+  reached the screen — a 500 in a form action was a blank wall. The error page now shows it.
+
+### Added — a site can be switched off, and its history can be bounded
+
+- **Serving switch.** A site used to be published by the sole fact of holding a deployment,
+  so the only way to take one down was to delete the build that made it work. `site` now
+  carries `disabled_at` and an optional reason; a disabled site answers the same 404 as one
+  that never existed, checked before visibility and before any grant lookup so it is off
+  for its owner too. Nothing is deleted — enabling it serves the same build again.
+- **Delete.** The counterpart to disabling, and the reason disabling exists: a site merely
+  in the way should be switched off, one that should never have existed is removed —
+  deployments, objects, grants and deploy tokens together, releasing the slug. Superadmin
+  only, the slug has to be typed back, and the row goes only once the objects have.
+- **Retention limit.** Every deployment is a full copy of the build, which is what makes
+  rollback a pointer move and what makes a site deployed on each push grow without bound.
+  A site can keep its last *N* deployments (`retention_limit`, set at creation or in
+  settings) and each upload drops what falls past it. Never the live one, never before the
+  new build is stored, and never silently: the panel names what the next deploy will delete
+  before it happens, the upload response carries `pruned` and `prunedBytes`, and the trail
+  gets a `deployment.pruned` entry.
+- **Size, where the question is asked.** The Sites list shows what each site occupies
+  across every deployment it holds, plus fleet totals for stored bytes and disabled sites;
+  the site page shows stored bytes, deployment count, the live build's size and the limit
+  in force. `GET /deployments` returns `serving`, `retentionLimit`, `storageBytes` and
+  `deploymentCount`.
+
+### Changed — the account screen is part of the panel, and passwords can be read back
+
+- Changing a password used to leave the panel for a bare centred form, reachable two ways
+  from the same corner — the account name and a key icon beside it — which read as two
+  destinations and were one. It is now a panel view with the rail still in place, reached
+  by the account name on a desktop and an Account tab on a phone; the key icon is gone.
+- Every password field in the app is one component with a reveal toggle. A credential you
+  cannot read is one that gets set to something nobody can reproduce, and "repeat it below"
+  only catches the same typo twice. The temporary passwords a superadmin issues start
+  visible — they are being read out to somebody, not kept.
+- A voluntary password change now stays on the account screen and says it worked. Only a
+  forced one still redirects into the panel, because clearing the gate is the point of it.
+
 ### Fixed — re-uploading an archive resurrected a deployment built by older rules
 
 - Deployments record which extraction rules produced them (`ingest_version`), and an upload

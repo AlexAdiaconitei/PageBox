@@ -485,6 +485,47 @@ table {
 		cursor: not-allowed;
 	}
 
+	/* A field with a control sitting inside its right edge — the password reveal toggle
+	   (PasswordInput.svelte). The padding is reserved on the input rather than the button
+	   being overlaid on top of the text, so a long value scrolls behind the toggle instead
+	   of under it. */
+	.input-affix {
+		position: relative;
+		display: block;
+		width: 100%;
+	}
+	.input-affix > .input {
+		padding-right: 2.5rem;
+	}
+	.affix-btn {
+		position: absolute;
+		top: 0;
+		right: 0;
+		display: flex;
+		height: 100%;
+		width: 2.4rem;
+		cursor: pointer;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: 0 6px 6px 0;
+		background: transparent;
+		color: var(--pb-faint);
+		transition:
+			color 0.12s ease,
+			background-color 0.12s ease;
+	}
+	.affix-btn:hover {
+		color: var(--pb-ink);
+		background: var(--pb-line-soft);
+	}
+	/* The ring belongs to the field; a second one inside it reads as a second control. */
+	.affix-btn:focus-visible {
+		outline: 2px solid var(--pb-accent);
+		outline-offset: -2px;
+		color: var(--pb-ink);
+	}
+
 	/* A text input standing in for a search-as-you-type select (see Combobox.svelte). */
 	.input-search {
 		padding-left: 2.25rem;
@@ -680,7 +721,8 @@ table {
 
 	/* --- fleet figures ------------------------------------------------------ */
 	/* The Sites overview. Counts an operator acts on — how many sites exist, how many are
-	   actually serving something, how many are dark — set as figures rather than as a chart:
+	   actually serving something, how many are dark or switched off, and what it all weighs
+	   both live and on disk — set as figures rather than as a chart:
 	   at this size a bar says less than the number does. The 1px gap over a line-coloured
 	   ground draws the dividers, so the strip stays hairlines rather than boxes. */
 	.figures {
@@ -691,9 +733,16 @@ table {
 		border-top: 1px solid var(--pb-line);
 		border-bottom: 1px solid var(--pb-line);
 	}
+	/* Six figures, so the breakpoints go 2 → 3 → 6: every step divides the count exactly
+	   and the strip never ends on a half-empty row. */
 	@media (min-width: 34rem) {
 		.figures {
-			grid-template-columns: repeat(4, minmax(0, 1fr));
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+	@media (min-width: 64rem) {
+		.figures {
+			grid-template-columns: repeat(6, minmax(0, 1fr));
 		}
 	}
 	.figure {

@@ -29,6 +29,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 	};
 };
 
+/** Shared body of the `suspend` and `restore` actions. */
+async function setBanned(event: Parameters<Actions[string]>[0], banned: boolean) {
+	const actor = requireSuperadmin(event.locals);
+	const data = await event.request.formData();
+	const userId = String(data.get('userId') ?? '');
+	if (userId === actor.id) return fail(400, { message: 'You cannot suspend yourself' });
+
+	if (banned) {
+		await adminAuth.api.banUser({ body: { userId }, headers: event.request.headers });
+	} else {
+		await adminAuth.api.unbanUser({ body: { userId }, headers: event.request.headers });
+	}
+	await audit({
+		action: banned ? 'user.banned' : 'user.unbanned',
+		actorUserId: actor.id,
+		targetType: 'user',
+		targetId: userId
+	});
+	return { message: banned ? 'Access revoked' : 'Access restored' };
+}
+
 export const actions: Actions = {
 	create: async (event) => {
 		const actor = requireSuperadmin(event.locals);
@@ -90,26 +111,16 @@ export const actions: Actions = {
 		return { message: 'Role updated' };
 	},
 
-	ban: async (event) => {
-		const actor = requireSuperadmin(event.locals);
-		const data = await event.request.formData();
-		const userId = String(data.get('userId') ?? '');
-		const banned = data.get('banned') === 'true';
-		if (userId === actor.id) return fail(400, { message: 'You cannot ban yourself' });
-
-		if (banned) {
-			await adminAuth.api.unbanUser({ body: { userId }, headers: event.request.headers });
-		} else {
-			await adminAuth.api.banUser({ body: { userId }, headers: event.request.headers });
-		}
-		await audit({
-			action: banned ? 'user.unbanned' : 'user.banned',
-			actorUserId: actor.id,
-			targetType: 'user',
-			targetId: userId
-		});
-		return { message: banned ? 'Access restored' : 'Access revoked' };
-	},
+	/**
+	 * Two actions rather than one that flips whatever it is sent.
+	 *
+	 * The form used to post the *current* state and the handler inverted it, so a stale page
+	 * — or a value read the wrong way round once — suspends the account it meant to restore.
+	 * An action named for what it does cannot be misread, and it is idempotent: pressing
+	 * suspend twice suspends.
+	 */
+	suspend: (event) => setBanned(event, true),
+	restore: (event) => setBanned(event, false),
 
 	resetPassword: async (event) => {
 		const actor = requireSuperadmin(event.locals);

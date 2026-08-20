@@ -1,4 +1,8 @@
 import type { RequestEvent } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
+import { db } from '../db';
+import { user } from '../db/schema';
+import type { SessionUser } from '../auth';
 import { atLeast, permissionFor } from '../perms';
 import { lookupSiteBySlug, type SiteRef } from '../sites/resolve';
 import { authenticateToken, jsonError, tokenAllowsSite, type TokenAuth } from './auth';
@@ -24,6 +28,29 @@ export async function requireSiteToken(
 	}
 
 	return { auth: authenticated.auth, siteRef };
+}
+
+/**
+ * The account a token acts as, as it stands *now* — not as it stood when the key was cut.
+ *
+ * A key is a credential belonging to a person, so it can never outrank them: a token whose
+ * owner was banned, demoted or had their grant removed has to stop working, and nothing in
+ * the key itself records any of that. Returns null when the owner is gone or suspended.
+ */
+export async function tokenOwner(auth: TokenAuth): Promise<SessionUser | null> {
+	if (!auth.ownerUserId) return null;
+
+	const [row] = await db.select().from(user).where(eq(user.id, auth.ownerUserId)).limit(1);
+	if (!row || row.banned) return null;
+
+	return {
+		id: row.id,
+		email: row.email,
+		name: row.name,
+		role: row.role ?? 'user',
+		banned: Boolean(row.banned),
+		mustChangePassword: Boolean(row.mustChangePassword)
+	};
 }
 
 export function clientIp(event: RequestEvent): string | null {
@@ -62,6 +89,14 @@ export async function identifyCaller(
 	if (hasBearer) {
 		const context = await requireSiteToken(event, slug);
 		if ('response' in context) return context;
+
+		// The scope on the key says which site; the owner's grants say whether that is still
+		// allowed. Both, every call — a key that outlives the permission it was issued under
+		// is a permission that cannot be revoked.
+		const owner = await tokenOwner(context.auth);
+		const permission = owner ? await permissionFor(owner, context.siteRef) : null;
+		if (!atLeast(permission, required)) return { response: jsonError(404, 'site not found') };
+
 		return {
 			caller: {
 				kind: 'token',

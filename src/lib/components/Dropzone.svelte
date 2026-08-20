@@ -20,8 +20,20 @@
 		slug,
 		basePath,
 		maxFiles,
-		maxBytes
-	}: { slug: string; basePath: string; maxFiles: number; maxBytes: number } = $props();
+		maxBytes,
+		retention
+	}: {
+		slug: string;
+		basePath: string;
+		maxFiles: number;
+		maxBytes: number;
+		/**
+		 * The site's retention rule, and what it will delete when this upload lands. Told
+		 * here rather than only in the answer: a deploy that silently removes older builds
+		 * is a deploy nobody can undo, and the warning is worth nothing after the fact.
+		 */
+		retention?: { limit: number | null; prunableBytes: number; prunable: string[] };
+	} = $props();
 
 	type Entry = { path: string; size: number; file: File };
 
@@ -34,6 +46,8 @@
 	let accepted = $state(false);
 	/** A zip dropped as-is: sent untouched, so there is nothing to inspect first. */
 	let rawArchive = $state<File | null>(null);
+
+	const willPrune = $derived(retention?.limit ? (retention.prunable ?? []) : []);
 
 	const blocking = $derived(result?.warnings.filter((warning) => warning.blocking) ?? []);
 	const advisory = $derived(result?.warnings.filter((warning) => !warning.blocking) ?? []);
@@ -181,10 +195,16 @@
 				return;
 			}
 
+			// The retention rule reports what it took, by count and by size, in the same line
+			// that says the deploy worked — the only moment the person is still looking.
+			const pruned = Array.isArray(payload.pruned) ? payload.pruned.length : 0;
+			const prunedNote = pruned
+				? ` · retention deleted ${pruned} old deployment(s), freeing ${formatBytes(payload.prunedBytes ?? 0)}`
+				: '';
 			status =
-				payload.brokenAssets > 0
+				(payload.brokenAssets > 0
 					? `Deployed — ${payload.fileCount} files, but ${payload.brokenAssets} referenced asset(s) are missing`
-					: `Deployed — ${payload.fileCount} files, live now`;
+					: `Deployed — ${payload.fileCount} files, live now`) + prunedNote;
 			reset({ keepStatus: true });
 			await invalidateAll();
 		} catch (err) {
@@ -233,6 +253,24 @@
 			<input class="hidden" type="file" webkitdirectory multiple onchange={onPick} />
 		</label>
 	</div>
+
+	{#if willPrune.length > 0}
+		<!-- Before the click, not in the receipt: a deploy that quietly deletes older builds
+		     is one nobody can undo, so the rule says what it will take while there is still
+		     the option of raising the limit instead. -->
+		<p class="text-muted mt-3 flex gap-2 text-[0.8rem]">
+			<TriangleAlert
+				size={14}
+				strokeWidth={1.75}
+				class="mt-0.5 shrink-0 text-[color:var(--pb-warn)]"
+			/>
+			<span>
+				This site keeps its last {retention?.limit} deployments, so deploying deletes {willPrune.length}
+				older one(s) — {formatBytes(retention?.prunableBytes ?? 0)}, never the live one:
+				<span class="mono text-faint break-all">{willPrune.join(', ')}</span>
+			</span>
+		</p>
+	{/if}
 
 	{#if status}
 		<p class="text-muted mt-3 text-[0.85rem]">{status}</p>

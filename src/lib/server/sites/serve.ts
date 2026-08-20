@@ -35,6 +35,11 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
 		});
 	}
 
+	// Checked before the visibility branch, and before any grant lookup: a suspended site
+	// is off for everybody, its owner included. The 404 is the same one everything else
+	// here answers, so "taken down" and "never existed" stay indistinguishable from outside.
+	if (siteRef.disabled) return notFound(siteRef);
+
 	if (siteRef.visibility === 'private') {
 		const denial = await guardPrivate(event, siteRef);
 		if (denial) return denial;

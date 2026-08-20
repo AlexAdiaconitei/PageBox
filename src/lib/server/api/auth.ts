@@ -13,7 +13,11 @@ import { TOKEN_PREFIX } from '../ids';
 
 export type TokenAuth = {
 	tokenId: string;
-	/** null = the token may deploy to any site its owner can. */
+	/**
+	 * The one site this token may act on. Null means the key carries no PageBox scope —
+	 * every key the panel issues has one, so a key without it was created by something
+	 * else, and "something else" is not a set of sites we can name.
+	 */
 	siteId: string | null;
 	ownerUserId: string;
 };
@@ -68,9 +72,15 @@ function safeParse(value: string): unknown {
 	}
 }
 
-/** A token scoped to one site may not touch another. */
+/**
+ * A token may act on exactly the site it was issued for.
+ *
+ * An unscoped key used to mean "any site its owner can reach", which is a wildcard nobody
+ * asked for: the panel is the only thing that issues keys and it always sets the scope, so
+ * the only key that can reach this branch is one created outside PageBox. Default-deny.
+ */
 export function tokenAllowsSite(auth: TokenAuth, siteId: string): boolean {
-	return auth.siteId === null || auth.siteId === siteId;
+	return auth.siteId !== null && auth.siteId === siteId;
 }
 
 export function jsonError(status: number, message: string, extra: Record<string, unknown> = {}) {

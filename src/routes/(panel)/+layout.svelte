@@ -5,7 +5,7 @@
 	import Layers from '@lucide/svelte/icons/layers';
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import LogOut from '@lucide/svelte/icons/log-out';
-	import KeyRound from '@lucide/svelte/icons/key-round';
+	import UserRound from '@lucide/svelte/icons/user-round';
 	import PageboxMark from '$lib/components/PageboxMark.svelte';
 
 	let { data, children } = $props();
@@ -26,6 +26,8 @@
 			current: page.url.pathname === item.href || page.url.pathname.startsWith(item.href + '/')
 		}))
 	);
+
+	const onAccount = $derived(page.url.pathname.startsWith('/account'));
 </script>
 
 <!--
@@ -41,15 +43,12 @@
 	</div>
 {/snippet}
 
-{#snippet account()}
-	<a
-		class="btn btn-ghost btn-xs"
-		href="/account/password"
-		title="Account — {data.user.email}"
-		aria-label="Account settings for {data.user.email}"
-	>
-		<KeyRound size={13} strokeWidth={1.75} />
-	</a>
+<!--
+	Sign out, and nothing else. The account itself is a destination in the rail below and in
+	the phone tab row — it used to be reachable two ways from the same corner, the name and a
+	key icon beside it, which read as two different things and were one.
+-->
+{#snippet signOut()}
 	<form method="POST" action="/logout">
 		<button class="btn btn-ghost btn-xs" type="submit" title="Sign out" aria-label="Sign out">
 			<LogOut size={13} strokeWidth={1.75} />
@@ -62,7 +61,7 @@
 	<header class="bg-rail border-line sticky top-0 z-30 border-b md:hidden">
 		<div class="flex items-center gap-2.5 px-4 py-2.5">
 			{@render brand()}
-			<div class="ml-auto flex shrink-0 items-center gap-1">{@render account()}</div>
+			<div class="ml-auto flex shrink-0 items-center gap-1">{@render signOut()}</div>
 		</div>
 		<nav class="scrollbar-none flex gap-1 overflow-x-auto px-3 pb-2" aria-label="Sections">
 			{#each nav as item (item.href)}
@@ -75,6 +74,17 @@
 					{item.label}
 				</a>
 			{/each}
+			<!-- Last in the row, the way it is last in the rail: there is no room for a
+			     footer on a phone, so the account joins the sections it sits below on a
+			     desktop rather than becoming an icon in the bar. -->
+			<a
+				href="/account/password"
+				class="rail-link rail-link-h"
+				aria-current={onAccount ? 'page' : undefined}
+			>
+				<UserRound size={15} strokeWidth={1.75} />
+				Account
+			</a>
 		</nav>
 	</header>
 
@@ -93,11 +103,18 @@
 		</nav>
 
 		<div class="border-line-soft flex items-center justify-between gap-2 border-t px-2 pt-3">
-			<a href="/account/password" class="hover:bg-line-soft -mx-1 min-w-0 rounded px-1 py-0.5">
-				<p class="truncate text-[0.85rem]">{data.user.email}</p>
+			<!-- The name *is* the link to the account view, and the only one: whoever wants to
+			     change their password looks for themselves, not for an icon. -->
+			<a
+				href="/account/password"
+				class="hover:bg-line-soft -mx-1 min-w-0 flex-1 rounded px-1 py-0.5"
+				aria-current={onAccount ? 'page' : undefined}
+				title="Account settings for {data.user.email}"
+			>
+				<p class="truncate text-[0.85rem]" class:font-medium={onAccount}>{data.user.email}</p>
 				<p class="eyebrow">{data.user.role === 'superadmin' ? 'Superadmin' : 'User'}</p>
 			</a>
-			<div class="flex items-center gap-1">{@render account()}</div>
+			<div class="flex shrink-0 items-center gap-1">{@render signOut()}</div>
 		</div>
 	</aside>
 
