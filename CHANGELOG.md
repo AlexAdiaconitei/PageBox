@@ -7,6 +7,48 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — storage quotas, allocated out of one declared pool
+
+Nothing stopped an admin filling the bucket. Now each one may hold so many bytes across
+every deployment their sites keep — history included, because a build kept for rollback
+occupies exactly as much disk as the one being served — and storage is charged to the
+site's owner, so a deployer pushing to somebody else's site spends that owner's allowance.
+
+- **`PAGEBOX_STORAGE_BYTES`, optional.** What the instance has to give away, and a
+  *declaration* rather than a measurement: S3 exposes no capacity figure, and MinIO and
+  Garage report disk size only through their own non-S3 admin APIs. Set it and the pool is
+  real; unset, per-admin quotas still hold with no pool arithmetic to do.
+- **A hard pool.** Quotas may not sum past the total. The superadmin has no quota of its
+  own — its allowance is the remainder, so every quota it hands out shrinks its own room,
+  and an allocation is refused both when the pool has not got it and when it would leave
+  the seat less than it is already using.
+- **Retention counts before the fact.** The allowance for an upload is
+  `quota − (used − what this deploy's retention will drop)`, so a site keeping its last *N*
+  builds stays deployable at its ceiling instead of needing builds deleted by hand. The
+  bucket briefly holds both, since pruning still runs after the upload lands.
+- **Refused before a byte is written.** The archive's own central directory is measured
+  through the same skip and rebase rules extraction uses, so the figure is exact rather
+  than an over-estimate that refuses a build which would have fitted. A guard inside
+  `extractZipToS3` is the backstop for an archive that misreports itself. The API answers
+  `413` with `reason: "quota"` and the arithmetic; the panel's drop area refuses before
+  packing, and `GET /deployments` reports the allowance.
+- **Lowering a quota below current usage is allowed.** It is the tool for reclaiming space
+  from an admin who has taken it, and it would be useless if it needed their cooperation.
+  Nothing of theirs is deleted: they are over, their sites keep serving, their next upload
+  is refused until they are under.
+- **Transfer a site to another admin.** Its storage moves with it, refused unless the new
+  owner has room. This is also what makes demotion workable — an admin can no longer be
+  demoted while they own sites, because only admins hold quota and stranded bytes would
+  belong to no allocation.
+- Sites with no owner are reported as unmetered on the Users page rather than being
+  silently charged to the seat.
+
+Migration 0006 adds `user.storage_quota_bytes`. Existing admins are given
+`PAGEBOX_DEFAULT_QUOTA_BYTES` at the first boot after upgrading — done at startup, not in
+SQL, because the migration cannot read the environment — and the log names anyone that
+figure leaves over their new limit. Set it before upgrading if your admins already hold
+more than the 5 GB default.
+
 ### Changed — three roles, one superadmin, and a boundary between admins
 
 The instance had two global roles, `superadmin` and `user`, and any number of superadmins.

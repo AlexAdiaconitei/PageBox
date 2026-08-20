@@ -47,6 +47,17 @@ export const user = pgTable(
 			onDelete: 'set null'
 		}),
 
+		/**
+		 * PageBox: how many bytes of the bucket this admin may occupy, across every site they
+		 * own and every deployment those sites still hold.
+		 *
+		 * Only admins carry one. The superadmin's allowance is whatever these leave over
+		 * (see quota.ts), so it has no row of its own — handing out a quota is literally the
+		 * seat giving away its own room. Null means unmetered, which after the backfill at
+		 * boot only describes an instance running without quotas configured at all.
+		 */
+		storageQuotaBytes: t.bigint('storage_quota_bytes', { mode: 'number' }),
+
 		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: t.timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},

@@ -3,14 +3,21 @@
 	import ShieldHalf from '@lucide/svelte/icons/shield-half';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
+	import { formatBytes } from '$lib/format';
 
 	let { data, form } = $props();
 	let adding = $state(false);
 	let resetting = $state<string | null>(null);
 	let transferring = $state<string | null>(null);
+	let requota = $state<string | null>(null);
 
 	const when = (value: string | Date) =>
 		new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
+
+	const GIB = 1024 * 1024 * 1024;
+	/** Quotas are entered in GiB; the stored value is bytes. */
+	const asGb = (bytes: number | null) =>
+		bytes === null ? '' : String(Math.round((bytes / GIB) * 1000) / 1000);
 
 	// Only the superadmin can hand the seat over, and only to an admin.
 	const canTransferTo = (role: string) => data.canSetRoles && role === 'admin';
@@ -36,6 +43,57 @@
 
 {#if form?.message}
 	<p class="notice notice-ok mb-5">{form.message}</p>
+{/if}
+
+{#if data.pool}
+	<!-- What there is to give away, and what is left. Allocated and used are both here on
+	     purpose: a hard pool reserves space whether or not anybody fills it, and the gap
+	     between the two figures is the cost of that choice, so it should be on the screen
+	     where quotas are handed out rather than discovered when the disk is full. -->
+	<div class="figures mb-6">
+		<div class="figure">
+			<span class="eyebrow">Storage</span>
+			<span class="figure-value">
+				{data.pool.total === null ? 'unset' : formatBytes(data.pool.total)}
+			</span>
+		</div>
+		<div class="figure">
+			<span class="eyebrow">Allocated</span>
+			<span class="figure-value">{formatBytes(data.pool.allocated)}</span>
+		</div>
+		<div class="figure" class:figure-dark={data.pool.free === 0}>
+			<span class="eyebrow">Free</span>
+			<span class="figure-value">
+				{data.pool.total === null ? '—' : formatBytes(data.pool.free)}
+			</span>
+		</div>
+		<div
+			class="figure"
+			title="The seat has no quota of its own — it gets what the admins leave over"
+		>
+			<span class="eyebrow">Seat uses</span>
+			<span class="figure-value">{formatBytes(data.pool.superadminUsed)}</span>
+		</div>
+	</div>
+
+	{#if data.pool.total === null}
+		<p class="text-muted mb-5 text-[0.85rem]">
+			<span class="mono">PAGEBOX_STORAGE_BYTES</span> is unset, so there is no pool to divide: each admin's
+			quota still holds on its own, but nothing here knows what the disk has room for.
+		</p>
+	{/if}
+	{#if data.pool.overAllocated}
+		<p class="notice mb-5">
+			Quotas sum past the instance total by {formatBytes(data.pool.allocated - data.pool.total!)}.
+			Nothing has been changed, and no further quota can be handed out until one is lowered.
+		</p>
+	{/if}
+	{#if data.pool.orphaned > 0}
+		<p class="notice mb-5">
+			{formatBytes(data.pool.orphaned)} sits on sites with no owner — it occupies the bucket and counts
+			against nobody's quota. Give those sites an owner from their site page.
+		</p>
+	{/if}
 {/if}
 
 {#if adding}
@@ -78,6 +136,28 @@
 			{/if}
 			<button class="btn btn-primary" type="submit">Create</button>
 		</div>
+		{#if data.canSetRoles}
+			<label class="field">
+				Storage quota (GB)
+				<!-- Pre-filled with the configured default and editable here, because a quota is
+				     part of seating an admin rather than a second errand afterwards. Asking for
+				     more than the pool has left is refused, never quietly trimmed. -->
+				<input
+					class="input"
+					type="number"
+					name="quota"
+					min="0"
+					step="0.5"
+					value={asGb(data.defaultQuota)}
+				/>
+			</label>
+			<p class="text-muted self-end text-[0.8rem]">
+				Only admins hold a quota.
+				{#if data.pool?.total !== null && data.pool}
+					{formatBytes(data.pool.free)} free of {formatBytes(data.pool.total)}.
+				{/if}
+			</p>
+		{/if}
 		{#if !data.canSetRoles}
 			<!-- An admin's form has no role field, and the server forces `user` regardless:
 			     the tier is closed upwards, so there is nothing here to choose. -->
@@ -100,6 +180,7 @@
 				<th>Name</th>
 				<th>Role</th>
 				<th>State</th>
+				<th class="num">Storage</th>
 				<th>Added</th>
 				<th></th>
 			</tr>
@@ -146,6 +227,21 @@
 							<span class="text-muted text-[0.85rem]">active</span>
 						{/if}
 					</td>
+					<td class="num whitespace-nowrap" data-label="Storage">
+						{#if person.quota === null}
+							<span class="text-faint">{formatBytes(person.used)}</span>
+						{:else}
+							<span
+								class:text-[color:var(--pb-danger)]={person.used > person.quota}
+								title="{formatBytes(person.used)} of {formatBytes(person.quota)}{person.role ===
+								'superadmin'
+									? ' — the remainder, not a quota'
+									: ''}"
+							>
+								{formatBytes(person.used)} / {formatBytes(person.quota)}
+							</span>
+						{/if}
+					</td>
 					<td class="text-muted" data-label="Added">{when(person.createdAt)}</td>
 					<td class="num">
 						{#if person.manageable}
@@ -156,6 +252,14 @@
 								>
 									Reset password
 								</button>
+								{#if data.canSetRoles && person.role === 'admin'}
+									<button
+										class="btn btn-ghost btn-xs"
+										onclick={() => (requota = requota === person.id ? null : person.id)}
+									>
+										Quota
+									</button>
+								{/if}
 								{#if canTransferTo(person.role)}
 									<button
 										class="btn btn-ghost btn-xs"
@@ -176,9 +280,35 @@
 						{/if}
 					</td>
 				</tr>
+				{#if requota === person.id}
+					<tr>
+						<td colspan="7" class="bg-line-soft">
+							<form method="POST" action="?/setQuota" class="flex flex-wrap items-end gap-3">
+								<input type="hidden" name="userId" value={person.id} />
+								<label class="field w-56 max-w-full">
+									Storage quota for {person.email} (GB)
+									<input
+										class="input"
+										type="number"
+										name="quota"
+										min="0"
+										step="0.5"
+										value={asGb(person.quota)}
+										required
+									/>
+								</label>
+								<button class="btn btn-ghost" type="submit">Set</button>
+								<p class="text-muted pb-1.5 text-[0.8rem]">
+									Using {formatBytes(person.used)}. Setting it lower is allowed — nothing of theirs
+									is deleted, their next deploy is refused until they are under it.
+								</p>
+							</form>
+						</td>
+					</tr>
+				{/if}
 				{#if resetting === person.id}
 					<tr>
-						<td colspan="6" class="bg-line-soft">
+						<td colspan="7" class="bg-line-soft">
 							<form method="POST" action="?/resetPassword" class="flex flex-wrap items-end gap-3">
 								<input type="hidden" name="userId" value={person.id} />
 								<label class="field w-72 max-w-full">
@@ -199,7 +329,7 @@
 				{/if}
 				{#if transferring === person.id}
 					<tr>
-						<td colspan="6" class="bg-line-soft">
+						<td colspan="7" class="bg-line-soft">
 							<form method="POST" action="?/transferSeat" class="flex flex-wrap items-end gap-3">
 								<input type="hidden" name="userId" value={person.id} />
 								<div class="w-full">

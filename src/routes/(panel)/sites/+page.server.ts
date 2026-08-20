@@ -6,6 +6,7 @@ import { basePathFor, config, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
 import { deployment, site } from '$lib/server/db/schema';
 import { isAdmin } from '$lib/server/auth';
+import { quotaFor, usageFor } from '$lib/server/quota';
 import { isValidSlug, newId } from '$lib/server/ids';
 import { sitesForUser } from '$lib/server/perms';
 import {
@@ -40,7 +41,17 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// retention limit exists.
 	const storage = await siteStorage(sites.map((entry) => entry.id));
 
+	// An admin does not see the Users page's pool — this is the only place they learn how
+	// much room they have left, so it belongs beside the fleet figures rather than only in
+	// the refusal when a deploy is turned away.
+	const actor = locals.user!;
+	const own = {
+		used: await usageFor(actor.id),
+		quota: await quotaFor({ ...actor, storageQuotaBytes: null })
+	};
+
 	return {
+		own,
 		sites: sites.map((entry) => {
 			const live = entry.activeDeploymentId ? liveById.get(entry.activeDeploymentId) : undefined;
 			const stored = storage.get(entry.id);

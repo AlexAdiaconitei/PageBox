@@ -8,6 +8,7 @@ import { db } from '$lib/server/db';
 import { deployment } from '$lib/server/db/schema';
 import { ingestDeployment } from '$lib/server/deploy/ingest';
 import { siteStorage } from '$lib/server/deploy/retention';
+import { allowanceFor, ownerOf } from '$lib/server/quota';
 import { verifyDeployment } from '$lib/server/deploy/verify';
 
 const ACCEPTED_TYPES = [
@@ -65,7 +66,12 @@ export const POST: RequestHandler = async (event) => {
 			meta: { reason: outcome.reason ?? 'invalid', message: outcome.message },
 			ip: clientIp(event)
 		});
-		return jsonError(outcome.status, outcome.message, { reason: outcome.reason });
+		// The quota refusal carries its arithmetic, so a CI log says "needs 4.2 GB, 1.1 GB
+		// free of 100 GB" rather than a sentence somebody has to go and verify by hand.
+		return jsonError(outcome.status, outcome.message, {
+			reason: outcome.reason,
+			...(outcome.quota ? { quota: outcome.quota } : {})
+		});
 	}
 
 	await audit({
@@ -152,6 +158,10 @@ export const GET: RequestHandler = async (event) => {
 
 	const storage = (await siteStorage([siteRef.id])).get(siteRef.id);
 
+	// What CI most wants before it builds: whether the next deploy will be allowed to land.
+	const owner = await ownerOf(siteRef.id);
+	const allowance = owner ? await allowanceFor(owner, siteRef) : { metered: false as const };
+
 	return json(200, {
 		slug: siteRef.slug,
 		basePath: siteRef.basePath,
@@ -163,6 +173,16 @@ export const GET: RequestHandler = async (event) => {
 		retentionLimit: siteRef.retentionLimit,
 		storageBytes: storage?.bytes ?? 0,
 		deploymentCount: storage?.deployments ?? 0,
+		quota: allowance.metered
+			? {
+					owner: owner?.email,
+					limit: allowance.quota,
+					used: allowance.used,
+					remaining: allowance.remaining,
+					freedByRetention: allowance.freedByRetention,
+					over: allowance.over
+				}
+			: null,
 		maxUploadBytes: config.MAX_UPLOAD_BYTES,
 		deployments: rows.map((row) => ({
 			id: row.id,

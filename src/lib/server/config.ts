@@ -66,6 +66,19 @@ const schema = z.object({
 	MAX_FILES: z.coerce.number().int().positive().default(20_000),
 	MAX_ZIP_RATIO: z.coerce.number().int().positive().default(100),
 
+	// --- storage quotas -------------------------------------------------------
+	//
+	// PAGEBOX_STORAGE_BYTES is what this instance has to give away, and it is a
+	// *declaration*: S3 exposes no capacity figure, so nothing can measure it for you —
+	// MinIO and Garage only report disk size through their own non-S3 admin APIs. Set it
+	// and the pool becomes real: allocated, free, and a superadmin whose own room shrinks
+	// with every quota it hands out. Leave it unset and per-admin quotas still hold; there
+	// is simply no pool arithmetic to do.
+	PAGEBOX_STORAGE_BYTES: z.coerce.number().int().positive().optional(),
+	// What a newly seated admin is offered on the form. Editable there; this is the
+	// starting figure, not a cap.
+	PAGEBOX_DEFAULT_QUOTA_BYTES: bytes(5 * 1024 * 1024 * 1024),
+
 	// --- credential throttling ------------------------------------------------
 	//
 	// Counted per IP and per account, and only failures count. Raise the attempt count
@@ -177,6 +190,17 @@ export function parseConfig(env: Record<string, string | undefined>): {
 	if (c.MAX_UPLOAD_BYTES > c.MAX_UNCOMPRESSED_BYTES) {
 		errors.push('MAX_UPLOAD_BYTES cannot exceed MAX_UNCOMPRESSED_BYTES');
 	}
+	// A default nobody could ever be given is a misconfiguration worth catching at boot
+	// rather than at the first attempt to seat an admin.
+	if (c.PAGEBOX_STORAGE_BYTES && c.PAGEBOX_DEFAULT_QUOTA_BYTES > c.PAGEBOX_STORAGE_BYTES) {
+		errors.push(
+			'PAGEBOX_DEFAULT_QUOTA_BYTES cannot exceed PAGEBOX_STORAGE_BYTES ' +
+				`(${formatBytes(c.PAGEBOX_DEFAULT_QUOTA_BYTES)} of ${formatBytes(c.PAGEBOX_STORAGE_BYTES)})`
+		);
+	}
+	// Deliberately *not* an error: the pool holding less than what has already been handed
+	// out is a data condition, and a data condition must not stop a container booting. The
+	// panel says over-allocated and refuses further allocation until it is resolved.
 	if (Boolean(c.BOOTSTRAP_ADMIN_EMAIL) !== Boolean(c.BOOTSTRAP_ADMIN_PASSWORD)) {
 		errors.push('BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must be set together');
 	}

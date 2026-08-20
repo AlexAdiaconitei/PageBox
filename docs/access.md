@@ -111,6 +111,35 @@ The panel lists sites you can *act* on, so a public site does not appear in your
 for being public: `deployer` is the floor for opening a site's page. A site you cannot act
 on answers 404, never 403, so the panel does not confirm which sites exist.
 
+## Storage quotas
+
+An admin may occupy so many bytes of the bucket, counted across **every deployment their
+sites still hold** — not just the live one, because a build kept for rollback takes exactly
+as much disk as the one being served. Storage is charged to the site's `owner_user_id`, so
+a deployer pushing to somebody else's site spends that owner's allowance.
+
+`PAGEBOX_STORAGE_BYTES` is what the instance has to give away, and it is a number somebody
+writes down: S3 has no capacity API, and MinIO and Garage report disk size only through
+their own non-S3 admin interfaces. Unset, per-admin quotas still hold and there is no pool
+arithmetic.
+
+The pool is hard — quotas may not sum past the total — and the superadmin has no quota of
+its own. Its allowance is the remainder, so every quota it hands out visibly shrinks its
+own room. An allocation is refused twice over: when the pool has not got it, and when it
+would leave the seat less than it is already using.
+
+| Situation | What happens |
+| --------- | ------------ |
+| Upload larger than what is left | `413`, with `reason: "quota"` and the figures. Nothing is written — the archive's own directory is measured first |
+| Retention would free space on this deploy | Counted **before** the fact, so a site keeping its last *N* builds stays deployable at its ceiling |
+| Quota lowered below current usage | Allowed. Sites keep serving, nothing is deleted; the next upload is refused until they are under it |
+| Admin demoted while owning sites | Refused. Only admins hold quota, so transfer the sites first (see below) |
+| Site handed to another admin | Its bytes move to the new owner's allocation, refused unless that admin has room |
+| Site with no owner | Unmetered, and reported as such — it occupies the bucket against nobody's allocation |
+
+Existing admins are given `PAGEBOX_DEFAULT_QUOTA_BYTES` at the first boot after upgrading,
+and the startup log names anyone that figure leaves over their new limit.
+
 ## Groups
 
 A group is a name, an owner and a list of members. Grant a site to the group once instead

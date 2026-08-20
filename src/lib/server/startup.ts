@@ -1,10 +1,11 @@
 import { hashPassword } from 'better-auth/crypto';
-import { count, eq } from 'drizzle-orm';
-import { config } from './config';
+import { and, count, eq, isNull } from 'drizzle-orm';
+import { config, formatBytes } from './config';
 import { db, getSql } from './db';
 import { runMigrations } from './db/migrate';
 import { account, user } from './db/schema';
 import { newId } from './ids';
+import { usageByOwner } from './quota';
 import { ensureBucket } from './s3';
 import { cache } from './cache';
 import { startSweeper } from './deploy/cleanup';
@@ -34,6 +35,7 @@ export async function startup(): Promise<void> {
 		}
 
 		await bootstrapAdmin();
+		await backfillQuotas();
 
 		// Sweeps deployments whose upload died mid-flight, now and once an hour.
 		startSweeper();
@@ -96,6 +98,45 @@ async function bootstrapAdmin(): Promise<void> {
 	});
 
 	log(`bootstrap superadmin created: ${email} (must change password at first login)`);
+}
+
+/**
+ * Gives every admin without a storage quota the configured default.
+ *
+ * Here rather than in the migration because the migration cannot read the environment, and
+ * the default is an environment value — a hardcoded figure in SQL would ignore whatever the
+ * operator actually configured. Runs on every boot and is idempotent: after the first, there
+ * is nothing with a null quota left to find, because seating an admin always writes one.
+ *
+ * It names whoever it leaves over their new quota. That is the whole cost of this default:
+ * an instance upgrading with admins already holding more than it will find their next deploy
+ * refused, and the difference between a log line at upgrade and a mystery a week later is
+ * whether anybody said so.
+ */
+async function backfillQuotas(): Promise<void> {
+	const unmetered = await db
+		.select({ id: user.id, email: user.email })
+		.from(user)
+		.where(and(eq(user.role, 'admin'), isNull(user.storageQuotaBytes)));
+	if (unmetered.length === 0) return;
+
+	const quota = config.PAGEBOX_DEFAULT_QUOTA_BYTES;
+	await db
+		.update(user)
+		.set({ storageQuotaBytes: quota })
+		.where(and(eq(user.role, 'admin'), isNull(user.storageQuotaBytes)));
+	log(`storage quota set to ${formatBytes(quota)} for ${unmetered.length} admin(s)`);
+
+	const usage = await usageByOwner(unmetered.map((row) => row.id));
+	for (const row of unmetered) {
+		const used = usage.get(row.id)?.bytes ?? 0;
+		if (used > quota) {
+			log(
+				`  ⚠ ${row.email} already holds ${formatBytes(used)} — over the new quota, ` +
+					'so their next deploy is refused until they free space or it is raised'
+			);
+		}
+	}
 }
 
 function log(msg: string): void {

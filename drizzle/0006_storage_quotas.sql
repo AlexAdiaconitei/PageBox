@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "storage_quota_bytes" bigint;

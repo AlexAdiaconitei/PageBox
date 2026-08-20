@@ -43,6 +43,13 @@
       "when": 1787238135931,
       "tag": "0005_roles_admin_tier",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787261273132,
+      "tag": "0006_storage_quotas",
+      "breakpoints": true
     }
   ]
 }

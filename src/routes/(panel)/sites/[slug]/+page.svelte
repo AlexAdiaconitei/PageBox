@@ -8,6 +8,7 @@
 	import Power from '@lucide/svelte/icons/power';
 	import PowerOff from '@lucide/svelte/icons/power-off';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import Dropzone from '$lib/components/Dropzone.svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { formatBytes, fullDate, timeAgo } from '$lib/format';
@@ -36,6 +37,7 @@
 	// The delete form stays folded away until asked for: it is the one control on this page
 	// that nothing undoes, and a page that opens with it showing invites the accident.
 	let deleting = $state(false);
+	let handingOver = $state(false);
 
 	const liveDeployment = $derived(data.deployments.find((entry) => entry.live));
 	const prunableBytes = $derived(
@@ -132,6 +134,7 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 				prunableBytes,
 				prunable: data.storage.nextPrune.map((entry) => shortId(entry.id))
 			}}
+			quotaRemaining={data.quota?.remaining ?? null}
 		/>
 	</section>
 {/if}
@@ -160,7 +163,32 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 		<span class="eyebrow">Keeping</span>
 		<span class="figure-value">{data.site.retentionLimit ?? 'all'}</span>
 	</div>
+	{#if data.quota}
+		<!-- Charged to the site's owner, not to whoever deploys: a deployer granted access to
+		     somebody else's site spends that owner's allowance, because it is their bucket
+		     space the build sits in. -->
+		<div
+			class="figure"
+			title="{data.owner?.email} has {formatBytes(data.quota.used)} of {formatBytes(
+				data.quota.limit
+			)} in use across every site they own"
+		>
+			<span class="eyebrow">Owner's room</span>
+			<span class="figure-value" class:text-[color:var(--pb-danger)]={data.quota.over}>
+				{formatBytes(data.quota.remaining)}
+			</span>
+		</div>
+	{/if}
 </div>
+
+{#if data.quota?.over}
+	<p class="notice mb-5">
+		<span class="font-medium">{data.owner?.email} is over their storage quota</span> —
+		{formatBytes(data.quota.used)} held against {formatBytes(data.quota.limit)}. Everything keeps
+		serving and nothing has been deleted, but uploads to their sites are refused until they are back
+		under it: delete old deployments, or lower a retention limit.
+	</p>
+{/if}
 
 <section class="section">
 	<div class="mb-3 flex items-center gap-2">
@@ -448,6 +476,47 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 				{/if}
 			</button>
 		</form>
+	</section>
+{/if}
+
+{#if data.transferTargets.length > 0}
+	<section class="section">
+		<div class="mb-3 flex items-center gap-2">
+			<ArrowLeftRight size={15} strokeWidth={1.75} class="text-faint" />
+			<h2 class="text-[1.05rem] font-semibold">Owner</h2>
+		</div>
+		<p class="text-muted mb-3 text-[0.85rem]">
+			This site belongs to <span class="mono">{data.owner?.email ?? 'nobody'}</span>, and the
+			{formatBytes(data.storage.bytes)} it holds counts against their quota. Handing it over moves both.
+			An admin cannot be demoted while they still own sites, so this is how their work gets passed on
+			rather than deleted.
+		</p>
+
+		{#if !handingOver}
+			<button class="btn btn-ghost" onclick={() => (handingOver = true)}>
+				<ArrowLeftRight size={14} strokeWidth={2} />
+				Transfer to another admin
+			</button>
+		{:else}
+			<form method="POST" action="?/transferSite" class="flex flex-wrap items-end gap-3">
+				<label class="field w-80 max-w-full">
+					New owner
+					<select class="select" name="ownerUserId" required>
+						<option value="" disabled selected>Pick an admin…</option>
+						{#each data.transferTargets as target (target.id)}
+							<!-- Room is shown, not just enforced, so the refusal is never a surprise. -->
+							<option value={target.id} disabled={!target.fits}>
+								{target.email} — {formatBytes(target.free)} free{target.fits ? '' : ' (too small)'}
+							</option>
+						{/each}
+					</select>
+				</label>
+				<button class="btn btn-ghost" type="submit">Transfer</button>
+				<button class="btn btn-ghost" type="button" onclick={() => (handingOver = false)}>
+					Cancel
+				</button>
+			</form>
+		{/if}
 	</section>
 {/if}
 

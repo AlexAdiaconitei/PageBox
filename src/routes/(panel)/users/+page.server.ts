@@ -4,8 +4,10 @@ import type { Actions, PageServerLoad, RequestEvent } from './$types';
 import { adminAuth, isAdmin, isSuperadmin, type SessionUser } from '$lib/server/auth';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
-import { user } from '$lib/server/db/schema';
+import { site, user } from '$lib/server/db/schema';
 import { manages } from '$lib/server/perms';
+import { canAllocate, parseQuota, poolState, usageByOwner } from '$lib/server/quota';
+import { config } from '$lib/server/config';
 
 /**
  * Account administration, on the admin host only.
@@ -44,9 +46,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 				.where(or(eq(user.createdByUserId, actor.id), eq(user.id, actor.id)))
 				.orderBy(desc(user.createdAt));
 
+	// Usage for every row on the page, in one query. The seat is in there too — its
+	// allowance is the pool's remainder, so what it occupies is part of the arithmetic.
+	const usage = await usageByOwner(rows.map((row) => row.id));
+	const pool = await poolState();
+
 	return {
 		actorRole: actor.role,
 		canSetRoles: isSuperadmin(actor),
+		// Only the seat allocates: an admin has no view of the pool and nothing to give away.
+		pool: isSuperadmin(actor) ? pool : null,
+		defaultQuota: config.PAGEBOX_DEFAULT_QUOTA_BYTES,
 		users: rows.map((row) => ({
 			id: row.id,
 			email: row.email,
@@ -56,7 +66,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			mustChangePassword: row.mustChangePassword,
 			createdAt: row.createdAt,
 			isSelf: row.id === actor.id,
-			manageable: manages(actor, row)
+			manageable: manages(actor, row),
+			// The seat's figure is the remainder, not a column, which is why it is read off
+			// the pool rather than off the row.
+			quota: row.role === 'superadmin' ? pool.superadminAllowance : row.storageQuotaBytes,
+			used: usage.get(row.id)?.bytes ?? 0
 		}))
 	};
 };
@@ -101,6 +115,18 @@ export const actions: Actions = {
 		if (!email.includes('@')) return fail(400, { message: 'That is not an email address' });
 		if (password.length < 10) return fail(400, { message: 'Use at least 10 characters' });
 
+		// A quota is part of seating an admin, not an afterthought: an admin without one has
+		// no room, and the figure comes out of the pool the moment they exist. Refused rather
+		// than clamped — being given less than the number on the form, silently, is how a
+		// deploy fails weeks later for a reason nobody can trace.
+		const quota = role === 'admin' ? parseQuota(data.get('quota')) : { value: null };
+		if (quota.error) return fail(400, { message: quota.error });
+		if (role === 'admin') {
+			const wantedBytes = quota.value ?? config.PAGEBOX_DEFAULT_QUOTA_BYTES;
+			const room = await canAllocate(null, wantedBytes);
+			if (!room.ok) return fail(409, { message: room.message });
+		}
+
 		try {
 			// No `role` in the body. The plugin refuses to assign one unless the caller holds
 			// `set-role`, and it refuses for a role of its own `adminRoles` even then — so the
@@ -115,6 +141,8 @@ export const actions: Actions = {
 				.update(user)
 				.set({
 					role,
+					storageQuotaBytes:
+						role === 'admin' ? (quota.value ?? config.PAGEBOX_DEFAULT_QUOTA_BYTES) : null,
 					// What the issuer typed is a handover credential, not this person's
 					// password: they replace it before the panel opens for them.
 					mustChangePassword: true,
@@ -129,7 +157,7 @@ export const actions: Actions = {
 				actorUserId: actor.id,
 				targetType: 'user',
 				targetId: created.user.id,
-				meta: { email, role }
+				meta: { email, role, quota: quota.value ?? undefined }
 			});
 		} catch (err) {
 			const message = (err as { body?: { message?: string } })?.body?.message;
@@ -156,12 +184,37 @@ export const actions: Actions = {
 		if (!target) return fail(404, { message: 'That account is not yours to administer' });
 
 		const role = data.get('role') === 'admin' ? 'admin' : 'user';
+
+		// Only admins hold quota, and quota is what makes the pool add up — so an account
+		// cannot leave the tier while it still owns sites occupying somebody's allocation.
+		// The way out is to hand each site to another admin (see the site page), not to
+		// strand the bytes on an account that no longer has a figure to charge them to.
+		if (role === 'user' && target.role === 'admin') {
+			const owned = await db
+				.select({ slug: site.slug })
+				.from(site)
+				.where(eq(site.ownerUserId, target.id));
+			if (owned.length > 0) {
+				return fail(409, {
+					message:
+						`${target.email} still owns ${owned.length} site(s) — ` +
+						`${owned.map((row) => row.slug).join(', ')}. ` +
+						'Transfer them to another admin from each site page first.'
+				});
+			}
+		}
+
 		// Written directly, like the role on `create` and for the same reason. The guards
 		// above are stricter than anything the plugin would apply — one seat, only the
 		// superadmin, only a row it administers — so routing this through `setRole` would add
 		// a second, weaker opinion about who may change a role, and a permission
 		// (`set-role`) that no PageBox role should hold.
-		await db.update(user).set({ role }).where(eq(user.id, target.id));
+		// Demoting drops the quota with the tier: `user` has no allocation, and leaving a
+		// figure behind would keep the pool showing space nobody can use.
+		await db
+			.update(user)
+			.set({ role, storageQuotaBytes: role === 'admin' ? target.storageQuotaBytes : null })
+			.where(eq(user.id, target.id));
 		await audit({
 			action: 'user.role_changed',
 			actorUserId: actor.id,
@@ -170,6 +223,52 @@ export const actions: Actions = {
 			meta: { role, from: target.role }
 		});
 		return { message: `${target.email} is now ${role}` };
+	},
+
+	/**
+	 * Sets how much of the bucket an admin may occupy.
+	 *
+	 * Only the seat, because the figure comes out of a pool only the seat can see — and out
+	 * of its own room, since its allowance is whatever the admins leave over. Lowering below
+	 * what somebody already stores is allowed on purpose: it is the tool for reclaiming
+	 * space from an admin who has taken it, and it would be useless if it needed their
+	 * cooperation. Nothing of theirs is deleted; they are simply over, and their next upload
+	 * is refused until they are not.
+	 */
+	setQuota: async (event) => {
+		const actor = requireAdmin(event.locals);
+		if (!isSuperadmin(actor)) return fail(403, { message: 'Not allowed' });
+
+		const data = await event.request.formData();
+		const target = await manageable(actor, String(data.get('userId') ?? ''));
+		if (!target) return fail(404, { message: 'That account is not yours to administer' });
+		if (target.role !== 'admin') {
+			return fail(400, { message: 'Only admins hold a storage quota' });
+		}
+
+		const quota = parseQuota(data.get('quota'));
+		if (quota.error) return fail(400, { message: quota.error });
+		if (quota.value === null) return fail(400, { message: 'Give a figure in gigabytes' });
+
+		const room = await canAllocate(target.id, quota.value);
+		if (!room.ok) return fail(409, { message: room.message });
+
+		await db.update(user).set({ storageQuotaBytes: quota.value }).where(eq(user.id, target.id));
+		await audit({
+			action: 'user.quota_set',
+			actorUserId: actor.id,
+			targetType: 'user',
+			targetId: target.id,
+			meta: { quota: quota.value, from: target.storageQuotaBytes }
+		});
+
+		const used = (await usageByOwner([target.id])).get(target.id)?.bytes ?? 0;
+		return {
+			message:
+				used > quota.value
+					? `Quota set. ${target.email} is over it — their sites keep serving, their next deploy is refused until they free space.`
+					: `Quota set for ${target.email}.`
+		};
 	},
 
 	/**

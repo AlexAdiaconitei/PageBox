@@ -733,8 +733,10 @@ table {
 		border-top: 1px solid var(--pb-line);
 		border-bottom: 1px solid var(--pb-line);
 	}
-	/* Six figures, so the breakpoints go 2 → 3 → 6: every step divides the count exactly
-	   and the strip never ends on a half-empty row. */
+	/* The count is no longer fixed — a figure appears when there is a storage quota to show,
+	   and again when the site has an owner with one — so the wide step fits as many as the
+	   measure holds instead of naming a number that only divides one of the cases. Below
+	   that, 2 and 3 stay explicit: auto-fit on a phone puts everything in one column. */
 	@media (min-width: 34rem) {
 		.figures {
 			grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -742,7 +744,7 @@ table {
 	}
 	@media (min-width: 64rem) {
 		.figures {
-			grid-template-columns: repeat(6, minmax(0, 1fr));
+			grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
 		}
 	}
 	.figure {

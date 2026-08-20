@@ -24,6 +24,12 @@ export const INGEST_VERSION = 2;
 export type ZipLimits = {
 	maxFiles: number;
 	maxUncompressedBytes: number;
+	/**
+	 * Bytes this deployment may still store against its owner's quota, or null when the
+	 * instance is unmetered. Enforced on the same running total as `maxUncompressedBytes`
+	 * — one accumulator, so the two limits can never disagree about what has been written.
+	 */
+	remainingQuota?: number | null;
 	/** Uncompressed:compressed ratio above which the archive is treated as a bomb. */
 	maxRatio: number;
 };
@@ -41,7 +47,14 @@ export class ZipRejected extends Error {
 	constructor(
 		message: string,
 		readonly reason:
-			'zip-slip' | 'symlink' | 'too-many-files' | 'too-large' | 'ratio' | 'empty' | 'unreadable'
+			| 'zip-slip'
+			| 'symlink'
+			| 'too-many-files'
+			| 'too-large'
+			| 'ratio'
+			| 'empty'
+			| 'unreadable'
+			| 'quota'
 	) {
 		super(message);
 		this.name = 'ZipRejected';
@@ -131,6 +144,20 @@ export async function extractZipToS3(
 					'too-large'
 				);
 			}
+			// The backstop behind `measureZip`. That pre-check reads the central directory and
+			// is exact, so this should never be the one that fires — but the directory is a
+			// claim the archive makes about itself, and a limit that only trusts a claim is
+			// not a limit. `validateEntrySizes` makes yauzl error on a mismatch too.
+			if (
+				limits.remainingQuota !== null &&
+				limits.remainingQuota !== undefined &&
+				result.totalBytes + entry.uncompressedSize > limits.remainingQuota
+			) {
+				throw new ZipRejected(
+					`archive would take this site past its owner's storage quota`,
+					'quota'
+				);
+			}
 
 			compressedTotal += entry.compressedSize;
 			// Ignore the ratio for tiny archives, where a few hundred bytes of headers
@@ -168,6 +195,44 @@ export async function extractZipToS3(
 
 	if (result.fileCount === 0) throw new ZipRejected('archive contains no files', 'empty');
 	return result;
+}
+
+/**
+ * What this archive would store, without storing any of it.
+ *
+ * Reads the central directory and applies the *same* rules extraction does — `safeEntryPath`
+ * for junk and directories, `chooseRoot`/`rebase` for the single-folder case — so the figure
+ * equals the `totalBytes` extraction would arrive at, rather than an over-estimate that
+ * refuses a deploy which would in fact have fitted. `validateEntrySizes` is what makes the
+ * declared sizes trustworthy enough to act on; the guard inside `extractZipToS3` is the
+ * backstop for an archive that lies anyway.
+ *
+ * Costs one pass over the directory and no file data at all, which is why a hopeless upload
+ * can be refused in milliseconds instead of after writing a gigabyte and deleting it.
+ */
+export async function measureZip(
+	zipPath: string
+): Promise<{ fileCount: number; totalBytes: number; root: string }> {
+	const root = chooseRoot(await listEntryPaths(zipPath)).root;
+	const zip = await openZip(zipPath);
+	let fileCount = 0;
+	let totalBytes = 0;
+
+	try {
+		for await (const entry of entries(zip)) {
+			const path = rebase(safeEntryPath(entry.fileName), root);
+			if (path === null) continue;
+			// Symlinks and traversal are extraction's business to reject; measuring only asks
+			// how big the thing is, and answering that early must not change what is refused.
+			if (isSymlinkEntry(entry.externalFileAttributes)) continue;
+			fileCount += 1;
+			totalBytes += entry.uncompressedSize;
+		}
+	} finally {
+		zip.close();
+	}
+
+	return { fileCount, totalBytes, root };
 }
 
 /** Entry names only: the central directory is read, no file data. */

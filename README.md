@@ -150,6 +150,15 @@ deployment, and prune before the new build is stored. It is never silent either 
 panel names what the next deploy will delete before you press it, and the API answers with
 `pruned` and `prunedBytes`.
 
+## Storage quotas
+
+Each admin may hold so many bytes across every deployment their sites keep. Set
+`PAGEBOX_STORAGE_BYTES` to declare what the instance has to give away and the pool becomes
+real — allocated, free, and a superadmin whose own room is whatever the admins leave over;
+leave it unset and the per-admin limits still hold on their own. Quotas cannot sum past the
+total, an over-quota admin keeps serving but cannot deploy, and a site can be handed to
+another admin with its storage. Details in [`docs/access.md`](docs/access.md).
+
 ## Upload cap
 
 `MAX_UPLOAD_BYTES` defaults to **100 MB** and is configurable. The default exists because

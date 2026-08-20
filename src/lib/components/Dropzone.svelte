@@ -21,7 +21,8 @@
 		basePath,
 		maxFiles,
 		maxBytes,
-		retention
+		retention,
+		quotaRemaining
 	}: {
 		slug: string;
 		basePath: string;
@@ -33,6 +34,14 @@
 		 * is a deploy nobody can undo, and the warning is worth nothing after the fact.
 		 */
 		retention?: { limit: number | null; prunableBytes: number; prunable: string[] };
+		/**
+		 * Bytes the owner's storage quota still has room for, or null when unmetered.
+		 *
+		 * Known before anything is packed or sent, so a build that cannot land says so at the
+		 * moment it is dropped rather than after a progress bar and a 413. Retention is
+		 * already counted into it by the server.
+		 */
+		quotaRemaining?: number | null;
 	} = $props();
 
 	type Entry = { path: string; size: number; file: File };
@@ -49,11 +58,21 @@
 
 	const willPrune = $derived(retention?.limit ? (retention.prunable ?? []) : []);
 
+	// The dropped build's own size, before packing. `result.totalBytes` is the sum of what
+	// would actually be stored, which is exactly what the quota meters.
+	const overQuota = $derived(
+		quotaRemaining !== null &&
+			quotaRemaining !== undefined &&
+			result !== null &&
+			result.totalBytes > quotaRemaining
+	);
+
 	const blocking = $derived(result?.warnings.filter((warning) => warning.blocking) ?? []);
 	const advisory = $derived(result?.warnings.filter((warning) => !warning.blocking) ?? []);
 	const needsAcceptance = $derived(blocking.length > 0);
 	const canDeploy = $derived(
 		!busy &&
+			!overQuota &&
 			(rawArchive !== null || (result !== null && !result.fatal && (!needsAcceptance || accepted)))
 	);
 
@@ -269,6 +288,18 @@
 				older one(s) — {formatBytes(retention?.prunableBytes ?? 0)}, never the live one:
 				<span class="mono text-faint break-all">{willPrune.join(', ')}</span>
 			</span>
+		</p>
+	{/if}
+
+	{#if overQuota}
+		<!-- Said here rather than by the server after the upload: the figures are known the
+		     moment the folder is dropped, and watching a build upload only to be refused is a
+		     worse way to learn the same thing. A dropped .zip is sent as-is and cannot be
+		     measured first, so that one still finds out from the 413. -->
+		<p class="notice mt-3 text-[0.85rem]">
+			This build is {formatBytes(result?.totalBytes ?? 0)} and the owner's storage quota has
+			{formatBytes(quotaRemaining ?? 0)} left. Delete an old deployment, lower a retention limit, or ask
+			for more room.
 		</p>
 	{/if}
 

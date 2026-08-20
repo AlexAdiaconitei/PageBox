@@ -11,9 +11,10 @@ import { db } from '../db';
 import { deployment, site } from '../db/schema';
 import { newId } from '../ids';
 import { deletePrefix, deploymentPrefix, headObject, objectKey } from '../s3';
+import { allowanceFor, ownerOf } from '../quota';
 import { invalidateSite, type SiteRef } from '../sites/resolve';
 import { pruneDeployments } from './retention';
-import { extractZipToS3, INGEST_VERSION, ZipRejected } from './zip';
+import { extractZipToS3, INGEST_VERSION, measureZip, ZipRejected } from './zip';
 
 /**
  * Turns an uploaded archive into an activated deployment.
@@ -38,7 +39,14 @@ export type IngestOutcome =
 			/** Older deployments the site's retention limit dropped to make room for this one. */
 			pruned: { ids: string[]; bytes: number };
 	  }
-	| { ok: false; status: 400 | 413; message: string; reason?: string };
+	| {
+			ok: false;
+			status: 400 | 413;
+			message: string;
+			reason?: string;
+			/** Set on a quota refusal, so the caller can print figures instead of a sentence. */
+			quota?: { used: number; quota: number; needed: number; freedByRetention: number };
+	  };
 
 export type IngestInput = {
 	body: ReadableStream<Uint8Array> | null;
@@ -85,6 +93,14 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			};
 		}
 
+		// What this archive would store, measured off its own central directory before a byte
+		// of it is written. The alternative is to find out mid-extraction, having already put
+		// most of a build in the bucket to then delete it — and for the panel uploader, to
+		// have somebody watch a progress bar for a deploy that was never going to land.
+		const measured = await measureZip(archivePath);
+		const budget = await quotaBudget(input.siteRef, measured.totalBytes);
+		if (budget.refusal) return budget.refusal;
+
 		deploymentId = newId();
 		await db.insert(deployment).values({
 			id: deploymentId,
@@ -106,7 +122,10 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			{
 				maxFiles: config.MAX_FILES,
 				maxUncompressedBytes: config.MAX_UNCOMPRESSED_BYTES,
-				maxRatio: config.MAX_ZIP_RATIO
+				maxRatio: config.MAX_ZIP_RATIO,
+				// The backstop: the pre-check above trusts what the archive says about itself,
+				// and this does not.
+				remainingQuota: budget.remaining
 			}
 		);
 
@@ -145,6 +164,55 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 	} finally {
 		await rm(dir, { recursive: true, force: true }).catch(() => {});
 	}
+}
+
+/**
+ * How many bytes this upload may store, and the refusal when it already cannot.
+ *
+ * Charged to whoever owns the site, not to whoever pressed deploy: a deployer granted
+ * access to somebody else's site is spending that owner's allowance, because it is their
+ * bucket space the build will sit in. A site with no owner is unmetered — its bytes belong
+ * to no allocation, which the panel reports rather than silently charging to the seat.
+ */
+async function quotaBudget(
+	siteRef: SiteRef,
+	bytes: number
+): Promise<{ refusal: Extract<IngestOutcome, { ok: false }> | null; remaining: number | null }> {
+	const owner = await ownerOf(siteRef.id);
+	if (!owner) return { refusal: null, remaining: null };
+
+	const allowance = await allowanceFor(owner, siteRef);
+	if (!allowance.metered) return { refusal: null, remaining: null };
+	if (bytes <= allowance.remaining) return { refusal: null, remaining: allowance.remaining };
+
+	return {
+		remaining: allowance.remaining,
+		refusal: {
+			ok: false,
+			status: 413,
+			reason: 'quota',
+			message:
+				`this build needs ${label(bytes)} and only ${label(allowance.remaining)} of the ` +
+				`${label(allowance.quota)} quota is free`,
+			quota: {
+				used: allowance.used,
+				quota: allowance.quota,
+				needed: bytes,
+				freedByRetention: allowance.freedByRetention
+			}
+		}
+	};
+}
+
+function label(bytes: number): string {
+	const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+	let value = Math.max(0, bytes);
+	let unit = 0;
+	while (value >= 1024 && unit < units.length - 1) {
+		value /= 1024;
+		unit++;
+	}
+	return `${Math.round(value * 10) / 10} ${units[unit]}`;
 }
 
 /**

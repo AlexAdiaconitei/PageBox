@@ -25,6 +25,7 @@ import {
 } from '$lib/server/deploy/retention';
 import { newId } from '$lib/server/ids';
 import { atLeast, manages, permissionFor } from '$lib/server/perms';
+import { allowanceFor, canAllocate, ownerOf, usageByOwner } from '$lib/server/quota';
 import { deletePrefix, deploymentPrefix, sitePrefix } from '$lib/server/s3';
 import { invalidateSite, lookupSiteBySlug } from '$lib/server/sites/resolve';
 
@@ -125,6 +126,19 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { users, groups } = await grantable(locals.user!);
 
 	const stored = (await siteStorage([siteRef.id])).get(siteRef.id);
+	const owner = await ownerOf(siteRef.id);
+	const allowance = owner ? await allowanceFor(owner, siteRef) : { metered: false as const };
+
+	// Who this site could be handed to: the other admins, with the room each has. Only the
+	// seat may transfer, so only the seat pays for the query.
+	const otherAdmins = isSuperadmin(locals.user!)
+		? await db
+				.select({ id: user.id, email: user.email, quota: user.storageQuotaBytes })
+				.from(user)
+				.where(eq(user.role, 'admin'))
+				.orderBy(user.email)
+		: [];
+	const adminUsage = await usageByOwner(otherAdmins.map((row) => row.id));
 	// `incoming: 1` — the build about to be uploaded takes a slot before it has a row.
 	const nextPrune = await prunablePlan(siteRef.id, row.retentionLimit, row.activeDeploymentId, 1);
 
@@ -155,6 +169,25 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			retentionLimit: row.retentionLimit,
 			url: siteUrl(row.basePath, url.port)
 		},
+		owner: owner ? { id: owner.id, email: owner.email } : null,
+		quota: allowance.metered
+			? {
+					limit: allowance.quota,
+					used: allowance.used,
+					remaining: allowance.remaining,
+					over: allowance.over
+				}
+			: null,
+		transferTargets: otherAdmins
+			.filter((row) => row.id !== owner?.id)
+			.map((row) => ({
+				id: row.id,
+				email: row.email,
+				free: Math.max(0, (row.quota ?? 0) - (adminUsage.get(row.id)?.bytes ?? 0)),
+				// Enough room for this site as it stands. Shown rather than only enforced, so
+				// the choice is visible before it is refused.
+				fits: (row.quota ?? 0) - (adminUsage.get(row.id)?.bytes ?? 0) >= (stored?.bytes ?? 0)
+			})),
 		storage: {
 			bytes: stored?.bytes ?? 0,
 			deployments: stored?.deployments ?? 0,
@@ -273,6 +306,56 @@ export const actions: Actions = {
 			meta: { siteId: siteRef.id }
 		});
 		return { message: 'Deployment deleted' };
+	},
+
+	/**
+	 * Hands a site to another admin, storage and all.
+	 *
+	 * The escape hatch demotion needs: an admin cannot leave the tier while they own sites,
+	 * and before this the only way to clear them was to delete them and have somebody
+	 * redeploy from CI. It also covers the ordinary case of an admin leaving.
+	 *
+	 * Refused unless the new owner's quota has room for everything the site holds, because
+	 * a transfer moves bytes between allocations — accepting it regardless would put someone
+	 * over a limit by an act that was not theirs.
+	 */
+	transferSite: async ({ locals, params, request }) => {
+		const { siteRef } = await loadSite(params.slug, locals.user);
+		// The seat only: handing a site between two admins is an act on both of their
+		// allocations, and neither of them can see the other's.
+		if (!isSuperadmin(locals.user!)) return fail(403, { message: 'Not allowed' });
+
+		const data = await request.formData();
+		const targetId = String(data.get('ownerUserId') ?? '');
+		const [target] = await db.select().from(user).where(eq(user.id, targetId)).limit(1);
+		if (!target || target.role !== 'admin') {
+			return fail(404, { message: 'Pick an admin to hand this site to' });
+		}
+
+		const stored = (await siteStorage([siteRef.id])).get(siteRef.id);
+		const bytes = stored?.bytes ?? 0;
+		const used = (await usageByOwner([target.id])).get(target.id)?.bytes ?? 0;
+		if (target.storageQuotaBytes !== null && used + bytes > target.storageQuotaBytes) {
+			return fail(409, {
+				message:
+					`${target.email} has ${formatBytes(Math.max(0, target.storageQuotaBytes - used))} free ` +
+					`and this site holds ${formatBytes(bytes)}. Raise their quota first.`
+			});
+		}
+
+		const previous = await ownerOf(siteRef.id);
+		await db.update(site).set({ ownerUserId: target.id }).where(eq(site.id, siteRef.id));
+		// Ownership is part of the cached SiteRef and decides `permissionFor`.
+		await invalidateSite(siteRef.slug, siteRef.id);
+
+		await audit({
+			action: 'site.transferred',
+			actorUserId: locals.user!.id,
+			targetType: 'site',
+			targetId: siteRef.id,
+			meta: { from: previous?.email, to: target.email, bytes }
+		});
+		return { message: `${siteRef.slug} now belongs to ${target.email}` };
 	},
 
 	/**

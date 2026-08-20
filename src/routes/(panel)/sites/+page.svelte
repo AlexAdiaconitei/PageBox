@@ -80,6 +80,25 @@
 			<span class="eyebrow">Stored</span>
 			<span class="figure-value">{formatBytes(fleet.storedBytes)}</span>
 		</div>
+		{#if data.own.quota !== null}
+			<!-- What is left of this account's own allowance. Not the same figure as "Stored"
+			     above: that one is the sites on this screen, this one is everything charged to
+			     you, which is the number a deploy is measured against. -->
+			<div
+				class="figure"
+				title="{formatBytes(data.own.used)} of {formatBytes(
+					data.own.quota
+				)} used across every site you own"
+			>
+				<span class="eyebrow">Your room</span>
+				<span
+					class="figure-value"
+					class:text-[color:var(--pb-danger)]={data.own.used > data.own.quota}
+				>
+					{formatBytes(Math.max(0, data.own.quota - data.own.used))}
+				</span>
+			</div>
+		{/if}
 	</div>
 {/if}
 
