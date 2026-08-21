@@ -95,8 +95,7 @@ export const site = pgTable(
 		 */
 		retentionLimit: t.integer('retention_limit'),
 
-		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-		archivedAt: t.timestamp('archived_at', { withTimezone: true })
+		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
 		t.uniqueIndex('site_slug_key').on(table.slug),

@@ -15,6 +15,9 @@ import { ValkeyCache } from './valkey';
 export interface CacheStore {
 	get<T>(key: string): Promise<T | undefined>;
 	set<T>(key: string, value: T, ttlSeconds: number): Promise<void>;
+	/** Drops one key. Use it whenever the key is known: a prefix match on a value that is
+	 * not prefix-delimited takes neighbours with it (`site:slug:demo` matched `demo-api`). */
+	delete(key: string): Promise<void>;
 	/** Drops every key starting with the prefix, locally and in other replicas. */
 	invalidatePrefix(prefix: string): Promise<void>;
 	close(): Promise<void>;
@@ -30,7 +33,7 @@ export const CACHE_TTL_SECONDS = 60;
 
 export const cacheKeys = {
 	siteBySlug: (slug: string) => `site:slug:${slug}`,
-	siteById: (id: string) => `site:id:${id}`,
+	/** Genuinely a prefix: one entry per (site, viewer), dropped as a set. */
 	sitePrefix: (siteId: string) => `perm:${siteId}:`,
 	permission: (siteId: string, userId: string | null) => `perm:${siteId}:${userId ?? 'anon'}`
 };

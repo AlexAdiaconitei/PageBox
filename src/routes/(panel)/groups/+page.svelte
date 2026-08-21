@@ -5,6 +5,7 @@
 
 	let { data, form } = $props();
 	let creating = $state(false);
+	let removing = $state<string | null>(null);
 </script>
 
 <svelte:head><title>Groups — PageBox</title></svelte:head>
@@ -88,6 +89,24 @@
 					</ul>
 				{/if}
 
+				{#if data.canManage && removing === group.id}
+					<form method="POST" action="?/deleteGroup" class="mt-4 flex flex-wrap items-end gap-3">
+						<input type="hidden" name="groupId" value={group.id} />
+						<label class="field w-56 max-w-full">
+							<!-- The slug typed back, as everywhere else that cannot be undone. -->
+							Type <span class="mono">{group.slug}</span> to delete it
+							<input class="input mono" name="confirm" autocomplete="off" required />
+						</label>
+						<button class="btn btn-danger" type="submit">Delete group</button>
+						<button class="btn btn-ghost" type="button" onclick={() => (removing = null)}>
+							Cancel
+						</button>
+						<p class="text-muted pb-1.5 text-[0.8rem]">
+							Its members keep their accounts; any site granted to this group loses that grant.
+						</p>
+					</form>
+				{/if}
+
 				{#if data.canManage}
 					<form method="POST" action="?/addMember" class="mt-4 flex flex-wrap items-end gap-3">
 						<input type="hidden" name="groupId" value={group.id} />
@@ -100,6 +119,15 @@
 							/>
 						</label>
 						<button class="btn btn-ghost" type="submit">Add</button>
+						{#if removing !== group.id}
+							<button
+								class="btn btn-danger ml-auto"
+								type="button"
+								onclick={() => (removing = group.id)}
+							>
+								Delete group
+							</button>
+						{/if}
 					</form>
 				{/if}
 			</section>

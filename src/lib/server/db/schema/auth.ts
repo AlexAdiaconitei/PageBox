@@ -178,12 +178,24 @@ export const apikey = pgTable(
 		permissions: t.text('permissions'),
 		metadata: t.text('metadata'),
 
+		/**
+		 * PageBox: the site this key may deploy to, mirrored out of `metadata`.
+		 *
+		 * The plugin owns `metadata` and stores it as text, so "the keys for this site" used
+		 * to mean reading every key on the instance and parsing JSON in JS — on every site
+		 * page load. This column is the same fact in a form the database can index. The
+		 * metadata copy stays authoritative for *authorisation* (it is what the plugin hands
+		 * back on verification); this one is for finding rows.
+		 */
+		siteId: t.text('site_id'),
+
 		createdAt: t.timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: t.timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 	},
 	(table) => [
 		t.index('apikey_reference_idx').on(table.referenceId),
-		t.index('apikey_start_idx').on(table.start)
+		t.index('apikey_start_idx').on(table.start),
+		t.index('apikey_site_idx').on(table.siteId)
 	]
 );
 

@@ -87,7 +87,13 @@
 
 		if (singleZip) {
 			rawArchive = items[0].getAsFile();
-			status = `${rawArchive!.name} · ${formatBytes(rawArchive!.size)} — sent as is`;
+			// Said out loud rather than left as a difference people discover: a zip is sent
+			// untouched, so nothing here inspects it — not the base path, not the storage
+			// quota, not the file count. The server checks all three and answers with the
+			// reason, but that is after the upload rather than before it.
+			status =
+				`${rawArchive!.name} · ${formatBytes(rawArchive!.size)} — sent as is. ` +
+				'A zip is not unpacked here, so the base-path and quota checks happen on the server.';
 			return;
 		}
 

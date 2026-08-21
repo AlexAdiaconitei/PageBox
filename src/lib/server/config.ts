@@ -93,11 +93,12 @@ const schema = z.object({
 
 	// --- startup tasks -------------------------------------------------------
 	PAGEBOX_MIGRATE_ON_START: z.stringbool().default(true),
-	PAGEBOX_ENSURE_BUCKET_ON_START: z.stringbool().default(true),
+	PAGEBOX_ENSURE_BUCKET_ON_START: z.stringbool().default(true)
 
-	// --- v2 (§12), no effect in v1 -------------------------------------------
-	PAGEBOX_BASE_DOMAIN: z.string().optional(),
-	PAGEBOX_SUBDOMAIN_MODE: z.stringbool().default(false)
+	// Per-site subdomains (§12) are a v2 shape, and the two variables that used to sit here
+	// for them were read by nothing. A configuration key that does not affect behaviour is
+	// worse than an absent one: it reads as a switch. `site.hostname` stays, because
+	// /whoami does report it.
 });
 
 export type Config = z.infer<typeof schema> & {

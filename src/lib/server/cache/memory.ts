@@ -31,6 +31,10 @@ export class MemoryCache implements CacheStore {
 		this.#map.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
 	}
 
+	async delete(key: string): Promise<void> {
+		this.#map.delete(key);
+	}
+
 	async invalidatePrefix(prefix: string): Promise<void> {
 		for (const key of this.#map.keys()) {
 			if (key.startsWith(prefix)) this.#map.delete(key);

@@ -23,7 +23,7 @@ export async function requireSiteToken(
 	}
 
 	const siteRef = await lookupSiteBySlug(slug);
-	if (!siteRef || siteRef.archived || !tokenAllowsSite(authenticated.auth, siteRef.id)) {
+	if (!siteRef || !tokenAllowsSite(authenticated.auth, siteRef.id)) {
 		return { response: jsonError(404, 'site not found') };
 	}
 
@@ -111,7 +111,7 @@ export async function identifyCaller(
 	if (!user) return { response: jsonError(401, 'sign in or send a deploy token') };
 
 	const siteRef = await lookupSiteBySlug(slug);
-	if (!siteRef || siteRef.archived) return { response: jsonError(404, 'site not found') };
+	if (!siteRef) return { response: jsonError(404, 'site not found') };
 
 	// Same answer as a site that does not exist: the API never confirms what is hosted here
 	// to someone who may not act on it.

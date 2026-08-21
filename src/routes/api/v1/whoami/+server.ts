@@ -24,7 +24,7 @@ export const GET: RequestHandler = async (event) => {
 	if (!auth.siteId) return jsonError(401, 'invalid token');
 
 	const [row] = await db.select().from(site).where(eq(site.id, auth.siteId)).limit(1);
-	if (!row || row.archivedAt) return jsonError(404, 'site not found');
+	if (!row) return jsonError(404, 'site not found');
 
 	// This answer is site metadata — slug, base path, visibility — so it needs the same
 	// permission the deploy endpoints do, checked against the owner as they stand now.

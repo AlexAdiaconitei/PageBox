@@ -149,6 +149,18 @@ dropped whenever a grant, a membership or a site's visibility changes.
 The owner is the admin who created it, and only they (or the superadmin) list it, change its
 membership or grant on it. Members can only be accounts that admin administers.
 
+Deleting a group removes its memberships and every grant made to it, and releases the slug.
+It only ever takes access away: members keep their accounts and any grant made to them
+personally.
+
+## Sessions
+
+Changing a password ends every other session on the account. **Sign out everywhere**, on the
+account screen, ends all of them including the one pressing it — for a laptop left somewhere
+or a cookie believed copied, where the password was never the problem. A suspended account's
+sessions stop working at the next request, because the ban is checked on every session read,
+not only at sign-in.
+
 ## Reading a private site
 
 Every file of a private site is authorised, not just the HTML. A design that checks only

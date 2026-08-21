@@ -39,6 +39,7 @@ export async function startup(): Promise<void> {
 
 		// Sweeps deployments whose upload died mid-flight, now and once an hour.
 		startSweeper();
+		installShutdown();
 
 		log(
 			`ready in ${Date.now() - t0}ms · admin=${config.PAGEBOX_ADMIN_HOST} ` +
@@ -98,6 +99,32 @@ async function bootstrapAdmin(): Promise<void> {
 	});
 
 	log(`bootstrap superadmin created: ${email} (must change password at first login)`);
+}
+
+/**
+ * Closes the pool and the cache client on the way out.
+ *
+ * adapter-node stops accepting requests on SIGTERM and SIGINT, but it knows nothing about
+ * the Postgres pool or the Valkey connection — so a container being replaced left its
+ * connections to time out on the server side rather than saying goodbye. Idempotent, and
+ * it never blocks the exit for long: a shutdown that hangs is worse than one that drops a
+ * socket.
+ */
+function installShutdown(): void {
+	let closing = false;
+	const close = async () => {
+		if (closing) return;
+		closing = true;
+		await Promise.race([
+			Promise.allSettled([getSql().end({ timeout: 5 }), cache.close()]),
+			new Promise((resolve) => setTimeout(resolve, 6000))
+		]);
+	};
+	for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+		// `once`, and unref'd through the runtime's own handler: this only tidies up, it does
+		// not decide when the process ends.
+		process.once(signal, () => void close());
+	}
 }
 
 /**

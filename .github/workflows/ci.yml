@@ -20,6 +20,100 @@ jobs:
       - run: pnpm run check
       - run: pnpm test
 
+  # The integration suite is the only thing that exercises serving, the deploy API, private
+  # sites, roles and quotas against a real Postgres and a real S3 — and it used to run only
+  # when somebody remembered to point PAGEBOX_E2E_BASE at something. `pnpm test` skips all
+  # of it silently without that variable, so "tests passed" meant the unit tests passed.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pagebox
+          POSTGRES_PASSWORD: pagebox
+          POSTGRES_DB: pagebox
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pagebox"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: pagebox
+          MINIO_ROOT_PASSWORD: pageboxpagebox
+        ports: ['9000:9000']
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      NODE_ENV: production
+      PAGEBOX_ADMIN_HOST: pagebox.localhost
+      PAGEBOX_SITES_HOST: pages.localhost
+      PAGEBOX_PUBLIC_SCHEME: http
+      DATABASE_URL: postgres://pagebox:pagebox@127.0.0.1:5432/pagebox
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY: pagebox
+      S3_SECRET_KEY: pageboxpagebox
+      S3_BUCKET: pagebox
+      S3_FORCE_PATH_STYLE: 'true'
+      # A CI runner is not addressable, and *.localhost is what config.ts checks for — the
+      # example credentials stay usable here on purpose.
+      AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      BOOTSTRAP_ADMIN_EMAIL: ci-admin@example.com
+      BOOTSTRAP_ADMIN_PASSWORD: ci-bootstrap-password
+      # The suite signs in repeatedly; the production default of 10 per 5 minutes throttles
+      # it halfway through and every later assertion fails as "wrong credentials".
+      LOGIN_MAX_ATTEMPTS: '200'
+      HOST_HEADER: x-forwarded-host
+      PROTOCOL_HEADER: x-forwarded-proto
+      ADDRESS_HEADER: x-forwarded-for
+      BODY_SIZE_LIMIT: '104857600'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+
+      # Migrations, the bucket and the bootstrap superadmin all happen in-process at boot
+      # (src/lib/server/startup.ts), so starting the built server is the whole setup.
+      - name: Start PageBox
+        run: |
+          node build/index.js > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 40); do
+            if curl -fsS -H 'x-forwarded-host: pagebox.localhost' \
+                 http://127.0.0.1:3000/healthz >/dev/null 2>&1; then
+              echo "up after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "server never became healthy:"; cat server.log; exit 1
+
+      - name: Seed the fixtures the suite deploys against
+        run: node scripts/seed-demo.mjs
+
+      - name: Integration tests
+        env:
+          PAGEBOX_E2E_BASE: http://127.0.0.1:3000
+          PAGEBOX_E2E_EMAIL: e2e-admin@example.com
+          PAGEBOX_E2E_PASSWORD: e2e-admin-password
+        run: pnpm vitest run tests/integration
+
+      - name: Server log
+        if: always()
+        run: cat server.log
+
+      - name: Stop PageBox
+        if: always()
+        run: kill "$(cat server.pid)" || true
+
   # Building the image on every push is what keeps the deployment path from rotting
   # unnoticed: it is the same Dockerfile Dokploy and compose use.
   image:

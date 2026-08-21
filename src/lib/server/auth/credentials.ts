@@ -112,6 +112,18 @@ export const signInWithPassword = (
 	credentials: { email: string; password: string }
 ) => call(event, kind, '/sign-in/email', credentials);
 
+/**
+ * Ends every session of this account, the caller's included.
+ *
+ * The one thing missing when a session is believed stolen: suspending the account is the
+ * superadmin's tool and too blunt for the person it belongs to, and a password change was
+ * the only way to get here — which is a lot of ceremony when the password was never the
+ * problem. Goes through the handler like every other credential call, so it is throttled
+ * and its cookies come back the same way.
+ */
+export const revokeAllSessions = (event: RequestEvent) =>
+	call(event, 'admin', '/revoke-sessions', {});
+
 export const changeOwnPassword = (
 	event: RequestEvent,
 	credentials: { currentPassword: string; newPassword: string }

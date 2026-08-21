@@ -4,9 +4,10 @@ import type { Actions, PageServerLoad } from './$types';
 import { isAdmin, isSuperadmin, type SessionUser } from '$lib/server/auth';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
-import { group, groupMember, user } from '$lib/server/db/schema';
+import { group, groupMember, siteGrant, user } from '$lib/server/db/schema';
 import { isValidSlug, newId } from '$lib/server/ids';
 import { hasOperatorAccess, invalidateUserGroups, manages } from '$lib/server/perms';
+import { invalidateSite } from '$lib/server/sites/resolve';
 
 /**
  * Groups, and who owns one.
@@ -134,6 +135,56 @@ export const actions: Actions = {
 			meta: { userId }
 		});
 		return { message: 'Member added' };
+	},
+
+	/**
+	 * Removes a group, its memberships and the grants made to it.
+	 *
+	 * A group holds a slug in a unique index, so one made by mistake used to be permanent —
+	 * there was no way to take the name back. Deleting is safe in the direction that
+	 * matters: it only ever takes access away. Members keep their accounts and any grant
+	 * made to them personally; what goes is the shortcut.
+	 */
+	deleteGroup: async ({ locals, request }) => {
+		const actor = requireAdmin(locals);
+		const data = await request.formData();
+		const owned = await ownedGroup(actor, String(data.get('groupId') ?? ''));
+		if (!owned) return fail(404, { message: 'That group is not yours to change' });
+		if (String(data.get('confirm') ?? '').trim() !== owned.slug) {
+			return fail(400, { message: `Type "${owned.slug}" to confirm` });
+		}
+
+		// Everyone who was in it loses whatever the group was granted, so their cached
+		// permission has to go with it.
+		const members = await db
+			.select({ userId: groupMember.userId })
+			.from(groupMember)
+			.where(eq(groupMember.groupId, owned.id));
+
+		// `site_grant` has no FK to `group` — a grant names a principal by type and id — so
+		// the rows it left behind are removed here rather than by a cascade.
+		const grants = await db
+			.delete(siteGrant)
+			.where(and(eq(siteGrant.principalType, 'group'), eq(siteGrant.principalId, owned.id)))
+			.returning({ siteId: siteGrant.siteId });
+
+		await db.delete(group).where(eq(group.id, owned.id));
+		for (const member of members) await invalidateUserGroups(member.userId);
+		for (const grant of grants) await invalidateSite(null, grant.siteId);
+
+		await audit({
+			action: 'group.deleted',
+			actorUserId: actor.id,
+			targetType: 'group',
+			targetId: owned.id,
+			meta: { slug: owned.slug, members: members.length, grants: grants.length }
+		});
+		return {
+			message:
+				grants.length > 0
+					? `Group ${owned.slug} deleted, along with ${grants.length} grant(s) made to it`
+					: `Group ${owned.slug} deleted`
+		};
 	},
 
 	removeMember: async ({ locals, request }) => {

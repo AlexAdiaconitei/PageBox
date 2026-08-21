@@ -6,12 +6,12 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { and, eq } from 'drizzle-orm';
-import { getConfig } from '../config';
+import { formatBytes, getConfig } from '../config';
 import { db } from '../db';
 import { deployment, site } from '../db/schema';
 import { newId } from '../ids';
 import { deletePrefix, deploymentPrefix, headObject, objectKey } from '../s3';
-import { allowanceFor, ownerOf } from '../quota';
+import { allowanceFor, ownerOf, withQuotaLock } from '../quota';
 import { invalidateSite, type SiteRef } from '../sites/resolve';
 import { pruneDeployments } from './retention';
 import { extractZipToS3, INGEST_VERSION, measureZip, ZipRejected } from './zip';
@@ -98,7 +98,30 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 		// most of a build in the bucket to then delete it — and for the panel uploader, to
 		// have somebody watch a progress bar for a deploy that was never going to land.
 		const measured = await measureZip(archivePath);
-		const budget = await quotaBudget(input.siteRef, measured.totalBytes);
+
+		// Everything from here to the last object written happens under the owner's quota
+		// lock. Checking a live SUM and then spending against it is check-then-act: two
+		// deploys by the same admin each read a figure the other is about to invalidate, and
+		// both pass. The lock is per owner, so it never makes one admin wait on another.
+		const owner = await ownerOf(input.siteRef.id);
+		const run = () => store(measured.totalBytes, written.checksum);
+		return owner ? await withQuotaLock('owner', owner.id, run) : await run();
+	} catch (err) {
+		if (deploymentId) await markFailed(input.siteRef.id, deploymentId);
+		if (err instanceof ZipRejected) {
+			return { ok: false, status: 400, message: err.message, reason: err.reason };
+		}
+		throw err;
+	} finally {
+		await rm(dir, { recursive: true, force: true }).catch(() => {});
+	}
+
+	/**
+	 * The part that must not race: measure against the owner's allowance, then store.
+	 * Declared here so it closes over the archive path and the ids the caller set up.
+	 */
+	async function store(measuredBytes: number, checksum: string): Promise<IngestOutcome> {
+		const budget = await quotaBudget(input.siteRef, measuredBytes);
 		if (budget.refusal) return budget.refusal;
 
 		deploymentId = newId();
@@ -106,7 +129,7 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			id: deploymentId,
 			siteId: input.siteRef.id,
 			status: 'uploading',
-			checksum: written.checksum,
+			checksum,
 			ingestVersion: INGEST_VERSION,
 			source: input.source,
 			notes: input.notes ?? null,
@@ -155,14 +178,6 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			root: result.root,
 			pruned
 		};
-	} catch (err) {
-		if (deploymentId) await markFailed(input.siteRef.id, deploymentId);
-		if (err instanceof ZipRejected) {
-			return { ok: false, status: 400, message: err.message, reason: err.reason };
-		}
-		throw err;
-	} finally {
-		await rm(dir, { recursive: true, force: true }).catch(() => {});
 	}
 }
 
@@ -192,8 +207,8 @@ async function quotaBudget(
 			status: 413,
 			reason: 'quota',
 			message:
-				`this build needs ${label(bytes)} and only ${label(allowance.remaining)} of the ` +
-				`${label(allowance.quota)} quota is free`,
+				`this build needs ${formatBytes(bytes)} and only ` +
+				`${formatBytes(allowance.remaining)} of the ${formatBytes(allowance.quota)} quota is free`,
 			quota: {
 				used: allowance.used,
 				quota: allowance.quota,
@@ -202,17 +217,6 @@ async function quotaBudget(
 			}
 		}
 	};
-}
-
-function label(bytes: number): string {
-	const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-	let value = Math.max(0, bytes);
-	let unit = 0;
-	while (value >= 1024 && unit < units.length - 1) {
-		value /= 1024;
-		unit++;
-	}
-	return `${Math.round(value * 10) / 10} ${units[unit]}`;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { config } from './config';
-import { db } from './db';
+import { config, formatBytes } from './config';
+import { db, getSql } from './db';
 import { deployment, site, user } from './db/schema';
 import { prunablePlan } from './deploy/retention';
 
@@ -27,7 +27,64 @@ import { prunablePlan } from './deploy/retention';
  * Usage is summed live rather than kept in a counter. At the scale this runs at the query
  * is two joins over a few hundred rows, and a counter is a number that drifts the first
  * time something fails between writing the objects and updating it.
+ *
+ * Because it is summed live, *every* decision that spends or hands out room has to be
+ * serialised against the others that touch the same account — see `withQuotaLock`. Read,
+ * decide, write is not atomic on its own, and a pool advertised as hard has to be hard
+ * under two people pressing deploy at the same moment, not only under one.
  */
+
+/**
+ * Serialises the decisions that spend or allocate storage.
+ *
+ * Everything here is check-then-act over a live `SUM`: two uploads by the same admin, or
+ * two quotas handed out at once, each read a figure that the other is about to invalidate,
+ * and both pass. Postgres advisory locks are the cheap fix — no row to lock (usage is
+ * derived, not stored), no table to serialise, and the lock is released with the session
+ * whatever happens to the request.
+ *
+ * Two scopes. Spending is per owner, so one admin's deploy never waits on another's. The
+ * pool is one lock for the instance, because allocating touches every quota at once. The
+ * pool lock is taken *inside* an owner lock nowhere, and vice versa — they are disjoint, so
+ * there is no ordering to get wrong.
+ *
+ * The key is a hash rather than the id, because advisory locks are keyed by bigint and
+ * ULIDs are not numbers. Collisions cost a needless wait, never a wrong answer.
+ */
+const LOCK_NAMESPACE = { owner: 0x9b01, pool: 0x9b02 } as const;
+
+function lockKey(scope: keyof typeof LOCK_NAMESPACE, id: string): number {
+	// FNV-1a over the id, folded into 31 bits so the pair fits a Postgres (int, int) lock.
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < id.length; i++) {
+		hash ^= id.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return (hash >>> 1) | 0;
+}
+
+export async function withQuotaLock<T>(
+	scope: keyof typeof LOCK_NAMESPACE,
+	id: string,
+	fn: () => Promise<T>
+): Promise<T> {
+	// A reserved connection, not the pool: an advisory lock belongs to the session that took
+	// it, and taking it on one connection while releasing on another leaks it forever (the
+	// same trap `db/migrate.ts` documents).
+	const reserved = await getSql().reserve();
+	const namespace = LOCK_NAMESPACE[scope];
+	const key = lockKey(scope, id);
+	try {
+		await reserved`SELECT pg_advisory_lock(${namespace}, ${key})`;
+		try {
+			return await fn();
+		} finally {
+			await reserved`SELECT pg_advisory_unlock(${namespace}, ${key})`;
+		}
+	} finally {
+		await reserved.release();
+	}
+}
 
 export type Usage = { bytes: number; deployments: number };
 
@@ -63,14 +120,24 @@ export async function usageFor(userId: string): Promise<number> {
 	return (await usageByOwner([userId])).get(userId)?.bytes ?? 0;
 }
 
-/** Bytes held by sites whose owner is gone — the FK sets it null rather than cascading. */
-export async function unownedBytes(): Promise<number> {
-	const [row] = await db
-		.select({ bytes: sql<string>`coalesce(sum(${deployment.totalBytes}), 0)` })
+/**
+ * Sites whose owner is gone — the FK sets `owner_user_id` null rather than cascading.
+ *
+ * Named, not just counted: "3.2 GB belongs to nobody" is a fact you cannot act on, and the
+ * action needed is to open each of those sites and give it an owner.
+ */
+export async function unownedSites(): Promise<{ slug: string; bytes: number }[]> {
+	const rows = await db
+		.select({
+			slug: site.slug,
+			bytes: sql<string>`coalesce(sum(${deployment.totalBytes}), 0)`
+		})
 		.from(site)
 		.leftJoin(deployment, and(eq(deployment.siteId, site.id), ne(deployment.status, 'failed')))
-		.where(isNull(site.ownerUserId));
-	return Number(row?.bytes ?? 0);
+		.where(isNull(site.ownerUserId))
+		.groupBy(site.slug)
+		.orderBy(site.slug);
+	return rows.map((row) => ({ slug: row.slug, bytes: Number(row.bytes) }));
 }
 
 export type PoolState = {
@@ -87,8 +154,8 @@ export type PoolState = {
 	/** The seat's own allowance: whatever the admins leave over. */
 	superadminAllowance: number | null;
 	superadminUsed: number;
-	/** Bytes on sites nobody owns; they occupy the bucket and belong to no allocation. */
-	orphaned: number;
+	/** Sites nobody owns: they occupy the bucket and belong to no allocation. */
+	orphaned: { slug: string; bytes: number }[];
 };
 
 export async function poolState(): Promise<PoolState> {
@@ -113,7 +180,7 @@ export async function poolState(): Promise<PoolState> {
 		unmetered,
 		superadminAllowance: total === null ? null : Math.max(0, total - allocated),
 		superadminUsed,
-		orphaned: await unownedBytes()
+		orphaned: await unownedSites()
 	};
 }
 
@@ -123,6 +190,9 @@ export async function poolState(): Promise<PoolState> {
  * Two ways to say no, and they are different failures: the pool has not got it, or handing
  * it over would leave the seat holding less room than it is already using. The second is
  * the one that surprises people, so it is a message of its own.
+ *
+ * Call it inside `withQuotaLock('pool', …)` together with the write it guards: on its own
+ * it answers a question about a figure that the next request is free to change.
  */
 export async function canAllocate(
 	targetId: string | null,
@@ -145,7 +215,7 @@ export async function canAllocate(
 		return {
 			ok: false,
 			message:
-				`Only ${label(total - others)} is free — ${label(wanted)} asked for. ` +
+				`Only ${formatBytes(total - others)} is free — ${formatBytes(wanted)} asked for. ` +
 				'Lower it, or take some back from another admin.'
 		};
 	}
@@ -156,8 +226,8 @@ export async function canAllocate(
 		return {
 			ok: false,
 			message:
-				`That would leave the superadmin ${label(total - (others + wanted))} while it is ` +
-				`already using ${label(seatUsed)}. Free some of its own storage first.`
+				`That would leave the superadmin ${formatBytes(total - (others + wanted))} while it ` +
+				`is already using ${formatBytes(seatUsed)}. Free some of its own storage first.`
 		};
 	}
 
@@ -267,16 +337,4 @@ export function parseQuota(raw: FormDataEntryValue | null): {
 		return { value: null, error: 'Use at least 0.001 GB, or 0 to stop them storing anything' };
 	}
 	return { value: Math.round(parsed * GIB) };
-}
-
-/** Bytes as a figure for a message. Kept local so quota.ts has no import into $lib. */
-function label(bytes: number): string {
-	const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-	let value = Math.max(0, bytes);
-	let unit = 0;
-	while (value >= 1024 && unit < units.length - 1) {
-		value /= 1024;
-		unit++;
-	}
-	return `${Math.round(value * 10) / 10} ${units[unit]}`;
 }

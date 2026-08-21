@@ -69,7 +69,6 @@ export async function pruneDeployments(
 
 	const removed: string[] = [];
 	const failed: string[] = [];
-	let reclaimed = 0;
 
 	for (const row of doomed) {
 		try {
@@ -82,14 +81,24 @@ export async function pruneDeployments(
 			continue;
 		}
 		removed.push(row.id);
-		reclaimed += row.totalBytes;
 	}
 
-	if (removed.length > 0) {
-		await db.delete(deployment).where(inArray(deployment.id, removed));
-	}
+	// `returning` rather than a blind delete: two deploys to the same site can compute the
+	// same plan, and both would then report having reclaimed the same bytes. Whoever's
+	// statement actually removed the row is the one that gets to count it.
+	const deleted =
+		removed.length > 0
+			? await db.delete(deployment).where(inArray(deployment.id, removed)).returning({
+					id: deployment.id,
+					totalBytes: deployment.totalBytes
+				})
+			: [];
 
-	return { prunedIds: removed, reclaimedBytes: reclaimed, failedIds: failed };
+	return {
+		prunedIds: deleted.map((row) => row.id),
+		reclaimedBytes: deleted.reduce((sum, row) => sum + row.totalBytes, 0),
+		failedIds: failed
+	};
 }
 
 /** Total bytes a site occupies across every deployment it still has. */

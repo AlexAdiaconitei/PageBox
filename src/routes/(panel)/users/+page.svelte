@@ -19,6 +19,10 @@
 	const asGb = (bytes: number | null) =>
 		bytes === null ? '' : String(Math.round((bytes / GIB) * 1000) / 1000);
 
+	const orphanBytes = $derived(
+		(data.pool?.orphaned ?? []).reduce((sum, entry) => sum + entry.bytes, 0)
+	);
+
 	// Only the superadmin can hand the seat over, and only to an admin.
 	const canTransferTo = (role: string) => data.canSetRoles && role === 'admin';
 </script>
@@ -88,10 +92,16 @@
 			Nothing has been changed, and no further quota can be handed out until one is lowered.
 		</p>
 	{/if}
-	{#if data.pool.orphaned > 0}
+	{#if data.pool.orphaned.length > 0}
+		<!-- Named, not just weighed: the action needed is to open each of these and hand it to
+		     an admin, so the notice links to them. -->
 		<p class="notice mb-5">
-			{formatBytes(data.pool.orphaned)} sits on sites with no owner — it occupies the bucket and counts
-			against nobody's quota. Give those sites an owner from their site page.
+			{formatBytes(orphanBytes)} sits on {data.pool.orphaned.length} site(s) with no owner — it occupies
+			the bucket and counts against nobody's quota. Hand each to an admin:
+			{#each data.pool.orphaned as orphan (orphan.slug)}
+				<a class="mono ml-1 hover:underline" href="/sites/{orphan.slug}">{orphan.slug}</a>
+				<span class="text-faint">({formatBytes(orphan.bytes)})</span>
+			{/each}
 		</p>
 	{/if}
 {/if}

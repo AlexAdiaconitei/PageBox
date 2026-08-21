@@ -24,27 +24,32 @@ async function visibleTo(actor: SessionUser) {
 		.where(eq(user.createdByUserId, actor.id));
 	const actorIds = [actor.id, ...issued.map((row) => row.id)];
 
-	// Site ids they can act on, plus the deployment ids underneath them — a deploy is
-	// recorded against the deployment, not the site, so the site clause alone would drop
-	// exactly the rows an operator opens this page for.
+	// Sites they can act on, plus the deployments underneath them — a deploy is recorded
+	// against the deployment, not the site, so the site clause alone would drop exactly the
+	// rows an operator opens this page for.
+	//
+	// The deployment half is a subquery rather than a list of ids: materialising every
+	// deployment an admin owns into an `IN (…)` grows the query text with their history,
+	// and a busy site has thousands.
 	const sites = await sitesForUser(actor);
 	const siteIds = sites.map((entry) => entry.id);
-	const deploymentIds = siteIds.length
-		? (
-				await db
-					.select({ id: deployment.id })
-					.from(deployment)
-					.where(inArray(deployment.siteId, siteIds))
-			).map((row) => row.id)
-		: [];
 
 	return or(
 		inArray(auditLog.actorUserId, actorIds),
 		siteIds.length
 			? and(eq(auditLog.targetType, 'site'), inArray(auditLog.targetId, siteIds))
 			: undefined,
-		deploymentIds.length
-			? and(eq(auditLog.targetType, 'deployment'), inArray(auditLog.targetId, deploymentIds))
+		siteIds.length
+			? and(
+					eq(auditLog.targetType, 'deployment'),
+					inArray(
+						auditLog.targetId,
+						db
+							.select({ id: deployment.id })
+							.from(deployment)
+							.where(inArray(deployment.siteId, siteIds))
+					)
+				)
 			: undefined
 	);
 }

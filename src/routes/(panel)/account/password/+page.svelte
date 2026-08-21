@@ -50,13 +50,25 @@
 {/if}
 
 <section class="section">
+	<h2 class="mb-3 text-[1.05rem] font-semibold">Sessions</h2>
+	<p class="text-muted mb-3 text-[0.85rem]">
+		Signing out everywhere ends every session on this account — this one included, so you will be
+		asked to sign in again. For a laptop left somewhere, or a cookie you think was copied: the
+		password is not the problem, so changing it is the wrong tool.
+	</p>
+	<form method="POST" action="?/signOutEverywhere">
+		<button class="btn btn-ghost" type="submit">Sign out everywhere</button>
+	</form>
+</section>
+
+<section class="section">
 	<h2 class="mb-3 text-[1.05rem] font-semibold">Password</h2>
 	<p class="text-muted mb-4 text-[0.85rem]">
 		Changing it signs out every other session on this account — a password is replaced because it
 		might be known, and a session that outlives it defeats the point.
 	</p>
 
-	<form method="POST" class="flex max-w-sm flex-col gap-4">
+	<form method="POST" action="?/changePassword" class="flex max-w-sm flex-col gap-4">
 		<label class="field">
 			Current password
 			<PasswordInput name="currentPassword" autocomplete="current-password" required />

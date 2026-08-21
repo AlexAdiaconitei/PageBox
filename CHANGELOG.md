@@ -7,6 +7,60 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — a codebase sweep: races, dead ends and tests that never ran
+
+- **The storage pool was not hard under concurrency.** Every quota decision is check-then-act
+  over a live `SUM`, so two deploys by the same admin — or two quotas handed out at once —
+  each read a figure the other was about to invalidate, and both passed. Both paths now run
+  under a Postgres advisory lock, per owner for spending and one for the pool, taken on a
+  reserved connection the way `db/migrate.ts` does.
+- **The API's `DELETE /deployments/{id}` dropped its objects before its row, unguarded** —
+  the bug already fixed in the panel's action, left in the other half. A storage failure
+  there listed a deployment that served nothing and offered to roll back to it.
+- **Retention could double-count what it reclaimed.** Two deploys computing the same plan
+  both reported the same freed bytes; the delete now counts the rows it actually removed.
+- **CI never ran the integration suite.** `pnpm test` skips all of it without
+  `PAGEBOX_E2E_BASE`, so "tests passed" meant the unit tests passed. There is now a job with
+  Postgres and MinIO that builds, boots, seeds and runs it.
+- **Three features had no regression tests.** Disabling, retention and deletion; the admin
+  tier; storage quotas — 21 new integration tests across `lifecycle`, `roles` and `quota`,
+  plus a shared harness the older suites had each copied.
+- **Four security-checklist lines were still only prose**: `Service-Worker-Allowed` never
+  emitted, host-only cookies on both hosts, sign-in throttling on both hosts, and a
+  hand-built archive carrying a symlink.
+
+### Changed — smaller corrections found in the same sweep
+
+- `site.archived_at` is dropped. Nothing ever wrote it and four code paths guarded against a
+  state that could not occur; disabling covers taking a site off the air and deleting covers
+  retiring it.
+- `apikey.site_id` mirrors the site id the plugin keeps in its free-text `metadata`, so "the
+  keys for this site" is an indexed lookup instead of reading every key on the instance and
+  parsing JSON in JS on each site page load.
+- `sitesForUser` asks the database which sites a caller can reach instead of reading the
+  whole table and discarding most of it — it runs on every panel request, through
+  `hasOperatorAccess`.
+- The activity trail scopes deployments with a subquery rather than materialising every
+  deployment id an admin owns into an `IN (…)`.
+- `invalidateSite` deletes the slug key exactly instead of dropping a prefix: slugs are not
+  prefix-delimited, so invalidating `demo` also dropped `demo-api` and `demo-private`.
+- **Sign out everywhere**, on the account screen: ends every session including the caller's,
+  for a laptop left behind or a cookie believed copied. Both actions on that page are named
+  now, since SvelteKit refuses to mix a default action with named ones.
+- **Groups can be deleted**, taking their memberships and the grants made to them. A group
+  made by mistake used to hold its slug forever.
+- Unowned sites are named and linked on the Users page rather than only weighed.
+- A site owner who administers no accounts is told why the grant picker is empty, instead of
+  being shown a control that cannot submit.
+- The panel says that a dropped `.zip` is sent as is, so its base-path and quota checks
+  happen on the server rather than before the upload.
+- SIGTERM and SIGINT close the Postgres pool and the Valkey client.
+- One `formatBytes`, not three. Dead code removed: `newDeployToken`/`hashToken` (better-auth
+  owns key generation), `cacheKeys.siteById` (written, never read), and the `PAGEBOX_BASE_DOMAIN`
+  / `PAGEBOX_SUBDOMAIN_MODE` v2 variables, which nothing read.
+- `XFF_DEPTH` is documented: it decides which hop of `X-Forwarded-For` is the client, and
+  that address is what rate limiting and the audit trail key on.
+
 ### Added — storage quotas, allocated out of one declared pool
 
 Nothing stopped an admin filling the bucket. Now each one may hold so many bytes across

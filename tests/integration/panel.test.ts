@@ -223,7 +223,7 @@ run('panel sessions', () => {
 		expect(gated.headers.get('location')).toBe('/account/password');
 
 		const changed = await actionResult(
-			await request('/account/password', {
+			await request('/account/password?/changePassword', {
 				jar: session,
 				method: 'POST',
 				form: { currentPassword: handover, newPassword: chosen, confirm: chosen }
@@ -244,7 +244,7 @@ run('panel sessions', () => {
 	});
 
 	it('reports a wrong current password as such', async () => {
-		const res = await request('/account/password', {
+		const res = await request('/account/password?/changePassword', {
 			jar,
 			method: 'POST',
 			form: {

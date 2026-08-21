@@ -1,7 +1,11 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
-import { changeOwnPassword, refusedForCredentials } from '$lib/server/auth/credentials';
+import {
+	changeOwnPassword,
+	refusedForCredentials,
+	revokeAllSessions
+} from '$lib/server/auth/credentials';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/schema';
@@ -11,7 +15,32 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	default: async (event) => {
+	/**
+	 * Ends every session on this account, including the one pressing the button.
+	 *
+	 * For a laptop left behind or a cookie believed copied — cases where the password is
+	 * fine and there was, until now, nothing to do about it short of changing it anyway.
+	 */
+	signOutEverywhere: async (event) => {
+		if (!event.locals.user) redirect(303, '/login');
+		const result = await revokeAllSessions(event);
+		if (!result.ok) {
+			return fail(result.rateLimited ? 429 : 400, {
+				message: result.rateLimited
+					? 'Too many attempts. Try again in a few minutes.'
+					: 'Could not end the other sessions — the server log has the reason'
+			});
+		}
+		await audit({ action: 'sessions.revoked', actorUserId: event.locals.user.id });
+		// Its own session went with the rest, so there is nothing to return to.
+		redirect(303, '/login');
+	},
+
+	/**
+	 * Named rather than `default`, because the page has two things to do now and SvelteKit
+	 * refuses to mix a default action with named ones.
+	 */
+	changePassword: async (event) => {
 		const current = event.locals.user;
 		if (!current) redirect(303, '/login');
 

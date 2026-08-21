@@ -6,7 +6,7 @@ import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { site, user } from '$lib/server/db/schema';
 import { manages } from '$lib/server/perms';
-import { canAllocate, parseQuota, poolState, usageByOwner } from '$lib/server/quota';
+import { canAllocate, parseQuota, poolState, usageByOwner, withQuotaLock } from '$lib/server/quota';
 import { config } from '$lib/server/config';
 
 /**
@@ -121,50 +121,58 @@ export const actions: Actions = {
 		// deploy fails weeks later for a reason nobody can trace.
 		const quota = role === 'admin' ? parseQuota(data.get('quota')) : { value: null };
 		if (quota.error) return fail(400, { message: quota.error });
-		if (role === 'admin') {
-			const wantedBytes = quota.value ?? config.PAGEBOX_DEFAULT_QUOTA_BYTES;
-			const room = await canAllocate(null, wantedBytes);
-			if (!room.ok) return fail(409, { message: room.message });
-		}
+		const wantedBytes = quota.value ?? config.PAGEBOX_DEFAULT_QUOTA_BYTES;
 
-		try {
-			// No `role` in the body. The plugin refuses to assign one unless the caller holds
-			// `set-role`, and it refuses for a role of its own `adminRoles` even then — so the
-			// account is created at the plugin's default and PageBox writes the role beside
-			// the two columns it already owns. Which role is decided above; the plugin has no
-			// say in it, and no PageBox role needs `set-role` as a result.
-			const created = await adminAuth.api.createUser({
-				body: { email, password, name },
-				headers: event.request.headers
-			});
-			await db
-				.update(user)
-				.set({
-					role,
-					storageQuotaBytes:
-						role === 'admin' ? (quota.value ?? config.PAGEBOX_DEFAULT_QUOTA_BYTES) : null,
-					// What the issuer typed is a handover credential, not this person's
-					// password: they replace it before the panel opens for them.
-					mustChangePassword: true,
-					// Who may administer this account from here on. Written in the same breath
-					// as the account, because an account with no issuer is one only the
-					// superadmin can reach.
-					createdByUserId: actor.id
-				})
-				.where(eq(user.id, created.user.id));
-			await audit({
-				action: 'user.created',
-				actorUserId: actor.id,
-				targetType: 'user',
-				targetId: created.user.id,
-				meta: { email, role, quota: quota.value ?? undefined }
-			});
-		} catch (err) {
-			const message = (err as { body?: { message?: string } })?.body?.message;
-			return fail(400, { message: message ?? 'Could not create that user' });
-		}
+		// Checked and written under one lock: `canAllocate` answers a question about a sum
+		// that the next request is free to change, so asking it outside the lock that guards
+		// the write is the same as not asking it.
+		return withQuotaLock('pool', 'instance', async () => {
+			if (role === 'admin') {
+				const room = await canAllocate(null, wantedBytes);
+				if (!room.ok) return fail(409, { message: room.message });
+			}
+			return seatAccount();
+		});
 
-		return { message: `${email} created — hand over the temporary password` };
+		async function seatAccount() {
+			try {
+				// No `role` in the body. The plugin refuses to assign one unless the caller holds
+				// `set-role`, and it refuses for a role of its own `adminRoles` even then — so the
+				// account is created at the plugin's default and PageBox writes the role beside
+				// the two columns it already owns. Which role is decided above; the plugin has no
+				// say in it, and no PageBox role needs `set-role` as a result.
+				const created = await adminAuth.api.createUser({
+					body: { email, password, name },
+					headers: event.request.headers
+				});
+				await db
+					.update(user)
+					.set({
+						role,
+						storageQuotaBytes: role === 'admin' ? wantedBytes : null,
+						// What the issuer typed is a handover credential, not this person's
+						// password: they replace it before the panel opens for them.
+						mustChangePassword: true,
+						// Who may administer this account from here on. Written in the same breath
+						// as the account, because an account with no issuer is one only the
+						// superadmin can reach.
+						createdByUserId: actor.id
+					})
+					.where(eq(user.id, created.user.id));
+				await audit({
+					action: 'user.created',
+					actorUserId: actor.id,
+					targetType: 'user',
+					targetId: created.user.id,
+					meta: { email, role, quota: quota.value ?? undefined }
+				});
+			} catch (err) {
+				const message = (err as { body?: { message?: string } })?.body?.message;
+				return fail(400, { message: message ?? 'Could not create that user' });
+			}
+
+			return { message: `${email} created — hand over the temporary password` };
+		}
 	},
 
 	/**
@@ -250,10 +258,15 @@ export const actions: Actions = {
 		if (quota.error) return fail(400, { message: quota.error });
 		if (quota.value === null) return fail(400, { message: 'Give a figure in gigabytes' });
 
-		const room = await canAllocate(target.id, quota.value);
-		if (!room.ok) return fail(409, { message: room.message });
-
-		await db.update(user).set({ storageQuotaBytes: quota.value }).where(eq(user.id, target.id));
+		// One lock over the check and the write, as on `create`.
+		const wanted = quota.value;
+		const refusal = await withQuotaLock('pool', 'instance', async () => {
+			const room = await canAllocate(target.id, wanted);
+			if (!room.ok) return room.message;
+			await db.update(user).set({ storageQuotaBytes: wanted }).where(eq(user.id, target.id));
+			return null;
+		});
+		if (refusal) return fail(409, { message: refusal });
 		await audit({
 			action: 'user.quota_set',
 			actorUserId: actor.id,

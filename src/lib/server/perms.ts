@@ -113,7 +113,6 @@ export type SiteSummary = {
  * since the panel lists things you can act on, not things you can read.
  */
 export async function sitesForUser(user: SessionUser): Promise<SiteSummary[]> {
-	const rows = await db.select().from(site).orderBy(site.slug);
 	const groupIds = await groupsOf(user.id);
 
 	const grants =
@@ -139,9 +138,27 @@ export async function sitesForUser(user: SessionUser): Promise<SiteSummary[]> {
 		byGrant.set(grant.siteId, [...(byGrant.get(grant.siteId) ?? []), grant.role]);
 	}
 
+	// Asked of the database rather than filtered afterwards. This runs on every panel
+	// request — `hasOperatorAccess` below calls it from the layout — and reading the whole
+	// site table to discard most of it was the same query getting slower with every site
+	// anybody added, whether or not the caller could see them.
+	const reachable = [...byGrant.keys()];
+	const rows =
+		user.role === 'superadmin'
+			? await db.select().from(site).orderBy(site.slug)
+			: await db
+					.select()
+					.from(site)
+					.where(
+						or(
+							eq(site.ownerUserId, user.id),
+							reachable.length ? inArray(site.id, reachable) : undefined
+						)
+					)
+					.orderBy(site.slug);
+
 	const out: SiteSummary[] = [];
 	for (const row of rows) {
-		if (row.archivedAt) continue;
 		let permission: Permission = null;
 		if (user.role === 'superadmin' || row.ownerUserId === user.id) permission = 'owner';
 		else permission = highest(byGrant.get(row.id) ?? []);

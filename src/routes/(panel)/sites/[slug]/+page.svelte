@@ -325,25 +325,35 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 			</table>
 		{/if}
 
-		<form method="POST" action="?/addGrant" class="flex flex-wrap items-end gap-3">
-			<label class="field w-80 max-w-full">
-				Person or group
-				<Combobox
-					name="principal"
-					options={principalOptions}
-					placeholder="Search people or groups…"
-				/>
-			</label>
-			<label class="field w-44 max-w-full">
-				Role
-				<select class="select" name="role">
-					<option value="viewer">viewer — read</option>
-					<option value="deployer">deployer — read + deploy</option>
-					<option value="owner">owner — everything</option>
-				</select>
-			</label>
-			<button class="btn btn-ghost" type="submit">Grant access</button>
-		</form>
+		{#if principalOptions.length === 0}
+			<!-- Reachable: a plain user granted `owner` manages the site but administers no
+			     accounts, so there is nobody they could name here. Saying so beats an empty
+			     picker that refuses to submit. -->
+			<p class="notice text-[0.85rem]">
+				You manage this site, but access is handed out by whoever administers the accounts — an
+				admin, or the superadmin. Ask them to grant the people you need.
+			</p>
+		{:else}
+			<form method="POST" action="?/addGrant" class="flex flex-wrap items-end gap-3">
+				<label class="field w-80 max-w-full">
+					Person or group
+					<Combobox
+						name="principal"
+						options={principalOptions}
+						placeholder="Search people or groups…"
+					/>
+				</label>
+				<label class="field w-44 max-w-full">
+					Role
+					<select class="select" name="role">
+						<option value="viewer">viewer — read</option>
+						<option value="deployer">deployer — read + deploy</option>
+						<option value="owner">owner — everything</option>
+					</select>
+				</label>
+				<button class="btn btn-ghost" type="submit">Grant access</button>
+			</form>
+		{/if}
 	</section>
 
 	<section class="section">

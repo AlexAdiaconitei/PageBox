@@ -29,7 +29,6 @@ export type SiteRef = {
 	spaFallback: boolean;
 	activeDeploymentId: string | null;
 	ownerUserId: string | null;
-	archived: boolean;
 	/** Suspended by an operator: it keeps everything it has and answers nothing. */
 	disabled: boolean;
 	/** How many deployments to keep on the next upload; null = keep everything. */
@@ -65,7 +64,7 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 	const siteRef = await lookupSiteBySlug(parsed.slug);
 	// A disabled site is resolved but not served: `serveSite` answers the same 404 as a
 	// site that does not exist, so taking one down leaks nothing about what is hosted here.
-	if (!siteRef || siteRef.archived) return null;
+	if (!siteRef) return null;
 
 	return {
 		siteRef,
@@ -95,7 +94,6 @@ export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
 		spaFallback: row.spaFallback,
 		activeDeploymentId: row.activeDeploymentId,
 		ownerUserId: row.ownerUserId,
-		archived: row.archivedAt !== null,
 		disabled: row.disabledAt !== null,
 		retentionLimit: row.retentionLimit
 	};
@@ -103,10 +101,19 @@ export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
 	return ref;
 }
 
-export async function invalidateSite(slug: string, siteId: string): Promise<void> {
+/**
+ * Drops what this site has cached: its own row, and every permission computed against it.
+ *
+ * The slug is an exact delete, not a prefix drop. Slugs are not prefix-delimited, so
+ * invalidating `demo` used to take `demo-api` and `demo-private` with it — harmless, but
+ * only by luck, and it made the cost of an edit proportional to how many sites shared a
+ * name stem. `slug` may be null when the caller only knows the id (a grant to a group being
+ * deleted, say); the permission entries are what matter there and the site row expires on
+ * its own TTL.
+ */
+export async function invalidateSite(slug: string | null, siteId: string): Promise<void> {
 	await Promise.all([
-		cache.invalidatePrefix(cacheKeys.siteBySlug(slug)),
-		cache.invalidatePrefix(cacheKeys.siteById(siteId)),
+		slug ? cache.delete(cacheKeys.siteBySlug(slug)) : Promise.resolve(),
 		cache.invalidatePrefix(cacheKeys.sitePrefix(siteId))
 	]);
 }

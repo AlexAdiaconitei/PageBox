@@ -44,7 +44,7 @@ function metadataSiteId(metadata: unknown): string | null {
 /** Loads the site and the caller's permission on it, or 404 if they may not see it. */
 async function loadSite(slug: string, sessionUser: App.Locals['user']) {
 	const siteRef = await lookupSiteBySlug(slug);
-	if (!siteRef || siteRef.archived) error(404, 'Site not found');
+	if (!siteRef) error(404, 'Site not found');
 
 	const permission = await permissionFor(sessionUser, siteRef);
 	// A site you cannot act on does not exist as far as the panel is concerned. Public
@@ -113,10 +113,14 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		.where(eq(siteGrant.siteId, siteRef.id))
 		.orderBy(siteGrant.createdAt);
 
-	// Deploy tokens are api keys; the one scoped to this site carries its id in metadata.
-	const tokens = (
-		await db.select().from(apikey).where(eq(apikey.enabled, true)).orderBy(desc(apikey.createdAt))
-	).filter((row) => metadataSiteId(row.metadata) === siteRef.id);
+	// Deploy tokens are api keys. `site_id` mirrors what the plugin keeps in `metadata`,
+	// which is free text it owns — so this asks an index instead of reading every key on the
+	// instance and parsing JSON in JS on each site page load.
+	const tokens = await db
+		.select()
+		.from(apikey)
+		.where(and(eq(apikey.enabled, true), eq(apikey.siteId, siteRef.id)))
+		.orderBy(desc(apikey.createdAt));
 
 	// Who this actor may hand access to. Not the whole directory: an admin granting a site
 	// to somebody else's account, or to a group somebody else controls the membership of,
@@ -395,17 +399,9 @@ export const actions: Actions = {
 		// Deployments, grants and the deploy tokens scoped here go with it: `deployment` and
 		// `site_grant` cascade on the FK, the keys carry their site in metadata and do not, so
 		// they are deleted by hand — directly, for the same reason `revokeToken` does.
-		const keys = (await db.select().from(apikey)).filter(
-			(row) => metadataSiteId(row.metadata) === siteRef.id
-		);
-		if (keys.length > 0) {
-			await db.delete(apikey).where(
-				inArray(
-					apikey.id,
-					keys.map((key) => key.id)
-				)
-			);
-		}
+		const keys = await db.delete(apikey).where(eq(apikey.siteId, siteRef.id)).returning({
+			id: apikey.id
+		});
 
 		await db.delete(site).where(eq(site.id, siteRef.id));
 		await invalidateSite(siteRef.slug, siteRef.id);
@@ -597,6 +593,10 @@ export const actions: Actions = {
 			},
 			headers: request.headers
 		});
+		// The same fact in a column the database can index. `metadata` stays authoritative
+		// for authorisation — it is what the plugin hands back on verification — and this is
+		// what "the keys for this site" is asked with.
+		await db.update(apikey).set({ siteId: siteRef.id }).where(eq(apikey.id, created.id));
 
 		await audit({
 			action: 'token.created',
@@ -620,7 +620,7 @@ export const actions: Actions = {
 
 		// Only keys belonging to this site may be revoked from this page.
 		const [row] = await db.select().from(apikey).where(eq(apikey.id, id)).limit(1);
-		if (!row || metadataSiteId(row.metadata) !== siteRef.id) {
+		if (!row || row.siteId !== siteRef.id) {
 			return fail(404, { message: 'That token is not on this site' });
 		}
 

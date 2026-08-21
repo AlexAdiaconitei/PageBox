@@ -42,7 +42,16 @@ export const DELETE: RequestHandler = async (event) => {
 		return jsonError(409, 'cannot delete the active deployment — activate another one first');
 	}
 
-	await deletePrefix(deploymentPrefix(siteRef.id, row.id));
+	// Objects first, row second, and the row only if the objects actually went — the same
+	// order the panel's action uses, for the same reason: the other way round leaves a
+	// deployment the panel still lists and still offers to roll back to, which then serves
+	// nothing. Failing loudly leaves it listed and intact, which is recoverable.
+	try {
+		await deletePrefix(deploymentPrefix(siteRef.id, row.id));
+	} catch (err) {
+		console.error(`[pagebox] could not drop the objects of deployment ${row.id}:`, err);
+		return jsonError(502, 'storage refused to delete this deployment — nothing was removed');
+	}
 	await db.delete(deployment).where(eq(deployment.id, row.id));
 
 	await audit({

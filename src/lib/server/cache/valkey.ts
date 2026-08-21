@@ -33,6 +33,14 @@ export class ValkeyCache implements CacheStore {
 		}
 	}
 
+	async delete(key: string): Promise<void> {
+		try {
+			await this.#client.unlink(NS + key);
+		} catch {
+			/* TTL remains the correctness floor */
+		}
+	}
+
 	async invalidatePrefix(prefix: string): Promise<void> {
 		try {
 			let cursor = '0';
