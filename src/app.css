@@ -719,6 +719,116 @@ table {
 		}
 	}
 
+	/* --- generator tabs ------------------------------------------------------ */
+	/* The deploy recipe, one panel per site generator (see $lib/preflight).
+	   
+	   Radio inputs rather than buttons and a click handler: the panel switches with no
+	   JavaScript at all, and the arrow keys already work because that is what a radio group
+	   does. The inputs sit before the labels and the panels so the sibling combinator can
+	   reach both — which is also why the rules below are written per index. Eight near-
+	   identical selectors is the price of a control that works on a page whose whole job is
+	   to be read and copied from. */
+	.gen-tabs {
+		border: 1px solid var(--pb-line);
+		border-radius: 6px;
+		overflow: hidden;
+	}
+
+	/* Off-screen rather than display:none, which would take them out of the tab order. */
+	.gen-radio {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		border: 0;
+		clip-path: inset(50%);
+		overflow: hidden;
+		white-space: nowrap;
+	}
+
+	.gen-list {
+		display: flex;
+		overflow-x: auto;
+		background: var(--pb-rail);
+		border-bottom: 1px solid var(--pb-line);
+	}
+
+	.gen-tab {
+		flex: 0 0 auto;
+		cursor: pointer;
+		padding: 0.5rem 0.85rem;
+		font-size: 0.8125rem;
+		color: var(--pb-muted);
+		white-space: nowrap;
+		border-bottom: 2px solid transparent;
+		transition:
+			color 0.12s ease,
+			border-color 0.12s ease;
+	}
+
+	.gen-tab:hover {
+		color: var(--pb-ink);
+	}
+
+	.gen-panel {
+		display: none;
+		padding: 0.9rem 1rem 1.1rem;
+	}
+
+	.gen-code {
+		font-family: var(--font-mono);
+		font-size: 0.76rem;
+		line-height: 1.65;
+		margin: 0.5rem 0 0;
+		padding: 0.7rem 0.85rem;
+		border-radius: 4px;
+		background: var(--pb-line-soft);
+		color: var(--pb-ink);
+		overflow-x: auto;
+		white-space: pre;
+	}
+
+	/* One rule per position, for the eight recipes in the table. Adding a ninth means adding
+	   a line to each of the three lists below — deliberately visible, so the CSS cannot
+	   silently stop covering a generator somebody added. */
+	.gen-tabs > .gen-radio:nth-of-type(1):checked ~ .gen-panels > .gen-panel:nth-child(1),
+	.gen-tabs > .gen-radio:nth-of-type(2):checked ~ .gen-panels > .gen-panel:nth-child(2),
+	.gen-tabs > .gen-radio:nth-of-type(3):checked ~ .gen-panels > .gen-panel:nth-child(3),
+	.gen-tabs > .gen-radio:nth-of-type(4):checked ~ .gen-panels > .gen-panel:nth-child(4),
+	.gen-tabs > .gen-radio:nth-of-type(5):checked ~ .gen-panels > .gen-panel:nth-child(5),
+	.gen-tabs > .gen-radio:nth-of-type(6):checked ~ .gen-panels > .gen-panel:nth-child(6),
+	.gen-tabs > .gen-radio:nth-of-type(7):checked ~ .gen-panels > .gen-panel:nth-child(7),
+	.gen-tabs > .gen-radio:nth-of-type(8):checked ~ .gen-panels > .gen-panel:nth-child(8) {
+		display: block;
+	}
+
+	.gen-tabs > .gen-radio:nth-of-type(1):checked ~ .gen-list > .gen-tab:nth-child(1),
+	.gen-tabs > .gen-radio:nth-of-type(2):checked ~ .gen-list > .gen-tab:nth-child(2),
+	.gen-tabs > .gen-radio:nth-of-type(3):checked ~ .gen-list > .gen-tab:nth-child(3),
+	.gen-tabs > .gen-radio:nth-of-type(4):checked ~ .gen-list > .gen-tab:nth-child(4),
+	.gen-tabs > .gen-radio:nth-of-type(5):checked ~ .gen-list > .gen-tab:nth-child(5),
+	.gen-tabs > .gen-radio:nth-of-type(6):checked ~ .gen-list > .gen-tab:nth-child(6),
+	.gen-tabs > .gen-radio:nth-of-type(7):checked ~ .gen-list > .gen-tab:nth-child(7),
+	.gen-tabs > .gen-radio:nth-of-type(8):checked ~ .gen-list > .gen-tab:nth-child(8) {
+		color: var(--pb-ink);
+		border-bottom-color: var(--pb-accent);
+		background: var(--pb-page);
+	}
+
+	/* The focus ring belongs on the label, because the input it describes is off-screen. */
+	.gen-tabs > .gen-radio:nth-of-type(1):focus-visible ~ .gen-list > .gen-tab:nth-child(1),
+	.gen-tabs > .gen-radio:nth-of-type(2):focus-visible ~ .gen-list > .gen-tab:nth-child(2),
+	.gen-tabs > .gen-radio:nth-of-type(3):focus-visible ~ .gen-list > .gen-tab:nth-child(3),
+	.gen-tabs > .gen-radio:nth-of-type(4):focus-visible ~ .gen-list > .gen-tab:nth-child(4),
+	.gen-tabs > .gen-radio:nth-of-type(5):focus-visible ~ .gen-list > .gen-tab:nth-child(5),
+	.gen-tabs > .gen-radio:nth-of-type(6):focus-visible ~ .gen-list > .gen-tab:nth-child(6),
+	.gen-tabs > .gen-radio:nth-of-type(7):focus-visible ~ .gen-list > .gen-tab:nth-child(7),
+	.gen-tabs > .gen-radio:nth-of-type(8):focus-visible ~ .gen-list > .gen-tab:nth-child(8) {
+		outline: 2px solid var(--pb-accent);
+		outline-offset: -2px;
+	}
+
 	/* --- fleet figures ------------------------------------------------------ */
 	/* The Sites overview. Counts an operator acts on — how many sites exist, how many are
 	   actually serving something, how many are dark or switched off, and what it all weighs

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Longshore — a reading queue</title>
+		<meta
+			name="description"
+			content="Everything you meant to read, in one list, routed in the browser."
+		/>
+		<link rel="stylesheet" href="./app/shell.css" />
+	</head>
+
+	<body>
+		<!--
+			The SPA fixture. There is one HTML file here and no page called `queue` or
+			`archive` — the router invents those in the browser.
+
+			Turn `spaFallback` on for the site and PageBox answers this document, with status
+			**200**, for any path inside the deployment that does not resolve to a file. That is
+			the opposite of the 404 next door in 04-multipage, and deliberately so: a fallback
+			says "something will render here", a 404 page says "nothing will".
+
+			Real assets are still served as themselves. ./app/shell.css and ./app/router.js
+			resolve to files, so they are never swallowed by the fallback — which is the part
+			that goes wrong on hosts that implement it as "serve index.html for everything".
+		-->
+		<a class="skip" href="#view">Skip to the list</a>
+
+		<header class="chrome">
+			<p class="wordmark">Longshore</p>
+			<nav aria-label="Sections">
+				<a href="./queue" data-route="queue">Queue</a>
+				<a href="./later" data-route="later">Later</a>
+				<a href="./archive" data-route="archive">Archive</a>
+			</nav>
+			<p class="count" id="count" aria-live="polite"></p>
+		</header>
+
+		<main id="view" tabindex="-1">
+			<noscript>
+				<div class="empty">
+					<h1>This one needs JavaScript</h1>
+					<p>
+						The list is rendered in the browser, which is the whole point of the fixture. The other
+						examples beside this one work without it.
+					</p>
+				</div>
+			</noscript>
+		</main>
+
+		<footer class="chrome-foot">
+			<p>
+				Client-routed. Reload on any path above and the same document comes back &mdash; with status
+				200, because something is going to render.
+			</p>
+		</footer>
+
+		<script src="./app/router.js" type="module"></script>
+	</body>
+</html>

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Meridian 01 — a GPS-disciplined 10 MHz reference you build yourself</title>
+		<meta
+			name="description"
+			content="Through-hole kit for a GPS-disciplined oscillator. Datasheet, case files and firmware included."
+		/>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;800&family=Martian+Mono:wght@400;600&display=swap"
+			rel="stylesheet"
+		/>
+		<link rel="stylesheet" href="./kit.css" />
+	</head>
+
+	<body>
+		<header class="head">
+			<p class="rev">Rev C · shipping from stock</p>
+			<h1>Meridian 01</h1>
+			<p class="lede">
+				A GPS-disciplined 10&nbsp;MHz reference, in a kit. The surface-mount work is done; what is
+				left is an evening with an iron, a scope you no longer have to trust, and a
+				second-per-three-hundred-years you can check against the sky.
+			</p>
+		</header>
+
+		<main>
+			<!--
+				The hero is a real image file rather than a gradient, because this fixture exists
+				to make the host serve one: 300 KB of PNG, big enough that a byte range is a
+				sensible thing to ask for.
+			-->
+			<figure class="hero">
+				<img
+					src="./img/board-hero.png"
+					width="1200"
+					height="675"
+					alt="The Meridian 01 board under raking light, traces catching the edge of the frame."
+					fetchpriority="high"
+				/>
+				<figcaption>
+					Rev C, populated. The can top left is the oven; it runs warm on purpose.
+				</figcaption>
+			</figure>
+
+			<!--
+				The signature: a dimensioned drawing, in SVG, with real leader lines. It is the
+				artifact this subject actually produces — a kit ships with a drawing, not with a
+				hero shot — and it is the thing on the page you cannot get from a template.
+			-->
+			<section class="drawing-block">
+				<h2>What arrives</h2>
+				<svg class="drawing" viewBox="0 0 620 360" role="img" aria-labelledby="drawing-title">
+					<title id="drawing-title">
+						Dimensioned drawing of the board: 100 by 80 millimetres, with the oscillator, GPS
+						module, SMA antenna connector and power input called out.
+					</title>
+
+					<defs>
+						<marker
+							id="arrow"
+							viewBox="0 0 10 10"
+							refX="9"
+							refY="5"
+							markerWidth="7"
+							markerHeight="7"
+							orient="auto-start-reverse"
+						>
+							<path d="M0,1 L9,5 L0,9 z" fill="currentColor" />
+						</marker>
+						<pattern
+							id="hatch"
+							width="6"
+							height="6"
+							patternTransform="rotate(45)"
+							patternUnits="userSpaceOnUse"
+						>
+							<line
+								x1="0"
+								y1="0"
+								x2="0"
+								y2="6"
+								stroke="currentColor"
+								stroke-width="1"
+								opacity="0.35"
+							/>
+						</pattern>
+					</defs>
+
+					<g class="dim">
+						<line
+							x1="120"
+							y1="52"
+							x2="440"
+							y2="52"
+							marker-start="url(#arrow)"
+							marker-end="url(#arrow)"
+						/>
+						<text x="280" y="44" text-anchor="middle">100.0</text>
+						<line
+							x1="466"
+							y1="80"
+							x2="466"
+							y2="300"
+							marker-start="url(#arrow)"
+							marker-end="url(#arrow)"
+						/>
+						<text x="484" y="196" text-anchor="middle" transform="rotate(90 484 196)">80.0</text>
+					</g>
+
+					<rect class="board" x="120" y="80" width="320" height="220" rx="4" />
+					<rect
+						class="board-inner"
+						x="132"
+						y="92"
+						width="296"
+						height="196"
+						rx="2"
+						fill="url(#hatch)"
+					/>
+
+					<circle class="hole" cx="136" cy="96" r="4" />
+					<circle class="hole" cx="424" cy="96" r="4" />
+					<circle class="hole" cx="136" cy="284" r="4" />
+					<circle class="hole" cx="424" cy="284" r="4" />
+
+					<rect class="part warm" x="168" y="124" width="86" height="72" rx="3" />
+					<text class="part-label" x="211" y="166" text-anchor="middle">OCXO</text>
+
+					<rect class="part" x="292" y="128" width="112" height="60" rx="3" />
+					<text class="part-label" x="348" y="163" text-anchor="middle">GNSS</text>
+
+					<rect class="part" x="168" y="228" width="70" height="40" rx="3" />
+					<text class="part-label" x="203" y="253" text-anchor="middle">PLL</text>
+
+					<rect class="conn" x="110" y="196" width="20" height="34" rx="2" />
+					<rect class="conn" x="430" y="230" width="20" height="30" rx="2" />
+
+					<g class="callout">
+						<line x1="110" y1="213" x2="46" y2="213" />
+						<text x="42" y="209" text-anchor="end">SMA</text>
+						<text x="42" y="223" text-anchor="end" class="callout-sub">3.3 V bias</text>
+
+						<line x1="450" y1="245" x2="560" y2="245" />
+						<text x="564" y="241">9–15 V</text>
+						<text x="564" y="255" class="callout-sub">2.1 mm</text>
+
+						<line x1="211" y1="124" x2="211" y2="72" />
+						<text x="211" y="66" text-anchor="middle" class="callout-warm">runs at 70 °C</text>
+					</g>
+				</svg>
+			</section>
+
+			<section class="figures">
+				<dl>
+					<div>
+						<dt>Holdover</dt>
+						<dd>1&times;10<sup>&minus;9</sup></dd>
+						<p>over four hours, oven warm</p>
+					</div>
+					<div>
+						<dt>Cold lock</dt>
+						<dd>12<span class="unit">min</span></dd>
+						<p>90 seconds from warm</p>
+					</div>
+					<div>
+						<dt>Draw</dt>
+						<dd>4.5<span class="unit">W</span></dd>
+						<p>11 W while the oven climbs</p>
+					</div>
+					<div>
+						<dt>Board</dt>
+						<dd>100&times;80</dd>
+						<p>four layer, 1.6 mm</p>
+					</div>
+				</dl>
+			</section>
+
+			<section class="detail-block">
+				<figure class="detail">
+					<img
+						src="./img/ocxo-detail.png"
+						width="800"
+						height="800"
+						alt="Close crop of the oven-controlled crystal oscillator can, warm against the cold board."
+						loading="lazy"
+						decoding="async"
+					/>
+				</figure>
+				<div class="detail-copy">
+					<h2>The can is the kit</h2>
+					<p>
+						Everything else here is commodity. The oven-controlled oscillator is what you are
+						buying: a crystal held at 70&nbsp;°C so it stops caring what the room is doing,
+						disciplined by the satellites so it stops caring what the crystal is doing either.
+					</p>
+					<p>
+						It draws more power warming up than running, and it will be warm to the touch forever.
+						That is not a fault to design out. It is the entire mechanism.
+					</p>
+				</div>
+			</section>
+
+			<!--
+				Downloads. Four real files of four different types — an image, a PDF, a zip and a
+				blob with no extension the MIME table knows — which is exactly the spread this
+				fixture is here to serve.
+			-->
+			<section class="downloads">
+				<h2>Files</h2>
+				<ul>
+					<li>
+						<a href="./downloads/meridian-01-datasheet.pdf">
+							<span class="kind">PDF</span>
+							<span class="name">Datasheet</span>
+							<span class="meta">Rev C · 1 page</span>
+						</a>
+					</li>
+					<li>
+						<a href="./downloads/meridian-01-case.zip" download>
+							<span class="kind">ZIP</span>
+							<span class="name">Enclosure files</span>
+							<span class="meta">OpenSCAD + DXF gasket</span>
+						</a>
+					</li>
+					<li>
+						<a href="./downloads/meridian-01-fw-1.4.2.bin" download>
+							<span class="kind">BIN</span>
+							<span class="name">Firmware 1.4.2</span>
+							<span class="meta">96 KB · flash over USB</span>
+						</a>
+					</li>
+					<li>
+						<a href="./img/board-hero.png" download>
+							<span class="kind">PNG</span>
+							<span class="name">Board photograph</span>
+							<span class="meta">1200&times;675 · press use</span>
+						</a>
+					</li>
+				</ul>
+				<p class="fineprint">
+					Checksums are printed on the packing slip. The firmware is unsigned; if that matters to
+					you, build it from the source tree instead.
+				</p>
+			</section>
+		</main>
+
+		<footer>
+			<p>Meridian Instruments · a fixture, not a product · no clock was harmed</p>
+		</footer>
+	</body>
+</html>

@@ -12,6 +12,7 @@
 	import Dropzone from '$lib/components/Dropzone.svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { formatBytes, fullDate, timeAgo } from '$lib/format';
+	import { GENERATOR_RECIPES } from '$lib/preflight';
 
 	let { data, form } = $props();
 
@@ -44,17 +45,32 @@
 		data.storage.nextPrune.reduce((sum, entry) => sum + entry.totalBytes, 0)
 	);
 
-	// Written out with this site's own slug and base path, so it can be pasted as is.
-	const deployRecipe = $derived(`# 1. build against the base path this site is served under
-#    Docusaurus baseUrl · Next basePath + assetPrefix · Vite/Astro base · SvelteKit paths.base
-SITE_BASE_PATH=${data.site.basePath} npm run build
+	/**
+	 * Step one, per generator, with this site's own path already in it.
+	 *
+	 * Every tool spells the option differently and disagrees about the slashes, so the thing
+	 * worth handing someone is not "set your base path" — it is the line for *their* tool
+	 * with *this* site's value in it, and a link to the page that says so officially.
+	 * `$lib/preflight` owns the table; the drop area's warning reads the same rows.
+	 */
+	const recipes = $derived(
+		GENERATOR_RECIPES.map((recipe) => ({
+			...recipe,
+			snippet: recipe.snippet({ basePath: data.site.basePath, url: data.site.url }),
+			upload: `# build, then zip what it produced
+(cd ${recipe.output} && zip -qr ../site.zip .)
 
-# 2. zip the output and upload it
-(cd dist && zip -qr ../site.zip .)
 curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments \\
   -H "Authorization: Bearer $PAGEBOX_TOKEN" \\
   -H "Content-Type: application/zip" \\
-  --data-binary @site.zip`);
+  --data-binary @site.zip`
+		}))
+	);
+
+	// The tabs are radio inputs, so the panel switches with no JavaScript at all and the
+	// arrow keys work because that is what a radio group already does. Unique per site so
+	// two of these on one page could never share a group.
+	const tabGroup = $derived(`gen-${data.site.slug}`);
 </script>
 
 <svelte:head><title>{data.site.slug} — PageBox</title></svelte:head>
@@ -286,8 +302,64 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 
 <details class="mt-5">
 	<summary class="text-muted cursor-pointer text-[0.85rem]">How to deploy to this site</summary>
-	<pre
-		class="mono border-line text-muted mt-3 overflow-x-auto rounded border p-3 text-[0.78rem] leading-relaxed">{deployRecipe}</pre>
+
+	<div class="gen-tabs mt-4">
+		<!--
+			One radio per generator, all of them before the labels and panels so the CSS can
+			match `input:nth-of-type(n):checked ~ …`. Visually hidden but focusable: a tab strip
+			you cannot reach with the keyboard is a tab strip half the people cannot use.
+		-->
+		{#each recipes as recipe, index (recipe.id)}
+			<input
+				class="gen-radio"
+				type="radio"
+				name={tabGroup}
+				id="{tabGroup}-{recipe.id}"
+				checked={index === 0}
+			/>
+		{/each}
+
+		<div class="gen-list" role="tablist" aria-label="Site generator">
+			{#each recipes as recipe (recipe.id)}
+				<label class="gen-tab" for="{tabGroup}-{recipe.id}">{recipe.label}</label>
+			{/each}
+		</div>
+
+		<div class="gen-panels">
+			{#each recipes as recipe (recipe.id)}
+				<section class="gen-panel">
+					<p class="text-muted text-[0.82rem]">
+						<span class="font-medium">1. Build against this site's path.</span>
+						{#if recipe.aka}
+							<span class="text-faint">Same option for {recipe.aka}.</span>
+						{/if}
+					</p>
+					<p class="text-faint mt-1 text-[0.78rem]">
+						In <span class="mono">{recipe.file}</span> —
+						<a class="hover:underline" href={recipe.docs} target="_blank" rel="noreferrer noopener">
+							{recipe.option} docs
+							<ArrowUpRight size={11} strokeWidth={1.75} class="inline align-[-1px]" />
+						</a>
+					</p>
+					<pre class="gen-code">{recipe.snippet}</pre>
+
+					<p class="text-muted mt-3 text-[0.82rem]">
+						<span class="font-medium">2. Zip the output and upload it.</span>
+						<span class="text-faint">
+							{recipe.build} writes to <span class="mono">{recipe.output}/</span>.
+						</span>
+					</p>
+					<pre class="gen-code">{recipe.upload}</pre>
+				</section>
+			{/each}
+		</div>
+	</div>
+
+	<p class="text-faint mt-3 text-[0.78rem]">
+		Whatever the tool, the value above is this site's own
+		<span class="mono">{data.site.basePath}</span> — the slashes differ between them, and getting them
+		wrong is what makes a build work locally and 404 every asset here.
+	</p>
 </details>
 
 {#if data.canManage}

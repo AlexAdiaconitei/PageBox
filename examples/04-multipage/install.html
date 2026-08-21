@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Install tern</title>
+		<meta name="description" content="Install tern from a release binary, Homebrew or source." />
+		<link rel="stylesheet" href="./docs.css" />
+	</head>
+	<body>
+		<!--
+			Served at ./install with no extension: PageBox tries `install`, then `install.html`,
+			then `install/index.html`, and stops at the first that exists. The rail never mentions
+			the extension, so the same markup keeps working if this page later grows children.
+		-->
+		<aside class="rail">
+			<p class="brand"><a href="./">tern</a></p>
+			<p class="tagline">Photo sync without a cloud in the middle</p>
+			<nav aria-label="Documentation">
+				<h2>Start</h2>
+				<ul>
+					<li><a href="./">Overview</a></li>
+					<li><a href="./install" aria-current="page">Install</a></li>
+				</ul>
+				<h2>Guide</h2>
+				<ul>
+					<li><a href="./guide/">First sync</a></li>
+					<li><a href="./guide/conflicts">Conflicts</a></li>
+				</ul>
+				<h2>Reference</h2>
+				<ul>
+					<li><a href="./reference/">Commands</a></li>
+				</ul>
+			</nav>
+		</aside>
+
+		<main>
+			<p class="crumb"><a href="./">tern</a> / install</p>
+			<h1>Install</h1>
+			<p class="summary">
+				One binary, no runtime. Put it on both machines &mdash; tern talks to itself over SSH and
+				refuses to run against a version it does not recognise.
+			</p>
+
+			<h2>Homebrew</h2>
+			<pre><code>brew install ternsync/tap/tern</code></pre>
+
+			<h2>Release binary</h2>
+			<p>Pick the build for the machine and drop it on the path.</p>
+			<pre><code><span class="c"># linux, x86-64</span>
+curl -fsSL https://example.invalid/tern/latest/linux-amd64 -o tern
+chmod +x tern &amp;&amp; sudo mv tern /usr/local/bin/</code></pre>
+
+			<h2>From source</h2>
+			<pre><code>git clone https://example.invalid/tern
+cd tern &amp;&amp; make install</code></pre>
+
+			<div class="note">
+				<strong>Both ends matter:</strong> the index format changed in 0.7. Upgrade the machine at
+				home first &mdash; an old client against a new index is refused, a new client against an old
+				index silently reindexes everything.
+			</div>
+
+			<h2>Check it</h2>
+			<pre><code>tern <span class="f">version</span>
+<span class="c"># tern 0.9.2 (index format 3)</span></code></pre>
+
+			<div class="next">
+				<a href="./guide/">Now run the first sync &rarr;</a>
+			</div>
+		</main>
+	</body>
+</html>

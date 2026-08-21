@@ -62,57 +62,200 @@ export function underRoot(paths: string[], root: string): string[] {
 	return paths.filter((path) => path.startsWith(prefix)).map((path) => path.slice(prefix.length));
 }
 
+/**
+ * How each generator is told what path it will be served under.
+ *
+ * One table, two consumers: the preflight warning in the drop area, and the deploy recipe on
+ * the site page. They used to be able to disagree — the warning said one thing and the
+ * copyable instructions said another — and a site that 404s every asset is exactly the wrong
+ * place to have two opinions.
+ *
+ * The slash conventions differ per tool and are not guessable. They were read off the
+ * official documentation, which is what `docs` links to, and they are the whole reason this
+ * is a table rather than a sentence:
+ *
+ *   trailing slash required   Docusaurus, VitePress, Vite, Nuxt
+ *   no trailing slash         Next.js, Astro, SvelteKit
+ *   a full absolute URL       Hugo
+ */
+export type SiteTarget = {
+	/** `/s/<slug>/` — always with both slashes, as PageBox stores it. */
+	basePath: string;
+	/** `https://pages.example.com/s/<slug>/` — the address the site answers on. */
+	url: string;
+};
+
+export type GeneratorRecipe = {
+	id: string;
+	label: string;
+	/** Tools built on it that take the same option, named so people find themselves. */
+	aka?: string;
+	/** The file to edit. */
+	file: string;
+	/** The option, written the way it appears in that file. */
+	option: string;
+	/**
+	 * The value that option takes for this site — the whole point of the table, since every
+	 * tool disagrees about the slashes. `snippet` embeds it and the preflight warning prints
+	 * it, so the two can only ever say the same thing.
+	 */
+	value: (site: SiteTarget) => string;
+	/** What to paste in, with this site's own path already substituted. */
+	snippet: (site: SiteTarget) => string;
+	/** What produces the build. */
+	build: string;
+	/** Where the build lands — the directory to zip. */
+	output: string;
+	/** Official docs for this exact option. Checked August 2026. */
+	docs: string;
+	/** Filenames that give the generator away in an uploaded build, where it has a tell. */
+	test?: RegExp;
+};
+
+/** `/s/docs/` → `/s/docs`, for the tools that refuse a trailing slash. */
+const noTrailing = (basePath: string) => basePath.replace(/\/$/, '');
+
+export const GENERATOR_RECIPES: GeneratorRecipe[] = [
+	{
+		id: 'next',
+		label: 'Next.js',
+		aka: 'Fumadocs, Nextra',
+		file: 'next.config.js',
+		option: 'basePath',
+		value: (site) => noTrailing(site.basePath),
+		// `output: 'export'` is in the snippet because a Next app that has not been told to
+		// export produces a server build, and a server build is not a thing PageBox can host.
+		snippet: (site) =>
+			`module.exports = {\n  output: 'export',\n  basePath: '${noTrailing(site.basePath)}'\n};`,
+		build: 'next build',
+		output: 'out',
+		docs: 'https://nextjs.org/docs/app/api-reference/config/next-config-js/basePath',
+		test: /(^|\/)_next\//
+	},
+	{
+		id: 'docusaurus',
+		label: 'Docusaurus',
+		file: 'docusaurus.config.js',
+		option: 'baseUrl',
+		value: (site) => site.basePath,
+		// Both slashes: Docusaurus documents baseUrl as '/metro/', and drops assets if either
+		// one is missing.
+		snippet: (site) => `export default {\n  baseUrl: '${site.basePath}'\n};`,
+		build: 'npm run build',
+		output: 'build',
+		docs: 'https://docusaurus.io/docs/api/docusaurus-config#baseUrl',
+		test: /(^|\/)\.docusaurus\/|(^|\/)docusaurus\..*\.js$/
+	},
+	{
+		id: 'astro',
+		label: 'Astro',
+		aka: 'Starlight',
+		file: 'astro.config.mjs',
+		option: 'base',
+		value: (site) => noTrailing(site.basePath),
+		snippet: (site) =>
+			`import { defineConfig } from 'astro/config';\n\nexport default defineConfig({\n  base: '${noTrailing(site.basePath)}'\n});`,
+		build: 'npm run build',
+		output: 'dist',
+		docs: 'https://docs.astro.build/en/reference/configuration-reference/#base',
+		test: /(^|\/)_astro\//
+	},
+	{
+		id: 'vitepress',
+		label: 'VitePress',
+		file: '.vitepress/config.ts',
+		option: 'base',
+		value: (site) => site.basePath,
+		// "It should always start and end with a slash" — the VitePress docs, verbatim.
+		snippet: (site) =>
+			`import { defineConfig } from 'vitepress';\n\nexport default defineConfig({\n  base: '${site.basePath}'\n});`,
+		build: 'npm run docs:build',
+		output: '.vitepress/dist',
+		docs: 'https://vitepress.dev/reference/site-config#base'
+	},
+	{
+		id: 'sveltekit',
+		label: 'SvelteKit',
+		file: 'svelte.config.js',
+		option: 'kit.paths.base',
+		value: (site) => noTrailing(site.basePath),
+		// Static output needs the adapter *and* the base; either alone gives a site that
+		// half works, which is worse than one that plainly does not.
+		snippet: (site) =>
+			`import adapter from '@sveltejs/adapter-static';\n\nexport default {\n  kit: {\n    adapter: adapter(),\n    paths: { base: '${noTrailing(site.basePath)}' }\n  }\n};`,
+		build: 'npm run build',
+		output: 'build',
+		docs: 'https://svelte.dev/docs/kit/configuration#paths',
+		test: /(^|\/)_app\/immutable\//
+	},
+	{
+		id: 'vite',
+		label: 'Vite',
+		aka: 'React, Vue, Svelte SPAs',
+		file: 'vite.config.ts',
+		option: 'base',
+		value: (site) => site.basePath,
+		snippet: (site) =>
+			`import { defineConfig } from 'vite';\n\nexport default defineConfig({\n  base: '${site.basePath}'\n});`,
+		build: 'npm run build',
+		output: 'dist',
+		docs: 'https://vite.dev/config/shared-options.html#base',
+		test: /(^|\/)assets\/index-[A-Za-z0-9_-]{6,}\.(js|css)$/
+	},
+	{
+		id: 'nuxt',
+		label: 'Nuxt',
+		file: 'nuxt.config.ts',
+		option: 'app.baseURL',
+		value: (site) => site.basePath,
+		// `nuxt generate`, not `nuxt build`: the latter produces a server.
+		snippet: (site) =>
+			`export default defineNuxtConfig({\n  app: { baseURL: '${site.basePath}' }\n});`,
+		build: 'npx nuxt generate',
+		output: '.output/public',
+		docs: 'https://nuxt.com/docs/api/nuxt-config'
+	},
+	{
+		id: 'hugo',
+		label: 'Hugo',
+		file: 'hugo.toml',
+		option: 'baseURL',
+		value: (site) => site.url,
+		// The odd one out: Hugo wants the whole address, scheme and all, not a path — so this
+		// is the only recipe that needs to know the site's URL rather than its base path.
+		snippet: (site) => `baseURL = '${site.url}'`,
+		build: 'hugo --minify',
+		output: 'public',
+		docs: 'https://gohugo.io/configuration/all/'
+	}
+];
+
 export type Generator = {
-	id: 'next' | 'docusaurus' | 'astro' | 'vite' | 'sveltekit';
+	id: string;
 	label: string;
 	/** The exact configuration to change, with this site's base path substituted. */
 	fix: (basePath: string) => string;
 };
 
-const GENERATORS: Array<{
-	id: Generator['id'];
-	label: string;
-	test: RegExp;
-	fix: (b: string) => string;
-}> = [
-	{
-		id: 'next',
-		label: 'Next.js / Fumadocs',
-		test: /(^|\/)_next\//,
-		fix: (base) =>
-			`next.config.js: basePath: '${base.replace(/\/$/, '')}' and assetPrefix: '${base.replace(/\/$/, '')}'`
-	},
-	{
-		id: 'docusaurus',
-		label: 'Docusaurus',
-		test: /(^|\/)\.docusaurus\/|(^|\/)docusaurus\..*\.js$/,
-		fix: (base) => `docusaurus.config.js: baseUrl: '${base}'`
-	},
-	{
-		id: 'astro',
-		label: 'Astro',
-		test: /(^|\/)_astro\//,
-		fix: (base) => `astro.config.mjs: base: '${base.replace(/\/$/, '')}'`
-	},
-	{
-		id: 'sveltekit',
-		label: 'SvelteKit',
-		test: /(^|\/)_app\/immutable\//,
-		fix: (base) => `svelte.config.js: kit.paths.base = '${base.replace(/\/$/, '')}'`
-	},
-	{
-		id: 'vite',
-		label: 'Vite',
-		test: /(^|\/)assets\/index-[A-Za-z0-9_-]{6,}\.(js|css)$/,
-		fix: (base) => `vite.config.ts: base: '${base}'`
-	}
-];
-
+/**
+ * Which generator produced this build, from the filenames it left behind.
+ *
+ * Only the ones with an unmistakable tell are detectable — `_next/`, `_astro/`,
+ * `_app/immutable/`. Hugo and VitePress produce ordinary directories with nothing in them
+ * that says who made them, so they appear in the recipe tabs and never here. Guessing wrong
+ * is worse than not guessing: the warning would name a config file the person does not have.
+ */
 export function detectGenerator(paths: string[]): Generator | null {
-	for (const generator of GENERATORS) {
-		if (paths.some((path) => generator.test.test(path))) {
-			return { id: generator.id, label: generator.label, fix: generator.fix };
-		}
+	for (const recipe of GENERATOR_RECIPES) {
+		if (!recipe.test || !paths.some((path) => recipe.test!.test(path))) continue;
+		return {
+			id: recipe.id,
+			label: recipe.label,
+			// The same string the recipe tab shows, so the warning and the instructions can
+			// never name different options.
+			fix: (basePath) =>
+				`${recipe.file}: ${recipe.option}: '${recipe.value({ basePath, url: basePath })}'`
+		};
 	}
 	return null;
 }

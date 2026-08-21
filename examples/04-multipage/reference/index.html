@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Commands &mdash; tern</title>
+		<meta name="description" content="Every tern command and the flags that matter." />
+		<link rel="stylesheet" href="../docs.css" />
+	</head>
+	<body>
+		<aside class="rail">
+			<p class="brand"><a href="../">tern</a></p>
+			<p class="tagline">Photo sync without a cloud in the middle</p>
+			<nav aria-label="Documentation">
+				<h2>Start</h2>
+				<ul>
+					<li><a href="../">Overview</a></li>
+					<li><a href="../install">Install</a></li>
+				</ul>
+				<h2>Guide</h2>
+				<ul>
+					<li><a href="../guide/">First sync</a></li>
+					<li><a href="../guide/conflicts">Conflicts</a></li>
+				</ul>
+				<h2>Reference</h2>
+				<ul>
+					<li><a href="../reference/" aria-current="page">Commands</a></li>
+				</ul>
+			</nav>
+		</aside>
+
+		<main>
+			<p class="crumb"><a href="../">tern</a> / reference</p>
+			<h1>Commands</h1>
+			<p class="summary">Six commands. Everything else is a flag on <code>sync</code>.</p>
+
+			<table>
+				<thead>
+					<tr>
+						<th>Command</th>
+						<th>What it does</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><code>init &lt;dir&gt;</code></td>
+						<td>Index a directory. Run once per machine.</td>
+					</tr>
+					<tr>
+						<td><code>sync &lt;remote&gt;</code></td>
+						<td>Move the difference, both ways.</td>
+					</tr>
+					<tr>
+						<td><code>status</code></td>
+						<td>What would move, without moving it.</td>
+					</tr>
+					<tr>
+						<td><code>resolve</code></td>
+						<td>Settle conflicts. See the guide.</td>
+					</tr>
+					<tr>
+						<td><code>verify</code></td>
+						<td>Re-hash and compare against the index.</td>
+					</tr>
+					<tr>
+						<td><code>version</code></td>
+						<td>Version and index format.</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<h2>Flags worth knowing</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>Flag</th>
+						<th>Effect</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><code>--dry-run</code></td>
+						<td>Print the plan and stop.</td>
+					</tr>
+					<tr>
+						<td><code>--proofs-first</code></td>
+						<td>Send JPEGs before raws.</td>
+					</tr>
+					<tr>
+						<td><code>--limit 2M</code></td>
+						<td>Cap the transfer rate, bytes per second.</td>
+					</tr>
+					<tr>
+						<td><code>--since 2024-01</code></td>
+						<td>Only files shot after a date.</td>
+					</tr>
+					<tr>
+						<td><code>--one-way</code></td>
+						<td>Send only. Nothing arrives on this machine.</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<div class="note">
+				<strong>Exit codes:</strong> <code>0</code> agreed, <code>2</code> conflicts left,
+				<code>3</code> transfer failed. Cron on <code>2</code> is normal; cron on <code>3</code> is
+				worth an email.
+			</div>
+		</main>
+	</body>
+</html>

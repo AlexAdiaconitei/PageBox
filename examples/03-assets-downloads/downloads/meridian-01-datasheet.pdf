@@ -1,0 +1,43 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 987 >>
+stream
+BT /F1 26 Tf 62 760 Td (MERIDIAN 01) Tj ET
+BT /F1 13 Tf 62 736 Td (GPS-disciplined clock, 10 MHz reference) Tj ET
+BT /F1 11 Tf 62 700 Td (Holdover          1e-9 over 4 hours, OCXO warmed) Tj ET
+BT /F1 11 Tf 62 682 Td (Acquisition       cold 12 min, warm 90 s) Tj ET
+BT /F1 11 Tf 62 664 Td (Outputs           10 MHz sine, 1 PPS TTL, NMEA over USB) Tj ET
+BT /F1 11 Tf 62 646 Td (Supply            9-15 V DC, 4.5 W steady, 11 W warming) Tj ET
+BT /F1 11 Tf 62 628 Td (Antenna           SMA, 3.3 V bias, 25 m RG-174 supplied) Tj ET
+BT /F1 11 Tf 62 610 Td (Board             100 x 80 mm, four layer, 1.6 mm) Tj ET
+BT /F1 11 Tf 62 574 Td (Kit contents      board, OCXO, antenna, case files, no enclosure) Tj ET
+BT /F1 11 Tf 62 556 Td (Assembly          through-hole only; SMD is pre-populated) Tj ET
+BT /F1 10 Tf 62 500 Td (Revision C - see the changelog on the site for what moved.) Tj ET
+BT /F1 10 Tf 62 484 Td (This page is a fixture. The clock is not real. The numbers are plausible.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001279 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1349
+%%EOF

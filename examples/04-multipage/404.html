@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Not here &mdash; tern</title>
+		<meta name="description" content="That page is not part of this documentation." />
+		<link rel="stylesheet" href="./docs.css" />
+	</head>
+	<body>
+		<!--
+			PageBox serves this file for any path in the deployment that does not resolve, and
+			answers 404 while doing it. That is the difference between a custom 404 page and an
+			SPA fallback: the fallback answers 200 because the app is going to render something,
+			this answers 404 because nothing is going to.
+		-->
+		<aside class="rail">
+			<p class="brand"><a href="./">tern</a></p>
+			<p class="tagline">Photo sync without a cloud in the middle</p>
+			<nav aria-label="Documentation">
+				<h2>Start</h2>
+				<ul>
+					<li><a href="./">Overview</a></li>
+					<li><a href="./install">Install</a></li>
+				</ul>
+				<h2>Guide</h2>
+				<ul>
+					<li><a href="./guide/">First sync</a></li>
+					<li><a href="./guide/conflicts">Conflicts</a></li>
+				</ul>
+				<h2>Reference</h2>
+				<ul>
+					<li><a href="./reference/">Commands</a></li>
+				</ul>
+			</nav>
+		</aside>
+
+		<main>
+			<div class="lost">
+				<p class="code">404 &middot; not found</p>
+				<h1>That page is not here</h1>
+				<p class="summary">
+					Which is worth saying properly: this document came back with a real 404 status, not a 200
+					with an apology printed on it. A crawler, a link checker and a monitoring probe all get
+					told the truth.
+				</p>
+				<p>
+					The documentation is small enough to scan &mdash; the rail has all of it. If you followed
+					a link from somewhere and it should exist,
+					<a href="./reference/">the command reference</a> is the most likely place it moved to.
+				</p>
+			</div>
+		</main>
+	</body>
+</html>

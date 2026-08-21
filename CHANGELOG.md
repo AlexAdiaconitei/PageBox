@@ -7,6 +7,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — example sites, and a deploy recipe per generator
+
+- **`examples/`** — five deployments, each a different shape, for exercising the host against
+  something that looks like a real site: one self-contained file; hashed and unhashed assets
+  side by side; images, a PDF, a zip and an extensionless blob; nested directories with a
+  custom `404.html`; and a client-routed app for the SPA fallback. Every one uses relative
+  URLs throughout, which is what `/s/<slug>/` requires and the most common reason a build
+  that works locally 404s once deployed. The binary assets are real files with a committed
+  script that produces them, so nobody has to trust a blob in the repo.
+- **Tabs on the deploy recipe.** Step one used to be a single line naming four tools at once.
+  It is now a panel per generator — Next.js (with Fumadocs and Nextra), Docusaurus, Astro,
+  VitePress, SvelteKit, Vite, Nuxt and Hugo — carrying the file to edit, the option, this
+  site's own value already substituted, the build command, the directory to zip, and a link
+  to the official documentation for that option.
+
+  The slash conventions are the point and they are not guessable: Docusaurus, VitePress, Vite
+  and Nuxt require a trailing slash, Next, Astro and SvelteKit refuse one, and Hugo wants a
+  whole absolute URL. Each was read off the official docs rather than remembered.
+
+  `$lib/preflight` owns the table and both consumers read it, so the warning in the drop area
+  and the instructions on the page can no longer name different options for the same tool.
+  The tabs are radio inputs, so they switch with no JavaScript and the arrow keys work
+  because that is what a radio group already does.
+
 ### Fixed — a codebase sweep: races, dead ends and tests that never ran
 
 - **The storage pool was not hard under concurrency.** Every quota decision is check-then-act

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>First sync &mdash; tern</title>
+		<meta name="description" content="Index both machines, dry-run, then move the difference." />
+		<link rel="stylesheet" href="../docs.css" />
+	</head>
+	<body>
+		<!--
+			This one lives at guide/index.html and is reached as `./guide/` &mdash; the directory
+			case. Its links go up with `../`, which is what keeps it working under any base path:
+			at /s/<slug>/guide/ the parent is /s/<slug>/, and nothing had to be told that.
+		-->
+		<aside class="rail">
+			<p class="brand"><a href="../">tern</a></p>
+			<p class="tagline">Photo sync without a cloud in the middle</p>
+			<nav aria-label="Documentation">
+				<h2>Start</h2>
+				<ul>
+					<li><a href="../">Overview</a></li>
+					<li><a href="../install">Install</a></li>
+				</ul>
+				<h2>Guide</h2>
+				<ul>
+					<li><a href="../guide/" aria-current="page">First sync</a></li>
+					<li><a href="../guide/conflicts">Conflicts</a></li>
+				</ul>
+				<h2>Reference</h2>
+				<ul>
+					<li><a href="../reference/">Commands</a></li>
+				</ul>
+			</nav>
+		</aside>
+
+		<main>
+			<p class="crumb"><a href="../">tern</a> / guide / first sync</p>
+			<h1>The first sync</h1>
+			<p class="summary">
+				The first run is the slow one: both sides get indexed from scratch. Everything after it
+				reads that index and moves only what changed.
+			</p>
+
+			<h2>1. Index each side</h2>
+			<pre><code><span class="c"># on the laptop</span>
+tern <span class="f">init</span> ~/Pictures
+
+<span class="c"># on the machine at home, over ssh</span>
+ssh home 'tern <span class="f">init</span> ~/Pictures'</code></pre>
+			<p>
+				Indexing hashes every file. On a library of 40&thinsp;000 photos over USB&nbsp;3 it takes
+				about eleven minutes, and it is the only time tern reads everything.
+			</p>
+
+			<h2>2. Look before you move</h2>
+			<pre><code>tern <span class="f">sync</span> home:~/Pictures --dry-run</code></pre>
+			<pre><code><span class="c">  &rarr; 1,204 files to send        14.8 GB
+  &larr; 31 files to receive         402 MB
+  ! 2 conflicts                 see below</span></code></pre>
+			<p>
+				Read the arrows. <code>&rarr;</code> leaves this machine, <code>&larr;</code> arrives on it.
+				If the direction surprises you, stop and work out why before running it for real.
+			</p>
+
+			<h2>3. Run it</h2>
+			<pre><code>tern <span class="f">sync</span> home:~/Pictures</code></pre>
+			<p>
+				It is resumable. Kill it, lose the connection, close the laptop &mdash; the next run picks
+				up from the last completed file, not from the beginning.
+			</p>
+
+			<div class="note">
+				<strong>Conflicts do not block the run.</strong> tern moves everything it can agree on and
+				leaves the disagreements for you. <a href="./conflicts">How conflicts are resolved</a>.
+			</div>
+
+			<div class="next">
+				<a href="./conflicts">Conflicts &rarr;</a>
+				<a href="../reference/">Command reference &rarr;</a>
+			</div>
+		</main>
+	</body>
+</html>

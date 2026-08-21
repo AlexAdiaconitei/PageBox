@@ -1,0 +1,363 @@
+/*
+ * Tallow Press — main stylesheet.
+ *
+ * The filename carries a content hash, which is what tells PageBox this file may be cached
+ * for a year and never revalidated: change the CSS, the hash changes, the URL changes. The
+ * unhashed print.css beside it gets `no-cache` instead. Both behaviours in one deployment
+ * is the point of this fixture.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&display=swap');
+
+:root {
+	/* Actual Riso ink names, because the palette is not a mood — it is what is in the drums.
+	   Two spot colours and black, on the white the paper actually is. */
+	--pink: #ff48b0;
+	--aqua: #00a2b0;
+	--yellow: #ffd200;
+	--paper: #fbfbf9;
+	--black: #101010;
+	--rule: #d8d8d4;
+
+	--display: Anton, 'Arial Narrow', Impact, sans-serif;
+	--body: Newsreader, Georgia, 'Times New Roman', serif;
+	--util: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+
+	--gutter: clamp(1.25rem, 5vw, 4rem);
+	--measure: 62rem;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--paper);
+	color: var(--black);
+	font-family: var(--body);
+	font-size: clamp(1rem, 0.96rem + 0.2vw, 1.08rem);
+	line-height: 1.6;
+	position: relative;
+}
+
+/* Riso prints on uncoated stock and the tooth shows. One SVG turbulence, fixed, at very low
+   opacity — enough to stop the white reading as a screen. */
+.grain {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 1;
+	opacity: 0.35;
+	mix-blend-mode: multiply;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+main,
+.masthead,
+footer {
+	position: relative;
+	z-index: 2;
+	max-width: var(--measure);
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+}
+
+/* --- masthead ------------------------------------------------------------ */
+.masthead {
+	padding-block: clamp(2.5rem, 8vw, 5rem) clamp(2rem, 6vw, 3.5rem);
+}
+
+.drum {
+	font-family: var(--util);
+	font-size: 0.72rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	margin: 0 0 clamp(1rem, 4vw, 2rem);
+	color: #565654;
+}
+
+.ink {
+	font-weight: 700;
+}
+.ink-pink {
+	color: var(--pink);
+}
+.ink-aqua {
+	color: var(--aqua);
+}
+
+/*
+ * The signature. Two stacked copies of the word, one per drum, a few pixels out of register
+ * and multiplied — which is exactly what two riso passes do to each other. Hovering pulls
+ * them back into register, the thing every riso printer is chasing and rarely gets.
+ */
+.overprint {
+	position: relative;
+	margin: 0;
+	font-family: var(--display);
+	font-size: clamp(3.6rem, 17vw, 10rem);
+	line-height: 0.82;
+	letter-spacing: -0.02em;
+	isolation: isolate;
+}
+
+.overprint .layer {
+	display: block;
+	mix-blend-mode: multiply;
+	transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.overprint .layer-aqua {
+	color: var(--aqua);
+	transform: translate(-5px, 3px);
+}
+
+.overprint .layer-pink {
+	color: var(--pink);
+	/* Pulled up onto the aqua layer rather than stacked below it. */
+	margin-top: -0.82em;
+	transform: translate(4px, -2px);
+}
+
+.overprint:hover .layer,
+.overprint:focus-within .layer {
+	transform: translate(0, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.overprint .layer {
+		transition: none;
+	}
+}
+
+.lede {
+	max-width: 34rem;
+	margin: clamp(1.25rem, 4vw, 2rem) 0 0;
+	font-size: clamp(1.05rem, 1rem + 0.5vw, 1.35rem);
+	line-height: 1.45;
+}
+
+/* --- specs --------------------------------------------------------------- */
+.specs {
+	border-block: 2px solid var(--black);
+	padding-block: 1.25rem;
+}
+
+.specs dl {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+	gap: 1.25rem 2rem;
+	margin: 0;
+}
+
+.specs dt {
+	font-family: var(--util);
+	font-size: 0.66rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: #565654;
+}
+
+.specs dd {
+	margin: 0.2rem 0 0;
+	font-family: var(--display);
+	font-size: clamp(1.6rem, 5vw, 2.3rem);
+	line-height: 1;
+}
+
+/* --- sections ------------------------------------------------------------ */
+section {
+	padding-block: clamp(2.5rem, 7vw, 4.5rem);
+}
+
+section + section {
+	border-top: 1px solid var(--rule);
+}
+
+.specs {
+	padding-block: 1.25rem;
+}
+
+h2 {
+	font-family: var(--display);
+	font-size: clamp(1.7rem, 5vw, 2.6rem);
+	line-height: 1;
+	margin: 0 0 0.75rem;
+	letter-spacing: -0.01em;
+}
+
+.note {
+	max-width: 34rem;
+	margin: 0 0 1.75rem;
+	color: #3a3a38;
+}
+
+/* --- swatches ------------------------------------------------------------ */
+.swatches {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+	gap: 1px;
+	background: var(--rule);
+	border: 1px solid var(--rule);
+}
+
+.swatch {
+	background: var(--paper);
+	padding: 0.85rem 0.9rem 1rem;
+}
+
+.chip {
+	display: block;
+	height: 3.25rem;
+	border-radius: 2px;
+	margin-bottom: 0.7rem;
+	/* Riso lays ink down unevenly; a second, offset copy of the fill at low alpha reads as
+	   coverage rather than as a flat rectangle. */
+	background-image: radial-gradient(rgb(255 255 255 / 0.32) 1px, transparent 1.4px);
+	background-size: 5px 5px;
+}
+
+.swatch-name {
+	font-family: var(--util);
+	font-size: 0.78rem;
+	display: block;
+}
+
+.swatch-code {
+	font-family: var(--util);
+	font-size: 0.68rem;
+	color: #6b6b68;
+}
+
+/* --- process ------------------------------------------------------------- */
+.process ol {
+	counter-reset: step;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+	gap: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.process li {
+	counter-increment: step;
+	position: relative;
+	padding-top: 2.6rem;
+}
+
+/* The number is set in the pink drum's ink, large and behind the heading — a print shop
+   numbers its passes, so the marker is the pass. */
+.process li::before {
+	content: counter(step, decimal-leading-zero);
+	position: absolute;
+	top: 0;
+	left: -0.06em;
+	font-family: var(--display);
+	font-size: 2.6rem;
+	line-height: 1;
+	color: var(--pink);
+	mix-blend-mode: multiply;
+}
+
+.process h3 {
+	font-family: var(--util);
+	font-size: 0.72rem;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	margin: 0 0 0.4rem;
+}
+
+.process p {
+	margin: 0;
+	font-size: 0.98rem;
+	line-height: 1.55;
+}
+
+/* --- estimate ------------------------------------------------------------ */
+.calc {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 1rem 1.5rem;
+	padding: 1.5rem;
+	border: 2px solid var(--black);
+}
+
+.calc label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	font-family: var(--util);
+	font-size: 0.66rem;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+}
+
+.calc input,
+.calc select {
+	font-family: var(--body);
+	font-size: 1rem;
+	padding: 0.5rem 0.6rem;
+	border: 1px solid var(--black);
+	border-radius: 0;
+	background: var(--paper);
+	color: var(--black);
+	min-width: 9rem;
+}
+
+.calc :is(input, select):focus-visible {
+	outline: 3px solid var(--aqua);
+	outline-offset: 1px;
+}
+
+#estimate {
+	margin-left: auto;
+	font-family: var(--display);
+	font-size: clamp(2rem, 7vw, 3.2rem);
+	line-height: 1;
+	color: var(--aqua);
+	mix-blend-mode: multiply;
+}
+
+.fineprint {
+	font-family: var(--util);
+	font-size: 0.72rem;
+	color: #6b6b68;
+	margin: 0.9rem 0 0;
+}
+
+/* --- footer -------------------------------------------------------------- */
+footer {
+	border-top: 2px solid var(--black);
+	padding-block: 1.75rem 3rem;
+	font-family: var(--util);
+	font-size: 0.75rem;
+	color: #565654;
+}
+
+footer p {
+	margin: 0 0 0.4rem;
+}
+
+.colophon {
+	color: #8b8b87;
+}
+
+::selection {
+	background: var(--yellow);
+	color: var(--black);
+}
+
+:focus-visible {
+	outline: 3px solid var(--aqua);
+	outline-offset: 2px;
+}

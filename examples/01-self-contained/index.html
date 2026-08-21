@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Sill — barometric station, north window</title>
+		<meta
+			name="description"
+			content="Pressure, temperature and humidity from a sensor on a north-facing windowsill. Read every four minutes."
+		/>
+
+		<!--
+			One file. No stylesheet, no script, no image — the dial below is inline SVG and the
+			needle is moved by the script at the bottom. Nothing here is fetched from anywhere,
+			which is the case this fixture exists to cover: a deployment of exactly one object.
+
+			The type is a system stack for the same reason. A webfont would be a second request
+			to somewhere else, and the personality of this page is meant to come from the
+			instrument, not from a font nobody can guarantee arrives.
+		-->
+		<style>
+			:root {
+				/* An aneroid barometer: enamel dial, brass case, oxidised fittings, and the one
+				   red mark that says where the needle was when you last set it. */
+				--enamel: #e9ebe7;
+				--dial: #f8f9f7;
+				--ink: #16212b;
+				--ink-soft: #5b6a76;
+				--brass: #9a7b45;
+				--verdigris: #3d7a72;
+				--mercury: #b8382c;
+				--hair: #c9cfc9;
+
+				--display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+				--label: ui-sans-serif, 'Avenir Next Condensed', 'Helvetica Neue', Arial, sans-serif;
+				--figure: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', monospace;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			body {
+				margin: 0;
+				min-height: 100svh;
+				background: radial-gradient(
+					120% 90% at 50% 0%,
+					#f3f5f1 0%,
+					var(--enamel) 55%,
+					#dfe3de 100%
+				);
+				color: var(--ink);
+				font-family: var(--display);
+				display: flex;
+				justify-content: center;
+				padding: clamp(1.5rem, 4vw, 3.5rem) 1.25rem 4rem;
+			}
+
+			main {
+				width: 100%;
+				max-width: 46rem;
+			}
+
+			header {
+				text-align: center;
+				margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+			}
+
+			.station {
+				font-family: var(--label);
+				font-size: 0.72rem;
+				letter-spacing: 0.22em;
+				text-transform: uppercase;
+				color: var(--brass);
+				margin: 0 0 0.6rem;
+			}
+
+			h1 {
+				font-size: clamp(1.9rem, 6vw, 2.9rem);
+				font-weight: 400;
+				letter-spacing: -0.015em;
+				margin: 0;
+			}
+
+			h1 em {
+				font-style: italic;
+				color: var(--verdigris);
+			}
+
+			.sub {
+				font-family: var(--label);
+				font-size: 0.9rem;
+				color: var(--ink-soft);
+				margin: 0.55rem 0 0;
+			}
+
+			/* --- the dial ---------------------------------------------------- */
+			.instrument {
+				display: block;
+				width: min(100%, 27rem);
+				margin: 0 auto;
+				filter: drop-shadow(0 14px 28px rgb(22 33 43 / 0.13));
+			}
+
+			#needle {
+				transform-box: fill-box;
+				transform-origin: 50% 84%;
+				/* Set by the script from the reading; the transition is what makes it read as an
+				   instrument settling rather than a number appearing. */
+				transition: transform 1.6s cubic-bezier(0.16, 0.84, 0.3, 1);
+			}
+
+			@media (prefers-reduced-motion: reduce) {
+				#needle {
+					transition: none;
+				}
+			}
+
+			/* --- readings ------------------------------------------------------ */
+			.readings {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 1px;
+				background: var(--hair);
+				border: 1px solid var(--hair);
+				border-radius: 3px;
+				overflow: hidden;
+				margin-top: clamp(1.5rem, 4vw, 2.25rem);
+			}
+
+			.reading {
+				background: var(--dial);
+				padding: 0.95rem 0.5rem 1.05rem;
+				text-align: center;
+			}
+
+			.reading dt {
+				font-family: var(--label);
+				font-size: 0.66rem;
+				letter-spacing: 0.16em;
+				text-transform: uppercase;
+				color: var(--ink-soft);
+				margin: 0 0 0.35rem;
+			}
+
+			.reading dd {
+				font-family: var(--figure);
+				font-size: clamp(1.15rem, 4vw, 1.5rem);
+				margin: 0;
+				font-variant-numeric: tabular-nums;
+			}
+
+			.reading dd span {
+				font-size: 0.62em;
+				color: var(--ink-soft);
+				margin-left: 0.15em;
+			}
+
+			/* --- trace --------------------------------------------------------- */
+			.trace {
+				margin-top: clamp(1.5rem, 4vw, 2.25rem);
+				background: var(--dial);
+				border: 1px solid var(--hair);
+				border-radius: 3px;
+				padding: 1rem 1rem 0.7rem;
+			}
+
+			.trace h2 {
+				font-family: var(--label);
+				font-size: 0.66rem;
+				letter-spacing: 0.16em;
+				text-transform: uppercase;
+				color: var(--ink-soft);
+				font-weight: 600;
+				margin: 0 0 0.75rem;
+			}
+
+			.trace svg {
+				display: block;
+				width: 100%;
+				height: auto;
+			}
+
+			.axis {
+				display: flex;
+				justify-content: space-between;
+				font-family: var(--figure);
+				font-size: 0.68rem;
+				color: var(--ink-soft);
+				margin-top: 0.4rem;
+			}
+
+			footer {
+				margin-top: 2rem;
+				text-align: center;
+				font-family: var(--label);
+				font-size: 0.78rem;
+				color: var(--ink-soft);
+				line-height: 1.7;
+			}
+
+			footer code {
+				font-family: var(--figure);
+				font-size: 0.92em;
+				color: var(--brass);
+			}
+
+			@media (max-width: 30rem) {
+				.readings {
+					grid-template-columns: repeat(2, 1fr);
+				}
+				.reading:last-child {
+					grid-column: span 2;
+				}
+			}
+		</style>
+	</head>
+
+	<body>
+		<main>
+			<header>
+				<p class="station">Station 04 · north window · 41&thinsp;m</p>
+				<h1>Falling <em>slowly</em></h1>
+				<p class="sub">1004.2 hPa and dropping 0.9 an hour since 06:00.</p>
+			</header>
+
+			<!--
+				The dial. Drawn rather than photographed so it stays sharp at any size and costs
+				nothing to load: the ticks are generated by the script from the same scale the
+				needle reads, so the two can never disagree.
+			-->
+			<svg class="instrument" viewBox="0 0 400 300" role="img" aria-labelledby="dial-title">
+				<title id="dial-title">Barometer reading 1004.2 hectopascals — falling</title>
+
+				<circle cx="200" cy="200" r="168" fill="none" stroke="#9a7b45" stroke-width="7" />
+				<circle cx="200" cy="200" r="158" fill="#f8f9f7" stroke="#c9cfc9" stroke-width="1" />
+
+				<g id="ticks" stroke="#16212b" stroke-linecap="square"></g>
+				<g id="numerals" font-family="ui-monospace, monospace" font-size="13" fill="#5b6a76"></g>
+
+				<!-- The set hand: where the needle stood at the last reset, in the red every
+				     barometer uses for exactly this. -->
+				<line
+					x1="200"
+					y1="200"
+					x2="200"
+					y2="72"
+					stroke="#b8382c"
+					stroke-width="1.5"
+					opacity="0.75"
+					transform="rotate(28 200 200)"
+				/>
+
+				<text
+					x="200"
+					y="150"
+					text-anchor="middle"
+					font-family="'Iowan Old Style', Georgia, serif"
+					font-size="15"
+					fill="#3d7a72"
+					letter-spacing="3"
+				>
+					CHANGE
+				</text>
+				<text
+					x="200"
+					y="248"
+					text-anchor="middle"
+					font-family="ui-sans-serif, sans-serif"
+					font-size="9"
+					fill="#5b6a76"
+					letter-spacing="4"
+				>
+					HECTOPASCALS
+				</text>
+
+				<g id="needle">
+					<polygon points="200,74 205,200 195,200" fill="#16212b" />
+					<polygon points="200,74 200,200 195,200" fill="#3a4a58" />
+				</g>
+				<circle cx="200" cy="200" r="11" fill="#9a7b45" />
+				<circle cx="200" cy="200" r="4" fill="#16212b" />
+			</svg>
+
+			<dl class="readings">
+				<div class="reading">
+					<dt>Pressure</dt>
+					<dd>1004.2<span>hPa</span></dd>
+				</div>
+				<div class="reading">
+					<dt>Temperature</dt>
+					<dd>11.6<span>°C</span></dd>
+				</div>
+				<div class="reading">
+					<dt>Humidity</dt>
+					<dd>78<span>%</span></dd>
+				</div>
+			</dl>
+
+			<section class="trace">
+				<h2>Last 24 hours</h2>
+				<svg
+					viewBox="0 0 600 120"
+					preserveAspectRatio="none"
+					role="img"
+					aria-label="Pressure over the last 24 hours, falling from 1012 to 1004 hectopascals"
+				>
+					<line
+						x1="0"
+						y1="60"
+						x2="600"
+						y2="60"
+						stroke="#c9cfc9"
+						stroke-width="1"
+						stroke-dasharray="3 5"
+					/>
+					<polyline
+						id="trace-line"
+						fill="none"
+						stroke="#3d7a72"
+						stroke-width="2.5"
+						stroke-linejoin="round"
+						stroke-linecap="round"
+						points=""
+					/>
+					<circle id="trace-head" r="4" fill="#b8382c" cx="0" cy="0" />
+				</svg>
+				<div class="axis"><span>06:00 yesterday</span><span>now</span></div>
+			</section>
+
+			<footer>
+				Read every four minutes by a BME280 on a Pi Zero.<br />
+				One file, no build step — <code>scp index.html</code> and it is live.
+			</footer>
+		</main>
+
+		<script>
+			// Everything below is decoration over data that would come from the sensor. The
+			// point of the fixture is that it is *here*, in the document, and not in a second
+			// request the host would have to serve.
+			(function () {
+				const READING = 1004.2;
+				const MIN = 960;
+				const MAX = 1050;
+				// A barometer face spans about 270°, from south-west round to south-east.
+				const SWEEP = 270;
+				const START = -135;
+
+				const angleFor = (hpa) =>
+					START + ((Math.min(MAX, Math.max(MIN, hpa)) - MIN) / (MAX - MIN)) * SWEEP;
+
+				const polar = (angle, radius) => {
+					const rad = ((angle - 90) * Math.PI) / 180;
+					return [200 + radius * Math.cos(rad), 200 + radius * Math.sin(rad)];
+				};
+
+				// Ticks every 5 hPa, longer and numbered every 20 — the convention on a real face.
+				const ticks = document.getElementById('ticks');
+				const numerals = document.getElementById('numerals');
+				for (let hpa = MIN; hpa <= MAX; hpa += 5) {
+					const major = hpa % 20 === 0;
+					const angle = angleFor(hpa);
+					const [x1, y1] = polar(angle, 158);
+					const [x2, y2] = polar(angle, major ? 138 : 148);
+
+					const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+					tick.setAttribute('x1', x1.toFixed(1));
+					tick.setAttribute('y1', y1.toFixed(1));
+					tick.setAttribute('x2', x2.toFixed(1));
+					tick.setAttribute('y2', y2.toFixed(1));
+					tick.setAttribute('stroke-width', major ? '2.5' : '1');
+					ticks.appendChild(tick);
+
+					if (!major) continue;
+					const [tx, ty] = polar(angle, 122);
+					const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+					label.setAttribute('x', tx.toFixed(1));
+					label.setAttribute('y', (ty + 4).toFixed(1));
+					label.setAttribute('text-anchor', 'middle');
+					label.textContent = String(hpa);
+					numerals.appendChild(label);
+				}
+
+				// The needle starts at the bottom of the scale and settles, so the page reads as
+				// an instrument coming to rest rather than a figure that was always there.
+				const needle = document.getElementById('needle');
+				const rest = angleFor(READING);
+				needle.style.transform = `rotate(${angleFor(MIN)}deg)`;
+				requestAnimationFrame(() => {
+					requestAnimationFrame(() => {
+						needle.style.transform = `rotate(${rest}deg)`;
+					});
+				});
+
+				// A day of pressure, falling. Deterministic so the fixture looks the same on
+				// every deploy — a fixture that changes is a fixture you cannot compare.
+				const series = Array.from({ length: 48 }, (_, i) => {
+					const t = i / 47;
+					return 1012 - 8 * t + Math.sin(i / 3.1) * 0.7 + Math.sin(i / 7.7) * 1.1;
+				});
+				const lo = Math.min(...series) - 1;
+				const hi = Math.max(...series) + 1;
+				const points = series.map((value, i) => {
+					const x = (i / (series.length - 1)) * 600;
+					const y = 110 - ((value - lo) / (hi - lo)) * 100;
+					return `${x.toFixed(1)},${y.toFixed(1)}`;
+				});
+				document.getElementById('trace-line').setAttribute('points', points.join(' '));
+
+				const [hx, hy] = points[points.length - 1].split(',');
+				const head = document.getElementById('trace-head');
+				head.setAttribute('cx', hx);
+				head.setAttribute('cy', hy);
+			})();
+		</script>
+	</body>
+</html>

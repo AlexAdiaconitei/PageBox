@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Tallow Press — risograph printing, two colours at a time</title>
+		<meta
+			name="description"
+			content="A two-drum risograph in a railway arch. Short runs, spot colour, visible registration."
+		/>
+
+		<!--
+			Two stylesheets and one script, all in ./assets/ and all referenced *relatively* —
+			this deployment is served under /s/<slug>/, and a leading slash would send every one
+			of these to the root of the host instead.
+
+			The filenames are the point of this fixture. `press.8f21c0ad.css` and `.js` carry an
+			eight-character content hash, so PageBox serves them `immutable` for a year; `print.css` does not,
+			so it is served `no-cache` and revalidated. A real build produces both kinds, and
+			the two cache policies are worth exercising against each other.
+		-->
+		<link rel="stylesheet" href="./assets/press.8f21c0ad.css" />
+		<link rel="stylesheet" href="./assets/print.css" media="print" />
+		<link
+			rel="icon"
+			href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='6' cy='8' r='5' fill='%23ff48b0'/%3E%3Ccircle cx='10' cy='8' r='5' fill='%2300a2b0' style='mix-blend-mode:multiply'/%3E%3C/svg%3E"
+		/>
+	</head>
+
+	<body>
+		<div class="grain" aria-hidden="true"></div>
+
+		<header class="masthead">
+			<p class="drum">
+				Drums loaded — <span class="ink ink-pink">fluorescent pink</span> +
+				<span class="ink ink-aqua">aqua</span>
+			</p>
+
+			<!--
+				The signature: the word printed twice, once per drum, a couple of pixels out of
+				register and multiplied together the way two riso passes actually overlap. Hover
+				pulls them back into register — which is the thing every riso printer is chasing.
+			-->
+			<h1 class="overprint" data-word="TALLOW">
+				<span class="layer layer-aqua" aria-hidden="true">TALLOW</span>
+				<span class="layer layer-pink">TALLOW</span>
+			</h1>
+			<p class="lede">
+				A two-drum Riso MZ in arch 14, under the Bethnal Green line. We print short runs in spot
+				colour and we do not hide the registration.
+			</p>
+		</header>
+
+		<main>
+			<section class="specs" aria-label="What the press does">
+				<dl>
+					<div>
+						<dt>Run length</dt>
+						<dd>25&ndash;500</dd>
+					</div>
+					<div>
+						<dt>Max sheet</dt>
+						<dd>A3</dd>
+					</div>
+					<div>
+						<dt>Colours per pass</dt>
+						<dd>2</dd>
+					</div>
+					<div>
+						<dt>Turnaround</dt>
+						<dd>4 days</dd>
+					</div>
+				</dl>
+			</section>
+
+			<section class="inks">
+				<h2>Ink on the shelf</h2>
+				<p class="note">
+					Riso ink is soy-based and never fully dries. It rubs. That is not a fault and we will not
+					quote you a price that pretends otherwise.
+				</p>
+				<ul class="swatches" id="swatches">
+					<!-- Filled by press.8f21c0ad.js so the stock list lives in one place. -->
+				</ul>
+			</section>
+
+			<section class="process">
+				<h2>How a job runs</h2>
+				<!--
+					Numbered because it genuinely is a sequence: each step waits on the one before
+					it, and the day count only makes sense in order.
+				-->
+				<ol>
+					<li>
+						<h3>Separate</h3>
+						<p>You send layered artwork, or we split it. One greyscale file per drum.</p>
+					</li>
+					<li>
+						<h3>Proof</h3>
+						<p>Five sheets, printed on the stock you chose. Posted, not emailed.</p>
+					</li>
+					<li>
+						<h3>Run</h3>
+						<p>Colour one, dry overnight, colour two. Registration drifts about 1&nbsp;mm.</p>
+					</li>
+					<li>
+						<h3>Trim</h3>
+						<p>Guillotined to size, interleaved with newsprint so the ink has somewhere to go.</p>
+					</li>
+				</ol>
+			</section>
+
+			<section class="quote">
+				<h2>Get a price</h2>
+				<p class="note">
+					Tell us the run, the stock and the number of colours. We answer within a day.
+				</p>
+				<form class="calc" id="calc">
+					<label>
+						<span>Sheets</span>
+						<input type="number" name="sheets" min="25" max="500" step="25" value="150" />
+					</label>
+					<label>
+						<span>Colours</span>
+						<select name="colours">
+							<option value="1">One</option>
+							<option value="2" selected>Two</option>
+						</select>
+					</label>
+					<label>
+						<span>Stock</span>
+						<select name="stock">
+							<option value="1">Munken 120gsm</option>
+							<option value="1.35">Colorplan 135gsm</option>
+							<option value="1.8">Board 300gsm</option>
+						</select>
+					</label>
+					<output id="estimate" for="calc">&mdash;</output>
+				</form>
+				<p class="fineprint">
+					An estimate, not a quote. Setup is £18 a colour and is already in the figure.
+				</p>
+			</section>
+		</main>
+
+		<footer>
+			<p>Arch 14, Three Colts Lane, London E2 &middot; Tuesdays and Thursdays, 10&ndash;6</p>
+			<p class="colophon">Set in Anton and Newsreader. Printed on a Riso MZ 1090.</p>
+		</footer>
+
+		<script src="./assets/press.8f21c0ad.js" defer></script>
+	</body>
+</html>

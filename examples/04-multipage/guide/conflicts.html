@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Conflicts &mdash; tern</title>
+		<meta name="description" content="What tern does when both sides changed the same file." />
+		<link rel="stylesheet" href="../docs.css" />
+	</head>
+	<body>
+		<aside class="rail">
+			<p class="brand"><a href="../">tern</a></p>
+			<p class="tagline">Photo sync without a cloud in the middle</p>
+			<nav aria-label="Documentation">
+				<h2>Start</h2>
+				<ul>
+					<li><a href="../">Overview</a></li>
+					<li><a href="../install">Install</a></li>
+				</ul>
+				<h2>Guide</h2>
+				<ul>
+					<li><a href="../guide/">First sync</a></li>
+					<li><a href="../guide/conflicts" aria-current="page">Conflicts</a></li>
+				</ul>
+				<h2>Reference</h2>
+				<ul>
+					<li><a href="../reference/">Commands</a></li>
+				</ul>
+			</nav>
+		</aside>
+
+		<main>
+			<p class="crumb"><a href="../">tern</a> / guide / conflicts</p>
+			<h1>Conflicts</h1>
+			<p class="summary">
+				A conflict is both sides changing the same file since the last agreement. tern never picks a
+				winner. It keeps both and tells you.
+			</p>
+
+			<h2>What it does</h2>
+			<p>
+				The file is left alone on each side and a marker is written beside it. Nothing is
+				overwritten and nothing is deleted, which means a conflict you ignore is a conflict that
+				stays exactly where it was.
+			</p>
+			<pre><code>Pictures/2019/rhossili-042.raw
+Pictures/2019/rhossili-042.raw.tern-conflict</code></pre>
+
+			<h2>Resolving one</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>Command</th>
+						<th>Effect</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><code>tern resolve --mine</code></td>
+						<td>This machine wins. The other copy is replaced on the next sync.</td>
+					</tr>
+					<tr>
+						<td><code>tern resolve --theirs</code></td>
+						<td>The remote wins. This copy is replaced.</td>
+					</tr>
+					<tr>
+						<td><code>tern resolve --keep-both</code></td>
+						<td>Renames one with its machine name and keeps them as separate files.</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<h2>Why not just take the newest</h2>
+			<p>
+				Because modification time lies. A file copied off a card, restored from a backup or touched
+				by a batch rename is newer than the edit you actually care about &mdash; and by the time you
+				notice, the other copy is gone. Keeping both is slower and never wrong.
+			</p>
+
+			<div class="next">
+				<a href="../reference/">Command reference &rarr;</a>
+			</div>
+		</main>
+	</body>
+</html>

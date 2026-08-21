@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>tern — sync a photo library between two machines</title>
+		<meta
+			name="description"
+			content="A small CLI that moves photos between machines without a cloud in the middle."
+		/>
+		<link rel="stylesheet" href="./docs.css" />
+	</head>
+	<body>
+		<!--
+			The routing fixture. Every link below is extensionless and relative:
+
+			  ./install      → install.html
+			  ./guide/       → guide/index.html
+			  ./reference/   → reference/index.html
+
+			PageBox resolves all three without the site knowing anything about it, and a
+			request for something that is not here lands on 404.html with a real 404 status —
+			not a 200 with an apology on it, which is what most static hosts do.
+		-->
+		<aside class="rail">
+			<p class="brand"><a href="./">tern</a></p>
+			<p class="tagline">Photo sync without a cloud in the middle</p>
+			<nav aria-label="Documentation">
+				<h2>Start</h2>
+				<ul>
+					<li><a href="./" aria-current="page">Overview</a></li>
+					<li><a href="./install">Install</a></li>
+				</ul>
+				<h2>Guide</h2>
+				<ul>
+					<li><a href="./guide/">First sync</a></li>
+					<li><a href="./guide/conflicts">Conflicts</a></li>
+				</ul>
+				<h2>Reference</h2>
+				<ul>
+					<li><a href="./reference/">Commands</a></li>
+				</ul>
+			</nav>
+		</aside>
+
+		<main>
+			<h1>tern</h1>
+			<p class="summary">
+				Two machines, one photo library, no third party holding the originals. tern walks both
+				trees, works out what each one is missing, and moves only that.
+			</p>
+
+			<h2>What it is for</h2>
+			<p>
+				You have a laptop that takes the photos and a machine at home that keeps them. You want the
+				second one to end up with everything, you want to be able to run it over a hotel connection,
+				and you do not want to think about it again. That is the whole brief.
+			</p>
+			<p>
+				It is not a backup tool. It makes two directories agree; if you delete something on both, it
+				is gone on both. Keep snapshots underneath it.
+			</p>
+
+			<h2>The shape of it</h2>
+			<pre><code><span class="c"># once, on each machine</span>
+tern <span class="f">init</span> ~/Pictures
+
+<span class="c"># then, from either side</span>
+tern <span class="f">sync</span> home:~/Pictures</code></pre>
+
+			<p>
+				The first run indexes both sides and will take a while. Every run after that reads the index
+				and moves the difference, which on a normal week is a few dozen files.
+			</p>
+
+			<div class="note">
+				<strong>Over a slow link:</strong> add <code>--proofs-first</code> and tern sends the JPEG
+				previews before the raws, so the library is browsable long before it is complete.
+			</div>
+
+			<h2>What it will not do</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>Not this</th>
+						<th>Instead</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Edit or convert images</td>
+						<td>It moves bytes. Your editor owns the pixels.</td>
+					</tr>
+					<tr>
+						<td>Resolve conflicts for you</td>
+						<td>It keeps both and asks. See <a href="./guide/conflicts">Conflicts</a>.</td>
+					</tr>
+					<tr>
+						<td>Run as a daemon</td>
+						<td>Put it in cron. A sync that runs itself is a sync you stop reading.</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<div class="next">
+				<a href="./install">Install it →</a>
+				<a href="./guide/">Or read the first-sync walkthrough →</a>
+			</div>
+		</main>
+	</body>
+</html>

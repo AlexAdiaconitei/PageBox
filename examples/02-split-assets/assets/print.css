@@ -1,0 +1,44 @@
+/*
+ * Tallow Press — print styles.
+ *
+ * Deliberately *not* content-hashed, which is the whole reason it is a separate file in
+ * this fixture: PageBox serves an unhashed asset `public, no-cache`, so the browser
+ * revalidates it on every visit, while `press.8f21c0ad.css` beside it is `immutable` for a
+ * year. One deployment, both cache policies, which is what a real build produces.
+ */
+
+@media print {
+	.grain,
+	.calc,
+	.fineprint {
+		display: none;
+	}
+
+	body {
+		background: #fff;
+		color: #000;
+		font-size: 11pt;
+	}
+
+	/* The overprint is a screen effect. On paper it would just be a muddy word, and the
+	   press of all places should not print something it would not sell. */
+	.overprint .layer-aqua {
+		display: none;
+	}
+
+	.overprint .layer-pink {
+		color: #000;
+		margin-top: 0;
+		transform: none;
+	}
+
+	section {
+		break-inside: avoid;
+		padding-block: 1.5rem;
+	}
+
+	a[href^='http']::after {
+		content: ' (' attr(href) ')';
+		font-size: 9pt;
+	}
+}
