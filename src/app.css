@@ -829,6 +829,48 @@ table {
 		outline-offset: -2px;
 	}
 
+	/* Two halves of the same answer, side by side: what the base-path option prefixes for
+	   you, and what it leaves for you to wrap. Read together or not at all, so they share a
+	   box rather than sitting as two loose paragraphs. */
+	.gen-split {
+		display: grid;
+		gap: 1px;
+		margin-top: 0.5rem;
+		background: var(--pb-line);
+		border: 1px solid var(--pb-line);
+		border-radius: 4px;
+		overflow: hidden;
+	}
+
+	@media (min-width: 40rem) {
+		.gen-split {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	.gen-split p {
+		margin: 0;
+		padding: 0.7rem 0.85rem 0.8rem;
+		background: var(--pb-page);
+		font-size: 0.8rem;
+		line-height: 1.55;
+		color: var(--pb-muted);
+	}
+
+	.gen-split-key {
+		display: block;
+		font-size: 0.62rem;
+		letter-spacing: 0.13em;
+		text-transform: uppercase;
+		color: var(--pb-faint);
+		margin-bottom: 0.3rem;
+	}
+
+	/* The half that breaks a site is the half worth colouring. */
+	.gen-split-warn {
+		color: var(--pb-warn);
+	}
+
 	/* --- fleet figures ------------------------------------------------------ */
 	/* The Sites overview. Counts an operator acts on — how many sites exist, how many are
 	   actually serving something, how many are dark or switched off, and what it all weighs

@@ -311,6 +311,7 @@ deployment — see the milestone table in
 
 - [Deploy API and CI setup](docs/deploy-api.md)
 - [Accounts, roles and grants](docs/access.md)
+- [Base paths: what each generator does not prefix](docs/base-paths.md)
 - [Deploying on Dokploy](docs/dokploy.md)
 - [Example sites](examples/README.md)
 - [Design brief](docs/PLAN-static-hosting.md) · [Implementation plan](docs/IMPLEMENTATION-PLAN.md)

@@ -350,6 +350,29 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 						</span>
 					</p>
 					<pre class="gen-code">{recipe.upload}</pre>
+
+					{#if recipe.manual}
+						<!--
+							The half that costs an afternoon. Setting the option is necessary and not
+							sufficient in every one of these tools, and each draws the line somewhere
+							else — so the site half-works: pages navigate, images 404. Saying it here,
+							beside the config that causes it, is cheaper than saying it in a bug report.
+						-->
+						<p class="text-muted mt-3 text-[0.82rem]">
+							<span class="font-medium">3. Mind what the option does not cover.</span>
+						</p>
+						<div class="gen-split">
+							<p>
+								<span class="gen-split-key">Prefixed for you</span>
+								{recipe.handled}
+							</p>
+							<p>
+								<span class="gen-split-key gen-split-warn">Yours to wrap</span>
+								{recipe.manual.what} — use
+								<span class="mono">{recipe.manual.helper}</span>.
+							</p>
+						</div>
+					{/if}
 				</section>
 			{/each}
 		</div>

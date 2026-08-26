@@ -121,6 +121,14 @@ itself is still the direct route — this is what makes the grant the source of 
 A token is scoped to exactly one site, the one it was issued for. A key carrying no scope
 authorises nothing.
 
+## The base path is not the whole job
+
+Every generator has an option for "I will be served under a subpath", and in all of them it
+is necessary and not sufficient: each prefixes some things automatically and leaves the rest
+to you. `next/image` does not take `basePath`; Astro's `base` rewrites nothing but the
+bundle. The panel's deploy recipe carries the per-generator answer, and
+[`docs/base-paths.md`](base-paths.md) has the reasoning.
+
 ## The rest
 
 ```http

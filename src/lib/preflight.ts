@@ -106,6 +106,17 @@ export type GeneratorRecipe = {
 	build: string;
 	/** Where the build lands — the directory to zip. */
 	output: string;
+	/** What the option prefixes on its own. The things nobody has to touch. */
+	handled: string;
+	/**
+	 * What it does *not* prefix, and the helper that does.
+	 *
+	 * Setting the base path is necessary and not sufficient in every one of these tools, and
+	 * each draws the line somewhere else — Vite rewrites almost everything, Astro rewrites
+	 * almost nothing. The gap is where a site half-works: pages navigate, images 404. That is
+	 * the half that costs an afternoon, so it belongs beside the config that causes it.
+	 */
+	manual?: { what: string; helper: string };
 	/** Official docs for this exact option. Checked August 2026. */
 	docs: string;
 	/** Filenames that give the generator away in an uploaded build, where it has a tell. */
@@ -123,13 +134,27 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 		file: 'next.config.js',
 		option: 'basePath',
 		value: (site) => noTrailing(site.basePath),
-		// `output: 'export'` is in the snippet because a Next app that has not been told to
-		// export produces a server build, and a server build is not a thing PageBox can host.
+		/*
+		 * Six lines, and five of them are not `basePath`.
+		 *
+		 * `output: 'export'` because a Next app that has not been told to export produces a
+		 * server build, which is not a thing PageBox can host. `images.unoptimized` because a
+		 * static export has no optimiser behind `/_next/image`, so without it every
+		 * `next/image` emits a URL that 404s — the snippet here used to omit it and was
+		 * therefore wrong. And `NEXT_PUBLIC_BASE_PATH` because the helper below has to read
+		 * the prefix from somewhere, and one definition beats a literal repeated across a
+		 * dozen components.
+		 */
 		snippet: (site) =>
-			`module.exports = {\n  output: 'export',\n  basePath: '${noTrailing(site.basePath)}'\n};`,
+			`const basePath = '${noTrailing(site.basePath)}';\n\nmodule.exports = {\n  output: 'export',\n  trailingSlash: true,\n  basePath,\n  images: { unoptimized: true },\n  env: { NEXT_PUBLIC_BASE_PATH: basePath }\n};`,
 		build: 'next build',
 		output: 'out',
 		docs: 'https://nextjs.org/docs/app/api-reference/config/next-config-js/basePath',
+		handled: 'next/link, _next/static, and images imported through the bundler',
+		manual: {
+			what: 'next/image with a literal src, metadata.icons, and anything in public/ written as an absolute path',
+			helper: 'a withBasePath() helper reading process.env.NEXT_PUBLIC_BASE_PATH'
+		},
 		test: /(^|\/)_next\//
 	},
 	{
@@ -144,6 +169,11 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 		build: 'npm run build',
 		output: 'build',
 		docs: 'https://docusaurus.io/docs/api/docusaurus-config#baseUrl',
+		handled: 'markdown links, and <Link to="…"> in React',
+		manual: {
+			what: 'assets that are not links — a raw <img src="/img/x.png">',
+			helper: "useBaseUrl(), or better require('@site/static/img/x.png')"
+		},
 		test: /(^|\/)\.docusaurus\/|(^|\/)docusaurus\..*\.js$/
 	},
 	{
@@ -158,6 +188,13 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 		build: 'npm run build',
 		output: 'dist',
 		docs: 'https://docs.astro.build/en/reference/configuration-reference/#base',
+		// The strictest of the set: `base` tells the bundler where the site will live and
+		// rewrites nothing else. Every href and every public/ path is the author's to prefix.
+		handled: 'the _astro/ bundle output, and nothing else',
+		manual: {
+			what: 'every <a href> and every public/ asset written as an absolute path',
+			helper: 'import.meta.env.BASE_URL'
+		},
 		test: /(^|\/)_astro\//
 	},
 	{
@@ -171,7 +208,12 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 			`import { defineConfig } from 'vitepress';\n\nexport default defineConfig({\n  base: '${site.basePath}'\n});`,
 		build: 'npm run docs:build',
 		output: '.vitepress/dist',
-		docs: 'https://vitepress.dev/reference/site-config#base'
+		docs: 'https://vitepress.dev/reference/site-config#base',
+		handled: 'markdown links and the theme’s own navigation',
+		manual: {
+			what: 'asset paths written literally in a component or in frontmatter',
+			helper: "withBase() from 'vitepress'"
+		}
 	},
 	{
 		id: 'sveltekit',
@@ -186,6 +228,13 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 		build: 'npm run build',
 		output: 'build',
 		docs: 'https://svelte.dev/docs/kit/configuration#paths',
+		handled: 'the _app/immutable/ bundle output',
+		manual: {
+			what: 'your own hrefs and asset paths',
+			// `base` still exists and still works, but the docs now point at resolve() — worth
+			// naming which one, because the deprecated answer is the one most guides give.
+			helper: "resolve() from '$app/paths' (base is deprecated)"
+		},
 		test: /(^|\/)_app\/immutable\//
 	},
 	{
@@ -200,6 +249,13 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 		build: 'npm run build',
 		output: 'dist',
 		docs: 'https://vite.dev/config/shared-options.html#base',
+		// The best-behaved of the set: imported assets, CSS url() and references in .html are
+		// all rewritten at build time. Only a path assembled at runtime is left alone.
+		handled: 'imported assets, CSS url() references, and paths written in .html',
+		manual: {
+			what: 'a public/ path built at runtime rather than written literally',
+			helper: 'import.meta.env.BASE_URL'
+		},
 		test: /(^|\/)assets\/index-[A-Za-z0-9_-]{6,}\.(js|css)$/
 	},
 	{
@@ -213,7 +269,12 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 			`export default defineNuxtConfig({\n  app: { baseURL: '${site.basePath}' }\n});`,
 		build: 'npx nuxt generate',
 		output: '.output/public',
-		docs: 'https://nuxt.com/docs/api/nuxt-config'
+		docs: 'https://nuxt.com/docs/api/nuxt-config',
+		handled: 'the built bundle under the configured baseURL',
+		manual: {
+			what: 'paths you assemble yourself, and public/ assets written absolutely',
+			helper: 'useRuntimeConfig().app.baseURL'
+		}
 	},
 	{
 		id: 'hugo',
@@ -226,7 +287,14 @@ export const GENERATOR_RECIPES: GeneratorRecipe[] = [
 		snippet: (site) => `baseURL = '${site.url}'`,
 		build: 'hugo --minify',
 		output: 'public',
-		docs: 'https://gohugo.io/configuration/all/'
+		docs: 'https://gohugo.io/configuration/all/',
+		// Hugo takes a whole URL and hands you functions rather than rewriting anything: a
+		// leading-slash path in a template stays exactly as written.
+		handled: 'anything built with the URL functions',
+		manual: {
+			what: 'paths written with a leading slash in a template',
+			helper: 'relURL — the docs advise omitting the leading slash'
+		}
 	}
 ];
 

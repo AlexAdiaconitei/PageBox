@@ -7,6 +7,35 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Fixed — the Next.js recipe produced a site with no images
+
+`basePath` is necessary and not sufficient. `next/link` applies it; `next/image` does not
+apply it to `src`, and with `output: 'export'` there is no server behind `/_next/image` for
+the optimiser to run on. The snippet shipped last week set only `basePath`, so anyone who
+followed it got a site whose pages navigated and whose images, favicon and other `public/`
+assets all 404'd — invisible locally, where the base path is `/`.
+
+It now sets `images: { unoptimized: true }` and exposes `NEXT_PUBLIC_BASE_PATH` for the
+helper that wraps the paths Next leaves alone.
+
+### Added — what each generator does *not* prefix
+
+The same trap exists in all eight and each draws the line somewhere else: Vite rewrites
+imported assets, CSS `url()` and paths in `.html`; Astro rewrites the bundle and nothing
+else, so every `<a href>` is the author's to prefix. That is where a site half-works, and it
+was not written down anywhere.
+
+- Every recipe now carries `handled` and `manual` — what the option covers, and what it does
+  not along with the helper that does. The deploy tab shows both beside the config that
+  causes the problem.
+- [`docs/base-paths.md`](docs/base-paths.md) has the long form: the table across all eight,
+  a full worked example for Next.js/Fumadocs, and a note on what PageBox's own preflight and
+  post-deploy verification already catch — plus the two places they do not, since the
+  post-deploy check reads only `index.html` and the preflight samples ten files.
+- Each helper was read off the official documentation rather than remembered, which caught
+  one that would have been wrong: SvelteKit's `base` from `$app/paths` is deprecated in
+  favour of `resolve()`, and the deprecated form is what most guides still show.
+
 ### Added — a README that shows the thing
 
 - **`docs/media/`** — the panel, a served site, the 404 page and a phone screen, captured
