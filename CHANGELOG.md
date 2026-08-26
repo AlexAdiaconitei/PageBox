@@ -7,6 +7,18 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — a README that shows the thing
+
+- **`docs/media/`** — the panel, a served site, the 404 page and a phone screen, captured
+  against a throwaway instance seeded from `examples/`, at 2x, in both themes. The README
+  leads with them: the panel is most of what PageBox is, and a paragraph describing a
+  deployment history is worse than one picture of it. The theme-aware ones are served
+  through `<picture>`, so the page follows the reader rather than pinning them to light.
+- The README is reorganised around what the thing does — deploy, serve, private sites, the
+  record, the error pages, the phone — with the operational sections (running it, startup,
+  taking a site down, retention, quotas, the upload cap) kept intact below. Nothing in it is
+  new behaviour; it is the same instance, finally visible without cloning the repository.
+
 ### Added — one error page, for everything that answers outside the router
 
 - **`$lib/server/errorPage.ts`** — the 404s, 401s, 403s and 405s that never reach SvelteKit
