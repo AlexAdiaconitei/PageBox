@@ -1,6 +1,8 @@
 import { Readable } from 'node:stream';
 import type { RequestEvent } from '@sveltejs/kit';
 import { cache } from '../cache';
+import { config } from '../config';
+import { errorResponse, isNavigation, notFoundResponse } from '../errorPage';
 import { atLeast, permissionFor } from '../perms';
 import { getObject, headObject, objectKey, type ObjectHead } from '../s3';
 import { contentTypeFor, isCompressible, isHtml } from './mime';
@@ -29,32 +31,37 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
 	const { siteRef } = hit;
 
 	if (event.request.method !== 'GET' && event.request.method !== 'HEAD') {
-		return new Response('Method not allowed', {
+		return errorResponse(event.request, {
 			status: 405,
-			headers: { allow: 'GET, HEAD', 'cache-control': 'no-store' }
+			title: 'Method not allowed',
+			detail: 'This host only serves files. It answers GET and HEAD, and nothing else.',
+			note: 'A form posting to a hosted page has nowhere to post to — PageBox stores static files, it runs no code for them.',
+			brand: 'sites',
+			host: config.PAGEBOX_SITES_HOST,
+			headers: { allow: 'GET, HEAD' }
 		});
 	}
 
 	// Checked before the visibility branch, and before any grant lookup: a suspended site
 	// is off for everybody, its owner included. The 404 is the same one everything else
 	// here answers, so "taken down" and "never existed" stay indistinguishable from outside.
-	if (siteRef.disabled) return notFound(siteRef);
+	if (siteRef.disabled) return notFound(event, siteRef);
 
 	if (siteRef.visibility === 'private') {
 		const denial = await guardPrivate(event, siteRef);
 		if (denial) return denial;
 	}
 
-	if (!siteRef.activeDeploymentId) return notFound(siteRef);
+	if (!siteRef.activeDeploymentId) return notFound(event, siteRef);
 
 	const subpath = normaliseSubpath(hit.subpath);
-	if (subpath === null || isForbiddenPath(subpath)) return notFound(siteRef);
+	if (subpath === null || isForbiddenPath(subpath)) return notFound(event, siteRef);
 
 	const deploymentId = siteRef.activeDeploymentId;
 	const candidates = candidatePaths(subpath, { spaFallback: siteRef.spaFallback });
 
 	const found = await locate(siteRef.id, deploymentId, candidates, event);
-	if (!found) return notFound(siteRef);
+	if (!found) return notFound(event, siteRef);
 
 	return respond(event, siteRef, found);
 }
@@ -72,16 +79,19 @@ async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Resp
 
 	// Signed in but not granted: the same 404 as a site that does not exist. Anything
 	// else would confirm which private sites are hosted here.
-	if (event.locals.user) return notFound(siteRef);
+	if (event.locals.user) return notFound(event, siteRef);
 
 	// Not signed in. Only a navigation may be sent to the login page: a 302 answering a
 	// <script src> or a fetch() arrives as HTML where code was expected, and the page
 	// breaks in silence halfway through a session expiring.
 	if (!isNavigation(event.request)) {
-		return new Response('Unauthorized', {
+		return errorResponse(event.request, {
 			status: 401,
+			title: 'Sign in required',
+			detail: 'This file belongs to a private site and the request carried no session.',
+			brand: 'sites',
+			host: config.PAGEBOX_SITES_HOST,
 			headers: {
-				'content-type': 'text/plain; charset=utf-8',
 				'cache-control': 'private, no-store',
 				'cdn-cache-control': 'no-store',
 				vary: 'Cookie'
@@ -99,18 +109,6 @@ async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Resp
 			vary: 'Cookie'
 		}
 	});
-}
-
-/**
- * A top-level document request, as opposed to a sub-resource.
- *
- * `Sec-Fetch-Dest` says so exactly and every current browser sends it; the Accept header
- * is the fallback for clients that do not.
- */
-export function isNavigation(request: Request): boolean {
-	const dest = request.headers.get('sec-fetch-dest');
-	if (dest) return dest === 'document' || dest === 'iframe';
-	return (request.headers.get('accept') ?? '').includes('text/html');
 }
 
 type Found = {
@@ -188,7 +186,7 @@ async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Pro
 	const range = event.request.headers.get('range') ?? undefined;
 	const object = await getObject(found.key, range);
 	// Vanished between HEAD and GET: a deployment being deleted underneath us.
-	if (!object) return notFound(siteRef);
+	if (!object) return notFound(event, siteRef);
 
 	headers.set('content-length', String(object.contentLength));
 	if (object.contentRange) headers.set('content-range', object.contentRange);
@@ -237,17 +235,22 @@ function matchesEtag(ifNoneMatch: string | null, etag: string): boolean {
 /**
  * One 404 for every reason: missing site, missing file, no deployment, or a private site
  * the caller may not see. Distinguishing them would confirm that a private site exists.
+ *
+ * The page is the instance-wide one (see errorPage.ts) — the same document the host
+ * dispatch answers with for a slug that resolves to nothing, so a site removed from live
+ * and a slug that was never registered are one answer down to the byte. What differs here
+ * is only the caching: a private site's 404 must not be stored anywhere, because whether
+ * it is a 404 depends on who asked.
  */
-function notFound(siteRef?: SiteRef): Response {
-	const headers = new Headers({
-		'content-type': 'text/plain; charset=utf-8',
-		'cache-control': siteRef?.visibility === 'private' ? 'private, no-store' : 'public, no-cache',
-		'x-content-type-options': 'nosniff'
-	});
-	if (siteRef?.visibility === 'private') {
-		headers.set('cdn-cache-control', 'no-store');
-		headers.set('cloudflare-cdn-cache-control', 'no-store');
-		headers.set('vary', 'Cookie');
-	}
-	return new Response('Not found', { status: 404, headers });
+function notFound(event: RequestEvent, siteRef?: SiteRef): Response {
+	const headers: Record<string, string> =
+		siteRef?.visibility === 'private'
+			? {
+					'cache-control': 'private, no-store',
+					'cdn-cache-control': 'no-store',
+					'cloudflare-cdn-cache-control': 'no-store',
+					vary: 'Cookie'
+				}
+			: { 'cache-control': 'public, no-cache' };
+	return notFoundResponse(event.request, 'sites', headers);
 }

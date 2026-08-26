@@ -7,6 +7,43 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
+### Added — one error page, for everything that answers outside the router
+
+- **`$lib/server/errorPage.ts`** — the 404s, 401s, 403s and 405s that never reach SvelteKit
+  now render a real page instead of a line of text. Most of them come from the host dispatch
+  in `hooks.server.ts` and from `sites/serve.ts`, which run before or instead of route
+  resolution, so `src/routes/+error.svelte` was never involved: every one of them was
+  `new Response('Not found', …)`, which a browser draws as one serif line on a white page
+  with no indication of whose server said it. The document is self-contained — no
+  stylesheet, no script, no image, no font file — because an error page that depends on
+  assets breaks exactly when assets are what broke, and on the sites host those requests
+  would go to an origin whose job is serving somebody else's files. Same palette, same
+  dark theme and same type as the panel, so the two error paths are indistinguishable.
+- **The shape follows what the caller asked for.** A navigation gets the page; a
+  sub-resource gets plain text, because a `<script src>` answered with HTML is a document
+  where code was expected and the nosniff header then fails it with a message about the
+  wrong thing; an `Accept: application/json` client gets JSON. The status — the part every
+  client actually reads — is the same in all three.
+- **The 404 stays one answer.** Unknown slug, site taken out of live, site whose deployment
+  was deleted or never activated, private site the caller has no grant for, file missing
+  inside a deployment: one page, byte for byte, asserted as such in the tests. It is also
+  the first version of that page to *say* so — a visitor is told that a site removed from
+  live and one that never existed answer alike, which is the honest response to "was this
+  ever here?" without answering it. A deployment shipping its own `404.html` still wins:
+  a site's not-found page is part of the site.
+- **Nothing from the request is reflected.** The requested path never appears. The sites
+  host is one origin shared by every deployment, so a document echoing a crafted URL is an
+  XSS against every other site on it — not a bet worth taking on an escaping function, for
+  a string already visible in the address bar.
+- **The panel keeps its console when something fails.** `(panel)/+error.svelte` renders the
+  error inside the rail rather than dropping a signed-in operator onto a bare page that
+  reads like an ended session, and it names the thing the panel does deliberately: a page
+  you may not open answers 404, exactly like one that does not exist, so the message says
+  it may be a dead link or a boundary and does not claim to know which.
+- A request arriving on neither hostname gets the same page **unbranded** — no mark, no
+  name, no mention of where sites live. Which software answers on an address that is not
+  ours is not the caller's business.
+
 ### Added — example sites, and a deploy recipe per generator
 
 - **`examples/`** — five deployments, each a different shape, for exercising the host against

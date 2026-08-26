@@ -182,6 +182,14 @@ by getting a login redirect instead of a 404. Hiding that would mean sending rea
 instead of the sign-in page, which makes private sites unusable. Signed-in users without a
 grant still learn nothing.
 
+Every 404 on the site host is the same document, whatever the reason: an unknown slug, a
+site an operator suspended, a site whose deployment was deleted or was never activated, a
+private site with no grant, and a path that is simply not in the deployment all answer byte
+for byte alike. That is what keeps this table from leaking — a page that read differently
+for "suspended" would confirm the site exists. The page says as much, so a visitor whose
+link stopped working knows the answer is deliberate rather than knowing why. A deployment
+that ships its own `404.html` is the one exception, and only within its own site.
+
 Every response for a private site — including its 404s, 401s and redirects — carries
 `Cache-Control: private, no-store`, `CDN-Cache-Control: no-store` and `Vary: Cookie`. One
 private asset cached at a CDN edge is readable without a session, which is the worst

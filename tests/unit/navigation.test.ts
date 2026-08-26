@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isNavigation } from '../../src/lib/server/sites/serve';
+import { isNavigation } from '../../src/lib/server/errorPage';
 
 const req = (headers: Record<string, string>) => new Request('http://x/', { headers });
 

@@ -7,6 +7,7 @@ import {
 } from '@sveltejs/kit';
 import { loadSession } from '$lib/server/auth/session';
 import { config, hostKind, type HostKind } from '$lib/server/config';
+import { errorResponse, notFoundResponse } from '$lib/server/errorPage';
 import { probeHealth } from '$lib/server/health';
 import { resolveSite } from '$lib/server/sites/resolve';
 import { serveSite } from '$lib/server/sites/serve';
@@ -50,11 +51,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	// Anything else that is neither host is not ours: no redirect, no hint, no routing.
-	if (!kind) return new Response('Not found', { status: 404 });
+	if (!kind) return notFoundResponse(event.request, null);
 	event.locals.hostKind = kind;
 
 	// Never serve internal paths from either host.
-	if (event.url.pathname.startsWith('/__pb/')) return notFound();
+	if (event.url.pathname.startsWith('/__pb/')) return notFoundResponse(event.request, kind);
 
 	if (kind === 'sites') {
 		const hit = await resolveSite(event.url.host, event.url.pathname);
@@ -73,19 +74,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 			}
 			return serveSite(event, hit);
 		}
-		if (!SITES_HOST_ROUTES.has(event.url.pathname)) return notFound();
+		if (!SITES_HOST_ROUTES.has(event.url.pathname)) return notFoundResponse(event.request, kind);
 	} else if (event.url.pathname.startsWith(config.PAGEBOX_SITES_PREFIX + '/')) {
 		// The admin host must never answer on the site prefix: one path, one meaning.
-		return notFound();
+		return notFoundResponse(event.request, kind);
 	}
 
 	// CSRF: cookie-authenticated mutations must come from our own origin. Done here, and
 	// not by SvelteKit's built-in check, because that one compares against a URL rebuilt
 	// from proxy headers (see vite.config.ts).
 	if (!sameOriginMutation(event, kind)) {
-		return new Response('Cross-site form submissions are forbidden', {
+		return errorResponse(event.request, {
 			status: 403,
-			headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }
+			title: 'Cross-site request blocked',
+			detail: 'This submission came from another site, so it was not processed.',
+			note:
+				'Open the page again on this host and retry. If you got here from a bookmarked ' +
+				'form or a page kept open for a long time, reloading it is enough.',
+			brand: kind,
+			host: kind === 'admin' ? config.PAGEBOX_ADMIN_HOST : config.PAGEBOX_SITES_HOST,
+			action: { href: '/', label: 'Start again' }
 		});
 	}
 
@@ -156,11 +164,4 @@ function sameOriginMutation(event: RequestEvent, kind: HostKind): boolean {
 		':'
 	)[0];
 	return originHost === expected;
-}
-
-function notFound(): Response {
-	return new Response('Not found', {
-		status: 404,
-		headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }
-	});
 }

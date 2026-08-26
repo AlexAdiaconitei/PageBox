@@ -124,6 +124,36 @@ run('serving a deployment', () => {
 		}
 	});
 
+	/**
+	 * The wiring, not the wording: the unit tests pin what the page contains, this pins
+	 * that the host dispatch and the site server actually reach it, over a real socket,
+	 * with a browser's headers.
+	 */
+	it('answers a navigation with a page rather than a line of text', async () => {
+		const res = await get(`/s/${slug}-does-not-exist/`, {
+			headers: { 'sec-fetch-dest': 'document', accept: 'text/html' }
+		});
+		expect(res.status).toBe(404);
+		expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
+		const body = await res.text();
+		expect(body).toContain('<!doctype html>');
+		// Self-contained: an error page that pulls a stylesheet from the site host is one
+		// more request to an origin that may have nothing to answer it with.
+		expect(body).not.toContain('<link');
+		// The path is never echoed back — this origin is shared by every deployment on it.
+		expect(body).not.toContain('does-not-exist');
+	});
+
+	// A sub-resource must not be handed a document: the browser rejects it on nosniff and
+	// the real cause never surfaces.
+	it('answers a sub-resource in plain text, at the same status', async () => {
+		const res = await get(`/s/${slug}-does-not-exist/app.js`, {
+			headers: { 'sec-fetch-dest': 'script' }
+		});
+		expect(res.status).toBe(404);
+		expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+	});
+
 	it('does not serve sites from the admin host', async () => {
 		expect((await get(`/s/${slug}/`, {}, adminHost)).status).toBe(404);
 		expect((await get('/', {}, 'unknown.example.com')).status).toBe(404);
