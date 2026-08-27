@@ -1,0 +1,34 @@
+---
+title: Choose your generator
+description: The exact option, the helper it does not cover, and how to check the build.
+---
+
+Every one of these pages answers the same four questions for one tool:
+
+1. what to set, and with which slashes;
+2. what that option prefixes on its own;
+3. what it does **not** prefix, and the helper that does;
+4. what to grep in the build before uploading it.
+
+<SiteTargetField />
+
+<Cards>
+  <Card title="Next.js" href="/docs/generators/next" description="And Fumadocs, Nextra. The longest one — basePath is five lines, not one." />
+  <Card title="Astro" href="/docs/generators/astro" description="And Starlight. The strictest: base rewrites the bundle and nothing else." />
+  <Card title="Vite" href="/docs/generators/vite" description="React, Vue and Svelte SPAs. The best-behaved of the set." />
+  <Card title="SvelteKit" href="/docs/generators/sveltekit" description="adapter-static plus paths.base — either alone half works." />
+  <Card title="Docusaurus" href="/docs/generators/docusaurus" description="baseUrl with both slashes, and useBaseUrl for the rest." />
+  <Card title="VitePress" href="/docs/generators/vitepress" description="base with both slashes, and withBase() in components." />
+  <Card title="Nuxt" href="/docs/generators/nuxt" description="nuxt generate, not nuxt build — the latter produces a server." />
+  <Card title="Hugo" href="/docs/generators/hugo" description="The odd one out: a whole absolute URL, not a path." />
+</Cards>
+
+## Not listed here?
+
+The option is nearly always called `base`, `baseUrl` or `basePath`, and the question to ask
+its documentation is *"what does this rewrite, and what does it leave alone"*. Then build,
+and grep the output for references that start at `/` and do not carry <Prefix />.
+
+If it is a tool other people use, it is worth adding to
+[`src/lib/preflight.ts`](/docs/deploy/base-paths#adding-a-generator) so the panel can name
+it too.

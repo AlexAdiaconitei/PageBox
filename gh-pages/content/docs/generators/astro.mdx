@@ -1,0 +1,116 @@
+---
+title: Astro
+description: base rewrites the bundle and nothing else — every href and every public/ asset is yours.
+---
+
+Applies to **Starlight**, which is an Astro integration and takes the same options.
+
+Astro is the strictest of the set. `base` tells the bundler where the site will live and
+rewrites nothing you wrote yourself: every `<a href>` and every `public/` path stays exactly
+as typed.
+
+<SiteTargetField />
+
+<Recipe id="astro" />
+
+<Steps>
+
+<Step>
+
+### The config
+
+```js title="astro.config.mjs"
+import { defineConfig } from 'astro/config';
+
+export default defineConfig({
+  // The origin, used for canonical URLs and the sitemap.
+  site: 'https://pages.example.com',
+  // The subpath. Astro refuses a trailing slash.
+  base: (process.env.SITE_BASE_PATH ?? '/').replace(/\/$/, ''),
+});
+```
+
+`site` and `base` do different jobs and you want both: `site` is what
+`Astro.site` and the sitemap integration use; `base` is what goes in front of the paths.
+
+</Step>
+
+<Step>
+
+### Prefix your own links
+
+`import.meta.env.BASE_URL` holds the value, with a trailing slash. Astro's own guidance is to
+join without doubling it:
+
+```astro
+---
+const base = import.meta.env.BASE_URL;
+---
+
+<a href={`${base}guide/`}>Guide</a>
+<img src={`${base}brand/logo.png`} alt="" />
+<link rel="icon" href={`${base}favicon.svg`} />
+```
+
+A component that does it once is worth writing on any site with more than a handful of
+links:
+
+```astro title="src/components/Path.astro"
+---
+const { to } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+{`${base}${to.replace(/^\//, '')}`}
+```
+
+</Step>
+
+<Step>
+
+### What Astro handles
+
+The `_astro/` bundle output — hashed JavaScript and CSS, and images imported through the
+bundler:
+
+```astro
+---
+import logo from '../assets/logo.png';
+import { Image } from 'astro:assets';
+---
+<Image src={logo} alt="" />
+```
+
+That resolves with the base path in it. An image in `public/` referenced by a literal string
+does not.
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+npm run build
+grep -ro 'href="/[^"]*"' dist/ | grep -v '/s/<slug>/'
+grep -ro 'src="/[^"]*"' dist/ | grep -v '/s/<slug>/'
+```
+
+Anything that comes back is a path that will leave your site.
+
+</Step>
+
+</Steps>
+
+<Callout type="warn" title="Content collections and markdown links">
+A relative link in a markdown file is resolved by Astro. An absolute one — `[Guide](/guide)`
+— is passed through untouched and will break. Either keep markdown links relative, or write
+them with the base in a remark plugin.
+</Callout>
+
+## Official documentation
+
+- [`base`](https://docs.astro.build/en/reference/configuration-reference/#base)
+- [`site`](https://docs.astro.build/en/reference/configuration-reference/#site)
+- [`import.meta.env.BASE_URL`](https://docs.astro.build/en/guides/environment-variables/#default-environment-variables)
+- [`public/`](https://docs.astro.build/en/basics/project-structure/#public)
+- [Starlight configuration](https://starlight.astro.build/reference/configuration/)

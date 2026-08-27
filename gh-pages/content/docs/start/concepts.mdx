@@ -1,0 +1,135 @@
+---
+title: How it fits together
+description: Two hostnames, sites, deployments, grants and tokens — what each one is and why it exists.
+---
+
+Six nouns cover everything PageBox does. Learning them in this order means each one only
+depends on the ones before it.
+
+## Two hostnames
+
+```
+https://pagebox.example.com/          → the admin panel and the API
+https://pages.example.com/s/<slug>/   → every deployed site
+```
+
+They must be different hostnames, and the process exits at startup if they match.
+
+The reason is not tidiness. The sites host runs JavaScript that somebody else uploaded. If
+the panel shared that origin, any hosted page could call the admin API with your admin
+cookie attached and act as you. So the panel's origin is the one that never hosts anyone
+else's code, and that separation is enforced rather than recommended.
+
+It follows that there are **two sessions**, not one:
+
+| Cookie | Host | Lifetime | Unlocks |
+| ------ | ---- | -------- | ------- |
+| `pb_admin.session_token` | the admin host | 30 days | the panel, and the API by cookie |
+| `pb_view.session_token` | the sites host | 12 hours | reading private sites |
+
+Both are host-only — no `Domain` attribute — and every session records which host it was
+minted for. Present one on the other host and it counts as no session at all, and the
+mismatch lands in the audit log.
+
+## A site
+
+A site is a slug, an access setting, and an owner.
+
+- The **slug** is the address: `/s/<slug>/`. It comes from one namespace shared across the
+  whole instance, so slugs are first come, first served, and deleting a site releases its
+  slug again.
+- **Access** is `public` or `private`. Public means anyone with the address can read it.
+  Private means every file is authorised — see [access](/docs/operate/access).
+- The **owner** is the admin who created it. Storage is charged to them, and handing a site
+  to another admin moves its bytes to that admin's allowance.
+
+A site with no deployment answers 404. So does a site whose serving has been switched off,
+and a private site you have no grant on. That is deliberate: **one 404 covers every reason
+a site can be missing**, byte for byte identical, so the sites host never becomes a way to
+find out which private sites exist.
+
+## A deployment
+
+A deployment is one complete, immutable copy of a build.
+
+Uploading does not replace anything. It stores a new deployment and — unless you asked it
+not to — moves the site's live pointer to it. The previous deployment is still there, whole,
+with its own id.
+
+Deployment ids are ULIDs, so they sort by time on their own, and **rollback is moving the
+pointer**. Nothing is rebuilt and nothing is re-uploaded; the site serves the older bytes
+from the next request onward.
+
+Two consequences worth holding on to:
+
+- A byte-identical re-upload returns the existing deployment with `"reused": true` rather
+  than storing a second copy. That is what a retrying CI job does, and it costs nothing.
+- Keeping every build means a site deployed on each push grows without bound, which is what
+  [retention limits](/docs/operate/storage#retention) are for.
+
+## A grant
+
+A grant gives a person, or a group, a role on one site.
+
+| Role | Can |
+| ---- | --- |
+| `viewer` | read the site |
+| `deployer` | read, deploy, activate and roll back |
+| `owner` | all of the above, plus grants, deploy tokens and visibility |
+
+Grants are per site. They are separate from the **global role** — `superadmin`, `admin` or
+`user` — which says what someone is on the instance rather than on any particular site.
+
+The one that surprises people: **`admin` is not a key to other people's sites.** An admin
+reaches a site by having created it or by being granted it, exactly like anyone else. Only
+`superadmin` short-circuits to `owner` everywhere.
+
+## A deploy token
+
+A token is a credential belonging to a person, scoped to exactly one site.
+
+It is shown once and stored only as a hash, so a lost token is reissued rather than
+recovered. Every call re-resolves the owner's permission on the site **as it stands now** —
+revoke their grant, demote them or suspend the account and the token stops working
+immediately. Pointed at a site it was not issued for, it gets a 404, the same answer as a
+slug that does not exist.
+
+That is why the grant is the source of truth and the key is only a convenience.
+
+## A group
+
+A group is a set of accounts you can grant in one move. It belongs to the admin who created
+it, because membership is a grant with an extra step, and a shared group list would be a way
+into somebody else's sites.
+
+## How a request is answered
+
+Putting it together, a request to `pages.example.com/s/docs/guide/` goes through:
+
+<Steps>
+<Step>
+### Host dispatch
+The sites host, so this is a site request and none of the admin API is reachable.
+</Step>
+<Step>
+### Slug lookup
+`docs` — is there such a site, is it serving, and does it have a live deployment? Any no
+answers the same 404.
+</Step>
+<Step>
+### Authorisation
+Public: allowed. Private: resolve the caller's grant, directly or through a group, and
+answer [by caller](/docs/operate/access#what-a-private-site-answers). This runs for the
+HTML **and for every asset that page then requests**.
+</Step>
+<Step>
+### Path resolution
+`guide/` → `guide/index.html`. The full order, including the SPA fallback, is in
+[how a site is served](/docs/operate/serving).
+</Step>
+<Step>
+### Response
+The object out of S3, with caching headers chosen from whether the filename is
+content-hashed, and a precompressed `.br` or `.gz` sibling if the client accepts one.
+</Step>
+</Steps>

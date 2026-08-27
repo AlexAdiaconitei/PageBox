@@ -1,0 +1,131 @@
+---
+title: Dokploy
+description: Application from Dockerfile, two domains, and the three things that bite.
+---
+
+Two routes exist. **Use the Application one** unless you have a reason not to: Dokploy's
+Compose stacks are not routed by *Add Domain*, so they need a hand-written Traefik dynamic
+file.
+
+## Application (Dockerfile)
+
+<Steps>
+
+<Step>
+### Create the project
+`app-pagebox`. It is an application, not a shared resource, so it does not belong in a
+`core`-style project.
+</Step>
+
+<Step>
+### Create the application
+Source: this Git repository. Build Type: **Dockerfile** (`./Dockerfile`). No build
+arguments are needed.
+</Step>
+
+<Step>
+### Add both domains
+**Add Domain** twice, both pointing at container port **3000**:
+
+- `pagebox.<your-domain>` — panel and API
+- `pages.<your-domain>` — the hosted sites
+
+Both are single-level hostnames, so an existing `*.<your-domain>` wildcard certificate and
+tunnel rule already cover them. No per-site DNS, no catch-all router.
+</Step>
+
+<Step>
+### Environment
+
+```bash
+PAGEBOX_ADMIN_HOST=pagebox.<your-domain>
+PAGEBOX_SITES_HOST=pages.<your-domain>
+PAGEBOX_PUBLIC_SCHEME=https
+
+DATABASE_URL=postgres://pagebox:…@<pg-host>:5432/pagebox
+# REDIS_URL=redis://<valkey-host>:6379      # required past one replica
+
+S3_ENDPOINT=http://192.168.1.197:3900       # Garage
+S3_ACCESS_KEY=…
+S3_SECRET_KEY=…
+S3_BUCKET=pagebox
+S3_FORCE_PATH_STYLE=true
+
+AUTH_SECRET=<openssl rand -base64 48>
+BOOTSTRAP_ADMIN_EMAIL=you@example.com
+BOOTSTRAP_ADMIN_PASSWORD=<replaced at first sign-in>
+
+MAX_UPLOAD_BYTES=104857600                  # 100 MB — see below
+```
+
+PageBox creates the bucket itself if the key is allowed to; otherwise create it first.
+</Step>
+
+<Step>
+### Health check
+Path `/healthz`. It probes Postgres and S3 and answers on any host, including Dokploy's
+internal IP probe, so a dependency outage marks the container unhealthy rather than letting
+it serve errors.
+</Step>
+
+<Step>
+### Deploy
+The first boot logs migrations, bucket state and the bootstrap superadmin:
+
+```
+[pagebox] migrations applied
+[pagebox] bucket "pagebox" created
+[pagebox] bootstrap superadmin created: you@example.com (must change password at first login)
+[pagebox] ready in 336ms · admin=pagebox.<domain> sites=pages.<domain>/s/<slug>/ cache=memory upload-cap=100 MB
+```
+</Step>
+
+</Steps>
+
+## Compose, only if you must
+
+`docker-compose.dokploy.yml` runs the app alone against external services. Two things to
+remember:
+
+- Compose stacks in Dokploy **ignore** *Add Domain* and container labels for routing. Copy
+  `traefik-dynamic.example.yml` into Dokploy's dynamic configuration directory — usually
+  `/etc/dokploy/traefik/dynamic/pagebox.yml` — and adjust the hostnames and container name.
+- The service must be attached to `dokploy-network`.
+
+## Things that bite
+
+<Accordions>
+
+<Accordion title="Both hostnames must differ">
+If they match, the container exits at boot with an explicit message. That is intentional: a
+shared origin lets any hosted page call the admin API with your admin cookie.
+</Accordion>
+
+<Accordion title="Cloudflare and the upload cap">
+`MAX_UPLOAD_BYTES` defaults to 100 MB because Cloudflare's proxy rejects larger request
+bodies on non-Enterprise plans, and Cloudflare is the first deployment target. Raise it when
+nothing in front imposes a smaller cap — it propagates to adapter-node's `BODY_SIZE_LIMIT`
+automatically, so the app-level and HTTP-level caps cannot drift apart. Traefik itself does
+not cap bodies unless you add a `buffering` middleware.
+</Accordion>
+
+<Accordion title="Cloudflare Access in front of the panel breaks CI">
+The token-based API lives on the admin host. Either add a bypass policy for `/api/v1/*` or
+send service tokens (`CF-Access-Client-Id` / `CF-Access-Client-Secret`) from the workflow.
+
+Never put Cloudflare Access in front of the **sites** host — public sites would stop being
+public.
+</Accordion>
+
+<Accordion title="Scaling past one replica requires REDIS_URL">
+The app refuses to start otherwise, because the grant cache would be per-process and two
+replicas would disagree about who can read what.
+</Accordion>
+
+<Accordion title="Do not set ORIGIN">
+The app reads `x-forwarded-host` and `x-forwarded-proto`, which Traefik sets. A fixed
+`ORIGIN` collapses the two hostnames into one and disables the host split — the property the
+whole design rests on.
+</Accordion>
+
+</Accordions>

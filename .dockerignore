@@ -12,3 +12,7 @@ tests
 .claude
 .agents
 skills-lock.json
+
+# The documentation site. It is built and deployed on its own; nothing in the app image
+# needs it, and it would drag a second node_modules into the build context.
+gh-pages

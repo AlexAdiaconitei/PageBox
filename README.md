@@ -309,6 +309,16 @@ deployment — see the milestone table in
 
 ## Documentation
 
+**[The documentation site](https://alexadiaconitei.github.io/PageBox/)** is the readable
+version of everything below — a step-by-step path from `docker compose up` to a site
+deployed from CI, with the base-path recipe for each generator filled in with your own
+slug. It is built from [`gh-pages/`](gh-pages/README.md) with Fumadocs, exported to static
+files, and deployed to GitHub Pages on every push — and to PageBox itself on every release,
+which is the shortest honest test of whether this thing hosts a real site.
+
+The Markdown below is the source those pages were written from, and stays as the reference
+kept beside the code:
+
 - [Deploy API and CI setup](docs/deploy-api.md)
 - [Accounts, roles and grants](docs/access.md)
 - [Base paths: what each generator does not prefix](docs/base-paths.md)

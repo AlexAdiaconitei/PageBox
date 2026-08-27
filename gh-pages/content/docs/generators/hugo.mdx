@@ -1,0 +1,91 @@
+---
+title: Hugo
+description: The odd one out — baseURL takes a whole address, and relURL does the rest.
+---
+
+Hugo is the only tool here that wants the complete address, scheme and all, rather than a
+path. It is also the one that rewrites the least: it hands you functions instead.
+
+<SiteTargetField />
+
+<Recipe id="hugo" />
+
+<Steps>
+
+<Step>
+
+### The config
+
+```toml title="hugo.toml"
+baseURL = 'https://pages.example.com/s/docs/'
+```
+
+Or from the command line, which is what CI should do:
+
+```bash
+hugo --minify --baseURL "$SITE_URL"
+```
+
+where `SITE_URL` is the `siteUrl` field from [`/api/v1/whoami`](/docs/deploy/api). That is
+the whole URL, not the base path — the one recipe on this site that needs the address rather
+than the prefix.
+
+</Step>
+
+<Step>
+
+### Use the URL functions
+
+A leading-slash path written in a template stays exactly as written. Hugo's own advice is to
+omit the leading slash and let `relURL` resolve it:
+
+```html
+<a href="{{ "guide/" | relURL }}">Guide</a>
+<img src="{{ "images/logo.png" | relURL }}" alt="">
+<link rel="icon" href="{{ "favicon.svg" | relURL }}">
+```
+
+For resources in `assets/`, the pipeline gives you the URL directly and it already carries
+the base:
+
+```html
+{{ $css := resources.Get "css/main.css" | minify | fingerprint }}
+<link rel="stylesheet" href="{{ $css.RelPermalink }}">
+```
+
+<Callout type="info" title="relURL or absURL">
+`relURL` produces a path; `absURL` produces the full address. Either works under a subpath —
+both apply `baseURL`. Prefer `relURL` for anything the browser fetches, and `absURL` for
+canonical links, feeds and Open Graph tags.
+</Callout>
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+hugo --minify
+grep -ro 'href="/[^"]*"' public/ | grep -v '/s/<slug>/'
+grep -ro 'src="/[^"]*"' public/ | grep -v '/s/<slug>/'
+```
+
+Anything still starting at `/` is a template with a hardcoded path in it.
+
+</Step>
+
+</Steps>
+
+<Callout type="warn" title="Hugo has no tell">
+A Hugo build is ordinary HTML in ordinary directories, so PageBox never guesses the
+generator. The preflight still reports absolute references — it just will not name
+`hugo.toml` as the file to edit.
+</Callout>
+
+## Official documentation
+
+- [Configure all](https://gohugo.io/configuration/all/) — `baseURL` and every other setting
+- [`relURL`](https://gohugo.io/functions/urls/relurl/)
+- [`absURL`](https://gohugo.io/functions/urls/absurl/)
+- [Host and deploy](https://gohugo.io/host-and-deploy/)

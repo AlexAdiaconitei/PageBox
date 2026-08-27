@@ -1,0 +1,164 @@
+---
+title: Deploy API
+description: The v1 endpoints — whoami, upload, history, activate, delete.
+---
+
+The API lives on the **admin host**, under `/api/v1`. Authentication is a bearer
+[deploy token](/docs/deploy/tokens). The sites host never exposes any of it.
+
+```
+https://pagebox.example.com/api/v1/…
+```
+
+## Ask for your base path, then build
+
+```http
+GET /api/v1/whoami
+Authorization: Bearer pbx_…
+```
+
+```json
+{
+  "scope": "site",
+  "siteId": "01J…",
+  "slug": "docs-a",
+  "basePath": "/s/docs-a/",
+  "siteUrl": "https://pages.example.com/s/docs-a/",
+  "mode": "path",
+  "maxUploadBytes": 104857600
+}
+```
+
+Build with that `basePath` instead of hardcoding it. When a site later moves to its own
+hostname, the same call returns `"basePath": "/"` and the next build comes out right without
+touching the workflow.
+
+Per generator: Next and Fumadocs take `basePath`, Docusaurus `baseUrl`, Astro and Vite
+`base`, SvelteKit `paths.base`, Nuxt `app.baseURL`, Hugo `baseURL` as a whole URL. The
+slashes differ — [base paths](/docs/deploy/base-paths) has the table.
+
+## Upload a build
+
+The body is the zip itself. No multipart wrapper.
+
+```http
+POST /api/v1/sites/{slug}/deployments
+Authorization: Bearer pbx_…
+Content-Type: application/zip
+X-Deployment-Notes: commit abc1234
+```
+
+```json
+{
+  "deploymentId": "01J…",
+  "status": "ready",
+  "fileCount": 812,
+  "totalBytes": 4711234,
+  "reused": false,
+  "skipped": [],
+  "root": "",
+  "activated": true,
+  "brokenAssets": 0,
+  "brokenAssetSamples": [],
+  "retentionLimit": 5,
+  "pruned": ["01J…"],
+  "prunedBytes": 4693110,
+  "url": "https://pages.example.com/s/docs-a/"
+}
+```
+
+<Accordions>
+
+<Accordion title="root — why your zip may end up one directory deep">
+If every path in the archive sits inside one directory, that directory becomes the site root
+and the response says which one (`"root": "out"`).
+
+`zip -r site.zip out` is the command people actually run, and deploying it verbatim would
+otherwise give a site whose root holds a folder and no `index.html`. Zip from inside instead:
+`(cd out && zip -qr ../site.zip .)`.
+</Accordion>
+
+<Accordion title="reused — what a retrying CI job gets">
+Re-uploading a byte-identical archive returns the existing deployment with `"reused": true`
+instead of storing a second copy. A retried job costs nothing and does not fill the bucket.
+</Accordion>
+
+<Accordion title="pruned — what retention deleted">
+When the site has a [retention limit](/docs/operate/storage#retention), the upload deletes
+the deployments that fall past it: `pruned` names them and `prunedBytes` is what came back.
+The live deployment is never among them, and a limit is never applied before the new build
+is safely stored. Without a limit, `retentionLimit` is `null` and `pruned` is empty.
+</Accordion>
+
+<Accordion title="activated — and how to skip it">
+`?activate=false` uploads without moving the live pointer. The pointer moves only after
+every object is in S3, so a failed upload leaves the previous deployment serving.
+</Accordion>
+
+<Accordion title="brokenAssets — the post-deploy check">
+After activation PageBox reads the deployed `index.html` back and resolves what it
+references the way the site serves it. A link to another page counts as found; a genuinely
+missing file is named in `brokenAssetSamples` rather than only counted. It reads that one
+file and its first 25 references — no more.
+</Accordion>
+
+</Accordions>
+
+### Rejections
+
+`400` with a `reason`:
+
+| `reason` | Meaning |
+| -------- | ------- |
+| `zip-slip` | an entry escapes the deployment root (`../`, absolute, `C:/`) |
+| `symlink` | an entry is a symlink |
+| `too-many-files` | over `MAX_FILES` |
+| `too-large` | expands past `MAX_UNCOMPRESSED_BYTES` |
+| `ratio` | compression ratio over `MAX_ZIP_RATIO`:1 — treated as a bomb |
+| `empty` | the archive holds no files |
+| `unreadable` | not a zip, or corrupt |
+
+`401` — the token is unknown, disabled or expired.
+`404` — no such site, or this token is not scoped to it.
+`413` — the body is over `MAX_UPLOAD_BYTES`, or the site's owner is out of quota
+(`reason: "quota"`, with the figures).
+`429` — this token has made too many calls in its window. Retry; do not rotate.
+
+## History
+
+```http
+GET /api/v1/sites/{slug}/deployments?limit=20
+```
+
+Newest first. The response also carries the site's own state:
+
+| Field | Means |
+| ----- | ----- |
+| `serving` | `false` when an operator has switched the site off — it then answers 404 whatever is deployed |
+| `retentionLimit` | how many deployments the site keeps, or `null` |
+| `storageBytes` | every deployment it still holds, not just the live one |
+| `deploymentCount` | how many there are |
+
+## The rest
+
+```http
+GET    /api/v1/sites/{slug}/deployments/{id}
+POST   /api/v1/sites/{slug}/deployments/{id}/activate   # rollback and roll-forward
+DELETE /api/v1/sites/{slug}/deployments/{id}            # 409 on the live one
+```
+
+## Uploading with a session instead
+
+The same endpoint takes a panel session, which is what the site page's drop area uses. See
+[deploy tokens](/docs/deploy/tokens#using-a-session-instead) for the three ways it differs —
+the important one being that it requires an `Origin` from the admin host.
+
+## Checking a real build end to end
+
+```bash
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_… \
+  node scripts/verify-real-build.mjs
+```
+
+Builds `tests/fixtures/real-site` with Vite against the base path `whoami` returns, deploys
+it, and fails if any reference in the served HTML does not resolve.

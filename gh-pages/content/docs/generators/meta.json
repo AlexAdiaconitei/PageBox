@@ -1,0 +1,5 @@
+{
+  "title": "Per generator",
+  "description": "The exact option, for the tool you actually use",
+  "pages": ["index", "next", "astro", "vite", "sveltekit", "docusaurus", "vitepress", "nuxt", "hugo"]
+}

@@ -1,0 +1,107 @@
+---
+title: VitePress
+description: base with both slashes, and withBase() wherever you wrote a path yourself.
+---
+
+<SiteTargetField />
+
+<Recipe id="vitepress" />
+
+<Steps>
+
+<Step>
+
+### The config
+
+```ts title=".vitepress/config.ts"
+import { defineConfig } from 'vitepress';
+
+export default defineConfig({
+  title: 'My docs',
+  // "It should always start and end with a slash" — the VitePress documentation, verbatim.
+  base: process.env.SITE_BASE_PATH ?? '/',
+});
+```
+
+</Step>
+
+<Step>
+
+### What VitePress handles
+
+Markdown links, the theme's own navigation, and assets referenced relatively from markdown
+(`![alt](./img.png)`) — those go through Vite's asset pipeline and come out with the base in
+them.
+
+</Step>
+
+<Step>
+
+### What is yours
+
+Asset paths written literally, in a component or in frontmatter:
+
+```vue
+<script setup>
+import { withBase } from 'vitepress';
+</script>
+
+<template>
+  <img :src="withBase('/logo.png')" alt="" />
+</template>
+```
+
+And in the theme config, where the same rule applies:
+
+```ts
+themeConfig: {
+  logo: '/logo.svg',        // needs the base — see below
+  socialLinks: [ … ],
+}
+```
+
+<Callout type="info" title="themeConfig.logo is an exception">
+VitePress prefixes `themeConfig.logo` itself. Most other literal paths — `head` tags, custom
+components, frontmatter `image` fields — are not, so `withBase()` is the safe default
+anywhere you are unsure.
+</Callout>
+
+For `head` entries, build the value from the same variable you passed to `base`:
+
+```ts
+const base = process.env.SITE_BASE_PATH ?? '/';
+
+export default defineConfig({
+  base,
+  head: [['link', { rel: 'icon', href: `${base}favicon.svg` }]],
+});
+```
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+npm run docs:build
+grep -ro 'href="/[^"]*"' .vitepress/dist/ | grep -v '/s/<slug>/'
+```
+
+</Step>
+
+</Steps>
+
+<Callout type="warn" title="VitePress has no tell">
+An uploaded VitePress build is ordinary directories and files with nothing in them that
+identifies the generator, so PageBox never guesses it. The preflight will still report
+absolute references it finds — it just will not name `.vitepress/config.ts` as the file to
+edit.
+</Callout>
+
+## Official documentation
+
+- [`base`](https://vitepress.dev/reference/site-config#base)
+- [`withBase()`](https://vitepress.dev/reference/runtime-api#usedata)
+- [Asset handling](https://vitepress.dev/guide/asset-handling)
+- [Deploying](https://vitepress.dev/guide/deploy)

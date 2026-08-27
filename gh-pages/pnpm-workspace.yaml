@@ -1,0 +1,10 @@
+# gh-pages is its own pnpm project: the docs site must build without the app's
+# dependencies, and CI installs it on its own.
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@fumadocs/base-ui@16.15.3'
+  - fumadocs-core@16.15.3
+  - fumadocs-mdx@15.4.0

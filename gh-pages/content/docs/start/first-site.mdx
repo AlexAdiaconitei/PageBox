@@ -1,0 +1,140 @@
+---
+title: Your first real site
+description: Take a build from a real generator, configure its base path, and deploy it — by hand, then from CI.
+---
+
+The [quickstart](/docs/start/quickstart) used an example build with relative URLs
+throughout, which is the one shape that cannot go wrong. A real generator emits absolute
+paths, and that is where the first afternoon usually goes.
+
+This page is the same journey with a real build.
+
+<SiteTargetField />
+
+<Steps>
+
+<Step>
+
+### Create the site, and note its base path
+
+Create a site with the slug above. Its address is <Prefix kind="url" /> and its base path —
+the part every generator needs to be told about — is <Prefix />.
+
+You do not have to write that down. Once the site has a deploy token, the API will tell you:
+
+```http
+GET /api/v1/whoami
+Authorization: Bearer pbx_…
+
+200 { "slug": "…", "basePath": "…", "siteUrl": "…", "mode": "path", "maxUploadBytes": 104857600 }
+```
+
+Build against what `whoami` returns rather than a literal. When a site later moves to its
+own hostname, the same call answers `"basePath": "/"` and the next build comes out right
+without anyone editing a workflow.
+
+</Step>
+
+<Step>
+
+### Tell your generator
+
+Every static site generator has an option for "I will be served under a subpath", and in
+all of them **the option is necessary and not sufficient**: each prefixes some things
+automatically and leaves the rest to you.
+
+Pick yours. The value below is already written for the site you named above — including the
+trailing slash, which every tool disagrees about.
+
+<RecipeTabs />
+
+The line under **Yours to wrap** is the one that costs the afternoon. Setting the option
+makes the pages navigate; the images, the favicon and anything else in `public/` written
+with a leading slash still point at the root of the host. There is
+[a page per generator](/docs/generators) with the worked version.
+
+</Step>
+
+<Step>
+
+### Build, and check the output before uploading
+
+```bash
+grep -o 'src="[^"]*"' <output>/index.html | grep -v '^src="/s/'
+grep -o '<link rel="icon"[^>]*>' <output>/index.html
+```
+
+Anything that comes back pointing at `/` rather than <Prefix /> will 404 once deployed. It
+is cheaper to see it here than after the upload.
+
+</Step>
+
+<Step>
+
+### Deploy it by hand once
+
+Drag the **contents** of the output directory onto the drop area on the site's page.
+
+The [preflight](/docs/deploy/preflight) runs in the browser before anything leaves the
+machine. If you dropped the folder that *contains* the build rather than its contents, it
+says so and uses the inner directory. If it finds absolute references that would break, it
+names the exact config line for the generator it detected — and that warning is blocking:
+you can deploy anyway, and the acknowledgement is recorded on the deployment.
+
+<Shot
+  name="site-detail"
+  alt="A site's page: the drop area, storage figures, and the deployment history with a live marker and Make live buttons"
+  caption="After the first upload the site page shows what is live, what it weighs, and every deployment kept behind it."
+/>
+
+Open <Prefix kind="url" /> and click through more than the front page. The post-deploy
+check only reads `index.html`, so a broken path on a subpage is yours to spot.
+
+</Step>
+
+<Step>
+
+### Then let CI do it
+
+Issue a deploy token from the site's page — it is shown once and stored hashed — and put it
+in your repository's secrets. The workflow is four steps: ask `whoami` for the base path,
+build with it, zip, POST.
+
+The whole file is on [GitHub Actions](/docs/deploy/ci).
+
+</Step>
+
+</Steps>
+
+## What to do when it is wrong anyway
+
+<Accordions>
+
+<Accordion title="The page loads but every image is missing">
+The base path option is set and the assets are not going through it. That is the normal
+failure, and it is the **Yours to wrap** row of your generator's recipe: `next/image` with a
+literal `src`, a raw `<img src="/img/x.png">` in Docusaurus, any `public/` path in Astro.
+Open [your generator's page](/docs/generators).
+</Accordion>
+
+<Accordion title="The site root shows a directory listing, or a 404">
+The archive had everything one level deep — you zipped the folder rather than its contents.
+PageBox detects the single-top-level-directory case and uses it as the root, reporting
+`"root": "out"` in the response, but a mixed archive is left alone. Zip from inside the
+output directory: `(cd out && zip -qr ../site.zip .)`.
+</Accordion>
+
+<Accordion title="Everything 404s, including the front page">
+Check the site is serving. **Disable serving** takes a site off the air without deleting
+anything, and every request then answers 404 for everyone. Check too that the deployment
+finished: the live pointer only moves after every object is in S3, so a failed upload leaves
+the previous deployment serving.
+</Accordion>
+
+<Accordion title="The API answers 404 for a site you can see in the panel">
+The token is scoped to a different site. A token pointed at a site it was not issued for
+gets the same answer as a slug that does not exist, on purpose — it does not confirm which
+sites are there.
+</Accordion>
+
+</Accordions>

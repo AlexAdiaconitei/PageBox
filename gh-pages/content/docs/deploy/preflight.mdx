@@ -1,0 +1,107 @@
+---
+title: The preflight
+description: What the drop area checks before your build leaves the machine, and what it does not.
+---
+
+The preflight runs in the browser, before a single byte is uploaded. It is UX, not security
+— the server revalidates everything, and the client belongs to whoever is using it. What it
+buys is the difference between *"your site is broken"* an hour later and *"this build will
+not work under `/s/<slug>/`, here is the line to change"* before anything is sent.
+
+## What it does
+
+<Steps>
+
+<Step>
+### Picks the site root
+If every path in what you dropped sits inside a single directory, that directory becomes the
+site root. Otherwise the site would end up one directory deep and every path would be wrong.
+The panel says which directory it chose.
+</Step>
+
+<Step>
+### Drops what is never part of a build
+`node_modules/`, `.git/`, `__MACOSX/`, `.DS_Store`, `Thumbs.db`, and anything whose path has
+a dot-prefixed segment. That last rule also means a stray `.env` never gets uploaded.
+</Step>
+
+<Step>
+### Checks there is an index
+No `index.html` at the root and nothing will answer at the site's address. This one is
+blocking.
+</Step>
+
+<Step>
+### Reads the HTML for absolute references
+Up to ten HTML files. Anything matching `src="/…"`, `href="/…"` or `url(/…)` that does not
+already start with this site's base path is reported, with the exact config line for the
+generator it detected.
+</Step>
+
+<Step>
+### Counts and weighs
+Against `MAX_FILES` and the upload cap, so an archive that would be refused is refused here
+rather than after the upload.
+</Step>
+
+</Steps>
+
+## The warnings
+
+| Code | Means | Blocking |
+| ---- | ----- | -------- |
+| `root-guessed` | everything sat inside one folder, so that folder is the site root | no |
+| `missing-index` | no `index.html` at the root | **yes** |
+| `absolute-paths` | references that resolve outside this site and will 404 | **yes** |
+| `base-path-ok` | absolute references found, and they already carry the base path | no |
+| `generator-base-path` | the generator was recognised; here is its option and value | **yes** |
+| `too-many-files` | over `MAX_FILES` | **yes** |
+| `too-large` | over the upload cap | **yes** |
+| `excluded-junk` | files were dropped from the upload | no |
+
+<Callout type="info" title="A blocking warning is not a refusal">
+You can deploy anyway. The codes and the fact that somebody accepted them are recorded on
+the deployment — the panel sends `?warnings=<codes>&acknowledged=1`, and warnings without an
+acknowledgement are refused by the server with a `400`.
+</Callout>
+
+## What counts as a broken path
+
+A root-absolute reference is only wrong when it points **outside** this site.
+
+A build configured with the right base path emits `/s/<slug>/…` everywhere, and calling that
+broken is how a correct build gets told to fix itself. So the check compares against the
+site's own base path, and reports only what falls outside it.
+
+Protocol-relative URLs (`//cdn.example.com/…`) and `data:` URLs are left alone: they are
+somebody else's problem, not PageBox's.
+
+## What it cannot see
+
+- **Anything outside the first ten HTML files.** A docs site with two hundred pages gets ten
+  of them sampled.
+- **Paths assembled at runtime.** `'/img/' + name` is a string until the browser runs it.
+- **CSS and JavaScript files.** Only HTML is read. A `url()` in an external stylesheet is
+  not checked here — though the post-deploy check will resolve it if `index.html` references
+  the stylesheet.
+- **Anything on a subpage.** The post-deploy check reads only `index.html`, and only its
+  first 25 references.
+
+Which is why [the grep in the base paths guide](/docs/deploy/base-paths#two-limits-worth-knowing)
+is still worth running on a build you are not sure about.
+
+## The server-side checks
+
+These are not advisory. Every one of them rejects the upload with a `400` and a `reason`:
+
+| `reason` | Means |
+| -------- | ----- |
+| `zip-slip` | an entry escapes the deployment root — `../`, an absolute path, `C:/` |
+| `symlink` | an entry is a symlink |
+| `too-many-files` | over `MAX_FILES` |
+| `too-large` | expands past `MAX_UNCOMPRESSED_BYTES` |
+| `ratio` | compression ratio over `MAX_ZIP_RATIO`:1 — treated as a zip bomb |
+| `empty` | the archive holds no files |
+| `unreadable` | not a zip, or corrupt |
+
+A body over `MAX_UPLOAD_BYTES` is a `413` before any of that runs.

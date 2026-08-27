@@ -1,0 +1,95 @@
+---
+title: Docusaurus
+description: baseUrl with both slashes, and useBaseUrl for everything that is not a link.
+---
+
+<SiteTargetField />
+
+<Recipe id="docusaurus" />
+
+<Steps>
+
+<Step>
+
+### The config
+
+```js title="docusaurus.config.js"
+export default {
+  title: 'My docs',
+
+  // The origin. Used for canonical URLs, the sitemap and the RSS feed.
+  url: 'https://pages.example.com',
+
+  // The subpath. Docusaurus documents this with a slash at each end, and drops
+  // assets if either one is missing.
+  baseUrl: process.env.SITE_BASE_PATH ?? '/',
+};
+```
+
+<Callout type="warn" title="Both slashes">
+`'/s/docs/'` — not `'/s/docs'`, not `'s/docs/'`. This is the one value in the whole set
+where getting a slash wrong fails quietly rather than loudly.
+</Callout>
+
+</Step>
+
+<Step>
+
+### What Docusaurus handles
+
+- markdown links between pages;
+- `<Link to="/guide">` in React components;
+- images imported through the bundler, including `![alt](./img.png)` in markdown.
+
+</Step>
+
+<Step>
+
+### What is yours
+
+Assets that are not links. A raw `<img src="/img/x.png">` in a JSX component or in
+`themeConfig` stays exactly as written:
+
+```jsx
+import useBaseUrl from '@docusaurus/useBaseUrl';
+
+export function Logo() {
+  return <img src={useBaseUrl('/img/logo.png')} alt="" />;
+}
+```
+
+Better still, import it so the bundler owns the URL:
+
+```jsx
+<img src={require('@site/static/img/logo.png').default} alt="" />
+```
+
+The places it hides:
+
+- `themeConfig.navbar.logo.src` — usually written as `'img/logo.svg'` **without** a leading
+  slash, which is already relative and fine. With one, it breaks.
+- `themeConfig.image` for the social card.
+- `favicon` in the site config — relative, so leave the leading slash off.
+- any `<img>` inside an MDX page.
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+npm run build
+grep -ro 'src="/[^"]*"' build/ | grep -v '/s/<slug>/'
+```
+
+</Step>
+
+</Steps>
+
+## Official documentation
+
+- [`baseUrl`](https://docusaurus.io/docs/api/docusaurus-config#baseUrl)
+- [`url`](https://docusaurus.io/docs/api/docusaurus-config#url)
+- [`useBaseUrl()`](https://docusaurus.io/docs/docusaurus-core#usebaseurl)
+- [Static assets](https://docusaurus.io/docs/static-assets)

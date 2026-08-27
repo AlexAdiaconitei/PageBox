@@ -1,0 +1,121 @@
+---
+title: How a site is served
+description: Path resolution, the SPA fallback, caching, compression and what is always refused.
+---
+
+Resolution follows what real generators actually emit, in this order.
+
+## Path resolution
+
+| Request | Answered with |
+| ------- | ------------- |
+| `/s/docs/` | `index.html` |
+| `/s/docs/about` | `about.html`, then `about/index.html` |
+| `/s/docs/guide/` | `guide/index.html` |
+| anything unmatched, SPA **on** | `index.html`, status **200** |
+| anything unmatched, SPA **off** | the site's own `404.html`, status **404** |
+
+The extensionless case matters because generators disagree: Next with `trailingSlash: false`
+emits `about.html`, Astro and Hugo emit `about/index.html`. PageBox tries both rather than
+making you pick a generator.
+
+## SPA fallback
+
+A per-site setting. It changes one thing: what happens when no file matches.
+
+<Tabs items={['Off (default)', 'On']}>
+
+<Tab value="Off (default)">
+An unmatched path answers the site's own `404.html` with status **404**, or the PageBox 404
+page if the build does not ship one.
+
+This is what a multi-page site wants. Turning the fallback on would make every typo answer
+the front page with a 200, and search engines would index them.
+</Tab>
+
+<Tab value="On">
+An unmatched path answers `index.html` with status **200**, so a client-side router can take
+over.
+
+This is what a single-page application needs, and it means the site's own `404.html` never
+gets a chance to answer.
+
+It does **not** swallow assets: a request for a file that looks like an asset and is not
+there still 404s, so a missing chunk fails as a missing chunk rather than arriving as HTML.
+</Tab>
+
+</Tabs>
+
+The `examples/` directory has one of each — `04-multipage` needs it off, `05-spa` needs it
+on — which is the quickest way to see the difference.
+
+## Caching
+
+Chosen per file, from the filename:
+
+| File | Header |
+| ---- | ------ |
+| content-hashed (`main-a1b2c3d4.js`) | `public, max-age=31536000, immutable` |
+| everything else | `public, max-age=0, must-revalidate` |
+| anything on a private site | `private, no-store` |
+
+So a deploy is visible immediately and a hashed chunk is never fetched twice.
+
+`If-None-Match` and `If-Modified-Since` work, and so do byte ranges — a `Range` request
+against a PDF or a video answers `206` with the slice.
+
+<Callout type="warn" title="Private responses are never cacheable">
+Every private response carries `private, no-store` plus the CDN-specific headers — and that
+includes its 404s and redirects. One private asset cached at an edge is readable without a
+session, which would undo the whole access model.
+</Callout>
+
+## Compression
+
+If a deployment contains `main.js.br` or `main.js.gz` beside `main.js`, PageBox serves the
+precompressed sibling to a client that accepts that encoding, with the right
+`Content-Encoding` and `Vary`. Nothing is compressed at request time — the build already did
+it, better and once.
+
+Most generators can emit these. It is worth switching on for a large site.
+
+## What is always refused
+
+Whatever a deployment contains:
+
+- **dotfiles** — a `.env` that made it into a build is not served;
+- **`__pb/*`** — reserved for PageBox's own routes inside a site;
+- **path traversal** — `../` in any form, resolved before the lookup, not after.
+
+## When a site answers 404
+
+One page, one status, for every reason:
+
+- there is no site with that slug;
+- the site exists but serving has been switched off;
+- the site exists but has no deployment yet;
+- the site is private and the caller has no grant.
+
+Byte for byte identical, so the sites host never becomes a way to find out which private
+sites exist. The page says so plainly rather than leaving a visitor to guess.
+
+<Shot
+  name="not-found"
+  alt="The 404 page served on the sites host"
+  caption="Self-contained, in the reader's theme, with no stylesheet, script or image to fetch."
+/>
+
+A deployment that ships its own `404.html` still wins **inside its own site** — the PageBox
+page only answers when there is no site to ask.
+
+## Taking a site down
+
+**Disable serving** on the site page takes it off the air without deleting anything: every
+request answers 404, for everyone, and the deployments, grants and tokens stay where they
+are. Enabling it serves the same build again.
+
+**Delete site** is the other end of that: it removes the site with every deployment, object,
+grant and deploy token it has, and releases the slug. It is superadmin-only and asks for the
+slug to be typed back, because nothing undoes it.
+
+Reach for disable first.

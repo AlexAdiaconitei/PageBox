@@ -1,0 +1,215 @@
+---
+title: GitHub Actions
+description: Ask for the base path, build with it, zip, push — the whole workflow.
+---
+
+Four steps. The only one worth explaining is the first, and it is the one most workflows
+skip.
+
+<SiteTargetField />
+
+## The workflow
+
+```yaml title=".github/workflows/deploy.yml"
+name: Deploy to PageBox
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: pagebox-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # 1. Ask PageBox where this site lives, rather than writing it down.
+      - id: pb
+        run: |
+          curl -sfS https://pagebox.example.com/api/v1/whoami \
+            -H "Authorization: Bearer ${{ secrets.PAGEBOX_TOKEN }}" \
+            | jq -r '"base=" + .basePath' >> $GITHUB_OUTPUT
+
+      # 2. Build with it. The variable your generator reads differs — see below.
+      - run: npm run build
+        env:
+          SITE_BASE_PATH: ${{ steps.pb.outputs.base }}
+
+      # 3. Zip the *contents* of the output directory, not the directory.
+      - run: (cd dist && zip -qr ../site.zip .)
+
+      # 4. Push it.
+      - run: |
+          curl -sfS -X POST \
+            https://pagebox.example.com/api/v1/sites/docs-a/deployments \
+            -H "Authorization: Bearer ${{ secrets.PAGEBOX_TOKEN }}" \
+            -H "Content-Type: application/zip" \
+            -H "X-Deployment-Notes: ${{ github.sha }}" \
+            --data-binary @site.zip
+```
+
+## Why step 1 exists
+
+Hardcoding <Prefix /> in a workflow works until the site moves. `whoami` answers with the
+site's current base path, and when a site later gets its own hostname the same call returns
+`"basePath": "/"` — so the next build comes out right without anyone editing this file.
+
+It also means the workflow fails loudly if the token has been revoked, before spending five
+minutes on a build nobody can deploy.
+
+## Wiring the variable into your generator
+
+`SITE_BASE_PATH` is just a name this workflow picked. Your config has to read it:
+
+<Tabs items={['Next.js', 'Astro', 'Vite', 'SvelteKit', 'Docusaurus', 'Nuxt']}>
+
+<Tab value="Next.js">
+```js title="next.config.mjs"
+const basePath = (process.env.SITE_BASE_PATH ?? '').replace(/\/$/, '');
+
+export default {
+  output: 'export',
+  trailingSlash: true,
+  basePath,
+  images: { unoptimized: true },
+  env: { NEXT_PUBLIC_BASE_PATH: basePath },
+};
+```
+Output directory: `out`. Next refuses a trailing slash, hence the `replace`.
+</Tab>
+
+<Tab value="Astro">
+```js title="astro.config.mjs"
+import { defineConfig } from 'astro/config';
+
+export default defineConfig({
+  base: (process.env.SITE_BASE_PATH ?? '/').replace(/\/$/, ''),
+});
+```
+Output directory: `dist`. No trailing slash.
+</Tab>
+
+<Tab value="Vite">
+```ts title="vite.config.ts"
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  base: process.env.SITE_BASE_PATH ?? '/',
+});
+```
+Output directory: `dist`. Vite wants the trailing slash, which is how `whoami` reports it —
+no rewriting needed.
+</Tab>
+
+<Tab value="SvelteKit">
+```js title="svelte.config.js"
+import adapter from '@sveltejs/adapter-static';
+
+export default {
+  kit: {
+    adapter: adapter(),
+    paths: { base: (process.env.SITE_BASE_PATH ?? '').replace(/\/$/, '') },
+  },
+};
+```
+Output directory: `build`. No trailing slash.
+</Tab>
+
+<Tab value="Docusaurus">
+```js title="docusaurus.config.js"
+export default {
+  url: 'https://pages.example.com',
+  baseUrl: process.env.SITE_BASE_PATH ?? '/',
+};
+```
+Output directory: `build`. Docusaurus wants both slashes, which is what `whoami` returns.
+</Tab>
+
+<Tab value="Nuxt">
+```ts title="nuxt.config.ts"
+export default defineNuxtConfig({
+  app: { baseURL: process.env.SITE_BASE_PATH ?? '/' },
+});
+```
+Build with `npx nuxt generate`. Output directory: `.output/public`. Trailing slash kept.
+</Tab>
+
+</Tabs>
+
+Remember that setting the option is [necessary and not sufficient](/docs/deploy/base-paths)
+in all of them.
+
+## Things that bite in CI
+
+<Accordions>
+
+<Accordion title="The zip has everything one level deep">
+`zip -r site.zip dist` puts `dist/` inside the archive. PageBox detects the
+single-top-level-directory case and uses it as the root, reporting `"root": "dist"`, but do
+not rely on it — a mixed archive is left alone. Zip from inside:
+`(cd dist && zip -qr ../site.zip .)`.
+</Accordion>
+
+<Accordion title="Cloudflare Access in front of the admin host">
+The token API lives on the admin host, so an Access policy over it stops this workflow
+dead. Add a bypass policy for `/api/v1/*`, or send service tokens:
+
+```yaml
+-H "CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}"
+-H "CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}"
+```
+</Accordion>
+
+<Accordion title="413 on a build that used to fit">
+`MAX_UPLOAD_BYTES` defaults to 100 MB because Cloudflare's proxy rejects larger bodies on
+non-Enterprise plans. If nothing in front of your instance imposes a smaller cap, raise it —
+it propagates to the HTTP-level limit automatically. If the reason is `quota`, the site's
+owner is out of [storage](/docs/operate/storage), not the request too large.
+</Accordion>
+
+<Accordion title="429 from the token">
+120 calls an hour per token by default. Retry rather than rotating — a new key gets its own
+fresh window, which hides the fact that something is calling far more than it needs to.
+</Accordion>
+
+<Accordion title="Two workflows racing">
+The `concurrency` block above is not decoration. Two uploads finishing out of order would
+leave the older build live. With it, the in-flight run is cancelled and the newest push
+wins.
+</Accordion>
+
+</Accordions>
+
+## Failing the build on a broken deploy
+
+The upload response reports what the deployed page could not resolve. Fail on it:
+
+```bash
+response=$(curl -sfS -X POST "$ADMIN/api/v1/sites/$SLUG/deployments" \
+  -H "Authorization: Bearer $PAGEBOX_TOKEN" \
+  -H "Content-Type: application/zip" \
+  --data-binary @site.zip)
+
+echo "$response" | jq .
+
+broken=$(echo "$response" | jq -r '.brokenAssets')
+if [ "$broken" != "0" ]; then
+  echo "::error::$broken references in index.html do not resolve"
+  echo "$response" | jq -r '.brokenAssetSamples[]'
+  exit 1
+fi
+```
+
+It reads one file, so it is a smoke test rather than a guarantee — but it catches a base
+path that was never applied, which is the failure worth catching automatically.

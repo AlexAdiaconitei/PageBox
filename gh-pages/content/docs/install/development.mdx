@@ -1,0 +1,74 @@
+---
+title: Development
+description: Running PageBox from source, and the env-file trick that trips everybody once.
+---
+
+```bash
+pnpm install
+cp .env.example .env
+cp .env.local.example .env.local      # host-side overrides for the compose services
+docker compose up -d postgres minio   # dependencies only
+pnpm dev
+```
+
+Then open **http://pagebox.localhost:5173** for the panel and
+**http://pages.localhost:5173** for the sites.
+
+Plain `localhost` answers 404 on purpose: PageBox routes by hostname, and a request that is
+neither host is not its business.
+
+## Why there are two env files
+
+`.env` holds container hostnames, which only resolve inside the compose network.
+`.env.local` points the same variables at the published ports and is loaded after it.
+
+Both are read by the `dev` and `db:*` scripts through Node's `--env-file-if-exists`. **Vite
+does not put `.env` into `process.env`**, so without that flag the app starts and then
+refuses to serve, which looks like a configuration bug and is not one.
+
+## Scripts
+
+| Command | Does |
+| ------- | ---- |
+| `pnpm dev` | the app, with both env files loaded |
+| `pnpm check` | `svelte-check` over the project |
+| `pnpm test` | the unit tests, offline |
+| `pnpm db:generate` | writes a new migration after a schema change |
+| `pnpm db:migrate` | applies pending migrations |
+| `pnpm db:studio` | Drizzle Studio against the dev database |
+
+## The integration suite
+
+`pnpm test` runs offline. The integration suite needs a running stack and skips itself
+without one:
+
+```bash
+node scripts/seed-demo.mjs     # seeds /s/demo/, a private twin, and an account for the suite
+
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000 \
+PAGEBOX_E2E_EMAIL=e2e-admin@example.com \
+PAGEBOX_E2E_PASSWORD=e2e-admin-password \
+pnpm test
+```
+
+The suite issues its own deploy token through the panel, the same way a person would, rather
+than reaching into the database.
+
+Two more entry points:
+
+- `scripts/seed-demo.mjs --dir path/to/dist` publishes a real build instead of the generated
+  one.
+- `scripts/verify-real-build.mjs` takes a token directly, builds
+  `tests/fixtures/real-site` with Vite against whatever base path `whoami` returns, deploys
+  it, and fails if any reference in the served HTML does not resolve.
+
+```bash
+PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_… \
+  node scripts/verify-real-build.mjs
+```
+
+## Built on
+
+SvelteKit 2 with Svelte 5 on `adapter-node`, Postgres through Drizzle, S3 through the AWS
+SDK, better-auth for sessions and deploy tokens, Tailwind 4, and optionally Valkey once
+there is more than one replica. Node 22+.

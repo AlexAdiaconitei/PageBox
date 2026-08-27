@@ -1,0 +1,103 @@
+---
+title: Overview
+description: Two ways in, one result — an immutable deployment and a pointer you can move.
+---
+
+There are two ways to put a build on PageBox, and they land in the same place.
+
+<Cards>
+  <Card
+    title="Drag and drop"
+    href="#drag-and-drop"
+    description="From the site's page in the panel. Runs a preflight before anything is uploaded."
+  />
+  <Card
+    title="A zip and a token"
+    href="/docs/deploy/api"
+    description="One POST with the archive as the body. What CI does."
+  />
+</Cards>
+
+Both produce a deployment: one complete, immutable copy of the build, with its own ULID.
+Neither replaces anything — the previous deployment stays exactly where it was, which is
+what makes rollback a pointer move.
+
+## Drag and drop
+
+Open the site's page and drop the **contents** of your output directory on the drop area.
+
+The most common mistake is dropping the folder that contains the build rather than what is
+inside it, so PageBox handles it: when every path in what you dropped sits inside a single
+directory, that directory becomes the site root, and the panel tells you it did.
+
+Before anything leaves the machine, the [preflight](/docs/deploy/preflight) reads the HTML
+and warns about references that would break under `/s/<slug>/`. A blocking warning can be
+accepted — and the acknowledgement is recorded on the deployment.
+
+<Shot
+  name="site-detail"
+  alt="A site's page: the drop area, storage figures, and the deployment history"
+  caption="Drop area, storage figures, and the deployment history with its live marker."
+/>
+
+## From CI
+
+```bash
+curl -sfS -X POST https://pagebox.example.com/api/v1/sites/docs/deployments \
+  -H "Authorization: Bearer $PAGEBOX_TOKEN" \
+  -H "Content-Type: application/zip" \
+  -H "X-Deployment-Notes: $GITHUB_SHA" \
+  --data-binary @site.zip
+```
+
+The body is the zip itself — no multipart wrapper. The full request and response, every
+rejection reason, and the rest of the endpoints are on [the deploy API](/docs/deploy/api).
+
+## What happens after the upload
+
+<Steps>
+<Step>
+### The archive is validated
+Zip-slip, symlinks, file count, uncompressed size and compression ratio. A rejection is a
+`400` with a `reason`, and nothing is stored.
+</Step>
+<Step>
+### The objects are written
+Every file goes to S3 under the new deployment's id. A byte-identical archive is recognised
+and the existing deployment is returned instead, with `"reused": true`.
+</Step>
+<Step>
+### The pointer moves
+Only after every object is in place. A failed upload leaves the previous deployment serving.
+Pass `?activate=false` to store without going live.
+</Step>
+<Step>
+### Retention runs
+If the site has a [retention limit](/docs/operate/storage#retention), the deployments that
+fall past it are deleted — never the live one, and never before the new build is stored. The
+response names them in `pruned`.
+</Step>
+<Step>
+### The result is checked
+PageBox reads the deployed `index.html` back, resolves everything it references the way the
+site actually serves it, and answers with `brokenAssets` and `brokenAssetSamples`.
+</Step>
+</Steps>
+
+## Rolling back
+
+**Make live** on any deployment in the history, or:
+
+```http
+POST /api/v1/sites/{slug}/deployments/{id}/activate
+```
+
+Nothing is rebuilt and nothing is re-uploaded. The next request serves the older bytes.
+Rolling forward again is the same call on the newer id — deployments are immutable, so
+moving the pointer never loses one.
+
+## Before you deploy anything real
+
+Read [base paths](/docs/deploy/base-paths). A PageBox site is served under `/s/<slug>/`,
+never at a domain root, and getting that wrong is the single most common way a site that
+works locally 404s once it is deployed.

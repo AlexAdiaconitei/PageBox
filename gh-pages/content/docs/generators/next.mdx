@@ -1,0 +1,170 @@
+---
+title: Next.js
+description: basePath, and the five other lines a static export under a subpath needs.
+---
+
+Applies equally to **Fumadocs** and **Nextra**, which are Next applications and take the
+same options. This very site is one of them, built with the config below.
+
+<SiteTargetField />
+
+<Recipe id="next" />
+
+## Why it is more than one line
+
+`next/link` applies `basePath` for navigation. `next/image` **does not** apply it to `src`.
+With `output: 'export'` there is also no server behind `/_next/image`, so the optimiser
+cannot run at all.
+
+Set only `basePath` and you get a site whose pages work and whose images, favicon and every
+other `public/` asset 404.
+
+<Steps>
+
+<Step>
+
+### The config
+
+```js title="next.config.mjs"
+/*
+ * Read the prefix from the environment so CI can pass what /api/v1/whoami returned,
+ * rather than a literal that goes stale the day the site moves.
+ */
+const basePath = (process.env.SITE_BASE_PATH ?? '').replace(/\/$/, '');
+
+/** @type {import('next').NextConfig} */
+const config = {
+  output: 'export',      // a static export; without it you get a server build
+  trailingSlash: true,   // emits /docs/index.html rather than /docs.html
+
+  basePath,
+  images: { unoptimized: true },        // required: no optimiser in an export
+  env: { NEXT_PUBLIC_BASE_PATH: basePath }, // so the helper below can read it
+};
+
+export default config;
+```
+
+`basePath` refuses a trailing slash and PageBox reports the base path with one, hence the
+`replace`.
+
+<Callout type="info" title="trailingSlash">
+Not strictly required, but recommended on a plain file server. Without it Next emits
+`/docs.html` and relies on a rewrite rule to answer `/docs` — PageBox resolves both, so it
+works either way, but `index.html` inside a directory is the shape every static host agrees
+on.
+</Callout>
+
+</Step>
+
+<Step>
+
+### One helper, in one place
+
+```ts title="src/lib/base-path.ts"
+export const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+
+export function withBasePath(path: string): string {
+  return `${basePath}${path}`;
+}
+```
+
+Keeping it in one module matters more than it looks: the alternative is the prefix written
+as a literal in a dozen components, and the day the site moves you find eleven of them.
+
+</Step>
+
+<Step>
+
+### Where to apply it
+
+Any absolute path to something in `public/` that does **not** go through `next/link`:
+
+```tsx title="app/layout.tsx"
+import type { Metadata } from 'next';
+import { withBasePath } from '@/lib/base-path';
+
+export const metadata: Metadata = {
+  icons: { icon: withBasePath('/brand/favicon.svg') },
+};
+```
+
+```tsx title="any component"
+import Image from 'next/image';
+import { withBasePath } from '@/lib/base-path';
+
+<Image src={withBasePath('/brand/logo.png')} width={64} height={64} alt="" />;
+```
+
+The full list:
+
+- `metadata.icons` in `app/layout.tsx` — the favicon, and the one that slips through most
+  often because nothing on the page looks broken;
+- the `src` of any `next/image` written as a literal;
+- paths read out of JSON or a manifest — wrap them **where they are consumed**, never bake
+  the prefix into the file;
+- any `url()` in CSS pointing at `public/` by absolute path. Bundler-imported URLs are fine.
+
+</Step>
+
+<Step>
+
+### What needs no change
+
+- `next/link` with `href="/docs"` — Next prefixes it already.
+- Images imported through the bundler (`import logo from './logo.png'`) — the final URL is
+  resolved with the base path in it.
+- Anything under `_next/static` — served with the prefix automatically.
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+npx next build
+
+# Every path to your own assets should carry the prefix, and none should be raw.
+grep -o 'src="[^"]*"' out/index.html | grep -v _next
+grep -o '<link rel="icon"[^>]*>' out/index.html
+```
+
+Three things to look for:
+
+| Seen | Means |
+| ---- | ----- |
+| `/s/<slug>/brand/logo.png` | correct |
+| `/brand/logo.png` | the helper was not applied here |
+| `/_next/image?url=…` | `images.unoptimized` is missing |
+
+</Step>
+
+</Steps>
+
+## Checklist
+
+- [ ] `basePath` defined once, read from the environment
+- [ ] `images.unoptimized: true` alongside `output: 'export'`
+- [ ] `NEXT_PUBLIC_BASE_PATH` exposed through `env`
+- [ ] a single `withBasePath()`, no repeated literals
+- [ ] `metadata.icons` wrapped
+- [ ] every `next/image` with a literal path wrapped
+- [ ] manifest and JSON paths wrapped where consumed, not in the file
+- [ ] build checked with `grep` over `out/`
+
+## What an export cannot do
+
+Worth knowing before you find out at build time: no `middleware`, no route handlers that run
+per request, no ISR, no `next/image` optimisation, no server actions. Next's
+[Static Exports guide](https://nextjs.org/docs/app/guides/static-exports) lists the full set.
+
+PageBox hosts the output of a build, so all of that is out of scope by definition — but a
+Next application that has never been exported before usually has one of them in it.
+
+## Official documentation
+
+- [`basePath`](https://nextjs.org/docs/app/api-reference/config/next-config-js/basePath)
+- [Static Exports](https://nextjs.org/docs/app/guides/static-exports)
+- [`images.unoptimized`](https://nextjs.org/docs/app/api-reference/components/image#unoptimized)
+- [`trailingSlash`](https://nextjs.org/docs/app/api-reference/config/next-config-js/trailingSlash)

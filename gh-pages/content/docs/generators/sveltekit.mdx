@@ -1,0 +1,117 @@
+---
+title: SvelteKit
+description: adapter-static and paths.base — either one alone gives a site that half works.
+---
+
+Two things have to be true at once: the app has to be **prerendered to files**, and it has
+to know its **base path**. Setting one without the other gives a site that half works, which
+is harder to diagnose than one that plainly does not.
+
+<SiteTargetField />
+
+<Recipe id="sveltekit" />
+
+<Steps>
+
+<Step>
+
+### Install the adapter
+
+```bash
+npm i -D @sveltejs/adapter-static
+```
+
+Without it, `npm run build` produces a Node server, which is not something PageBox can host.
+
+</Step>
+
+<Step>
+
+### The config
+
+```js title="svelte.config.js"
+import adapter from '@sveltejs/adapter-static';
+
+export default {
+  kit: {
+    adapter: adapter({
+      // A single-page app instead: see the SPA note below.
+      fallback: undefined,
+    }),
+    paths: {
+      // SvelteKit refuses a trailing slash.
+      base: (process.env.SITE_BASE_PATH ?? '').replace(/\/$/, ''),
+    },
+  },
+};
+```
+
+</Step>
+
+<Step>
+
+### Turn prerendering on
+
+```ts title="src/routes/+layout.ts"
+export const prerender = true;
+```
+
+Every route that is not prerendered is a route the adapter cannot emit. The build tells you
+which ones, by name.
+
+</Step>
+
+<Step>
+
+### Prefix your own paths
+
+The bundle under `_app/immutable/` is handled. Your own hrefs and asset paths are not:
+
+```svelte
+<script>
+  import { resolve } from '$app/paths';
+</script>
+
+<a href={resolve('/guide')}>Guide</a>
+<img src={resolve('/brand/logo.png')} alt="" />
+```
+
+<Callout type="info" title="resolve(), not base">
+`base` from `$app/paths` still exists and still works, but the documentation now points at
+`resolve()`. Worth naming which one, because the deprecated answer is the one most guides
+still give.
+</Callout>
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+npm run build
+grep -o 'href="[^"]*"' build/index.html | grep -v _app
+```
+
+</Step>
+
+</Steps>
+
+## If it is a single-page app
+
+Give the adapter a fallback document and switch **SPA fallback** on in the site's settings:
+
+```js
+adapter({ fallback: 'index.html' })
+```
+
+Then a path with no file behind it answers `index.html` with a 200, and the client router
+takes over. See [how a site is served](/docs/operate/serving#spa-fallback) — and note that
+turning it on means the site's own `404.html` never gets a chance to answer.
+
+## Official documentation
+
+- [`paths`](https://svelte.dev/docs/kit/configuration#paths)
+- [`adapter-static`](https://svelte.dev/docs/kit/adapter-static)
+- [`$app/paths`](https://svelte.dev/docs/kit/$app-paths)
+- [Page options — `prerender`](https://svelte.dev/docs/kit/page-options#prerender)

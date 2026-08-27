@@ -1,0 +1,47 @@
+name: Docs → PageBox
+
+# Deploys the documentation site to a PageBox instance — the same workflow the docs tell
+# everyone else to write, running against PageBox's own docs.
+#
+# Needs three secrets and one variable:
+#   secrets.PAGEBOX_ADMIN   https://pagebox.example.com
+#   secrets.PAGEBOX_TOKEN   the pbx_ deploy token issued for the site
+#   vars.PAGEBOX_SLUG       the site's slug, e.g. docs
+#
+# It is manual and on-release rather than on every push: GitHub Pages is the canonical
+# home, and this is the copy that proves the product hosts its own documentation.
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pagebox
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gh-pages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: gh-pages/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+
+      - run: ./scripts/deploy-to-pagebox.sh
+        env:
+          PAGEBOX_ADMIN: ${{ secrets.PAGEBOX_ADMIN }}
+          PAGEBOX_TOKEN: ${{ secrets.PAGEBOX_TOKEN }}
+          PAGEBOX_SLUG: ${{ vars.PAGEBOX_SLUG }}
+          DEPLOY_NOTES: ${{ github.sha }}

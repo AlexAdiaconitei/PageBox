@@ -1,0 +1,60 @@
+---
+title: Documentation
+description: Run PageBox, put a build on it, and give the right people access to it.
+---
+
+PageBox is static hosting you run yourself. It never builds anything: it receives an
+artifact that is already built — a `dist/`, a zip, a lone `index.html` — stores it whole,
+and serves it under `/s/<slug>/`. A site is public or private, and on a private one every
+asset goes through the authorisation check, not just the HTML.
+
+These pages are in the order you will need them.
+
+<Cards>
+  <Card
+    title="Quickstart"
+    href="/docs/start/quickstart"
+    description="A running instance and a deployed site, from an empty directory."
+  />
+  <Card
+    title="How it fits together"
+    href="/docs/start/concepts"
+    description="Two hostnames, sites, deployments, grants and tokens — what each one is for."
+  />
+  <Card
+    title="Base paths"
+    href="/docs/deploy/base-paths"
+    description="The single most common reason a site that works locally 404s once deployed."
+  />
+  <Card
+    title="Deploy API"
+    href="/docs/deploy/api"
+    description="Push a build from CI with a token scoped to one site."
+  />
+</Cards>
+
+## If you already know what you are looking for
+
+| You want to | Read |
+| ----------- | ---- |
+| get it running on your machine | [Docker Compose](/docs/install/docker-compose) |
+| get it running on a server | [Dokploy](/docs/install/dokploy) |
+| fix a site whose images 404 | [Base paths](/docs/deploy/base-paths), then [your generator](/docs/generators) |
+| deploy on every push | [GitHub Actions](/docs/deploy/ci) |
+| understand who can see what | [Accounts, roles and grants](/docs/operate/access) |
+| know what a given URL will answer | [How a site is served](/docs/operate/serving) |
+| stop the bucket filling up | [Storage and retention](/docs/operate/storage) |
+| work out what an error means | [Troubleshooting](/docs/reference/troubleshooting) |
+
+## What PageBox does not do
+
+It is worth being clear early, because the shape of everything else follows from it.
+
+- **It does not build.** No repository is cloned, no install step runs, no framework is
+  detected. You build, and you send the result.
+- **It does not have a sign-up page.** Accounts are issued by somebody who already has one.
+- **It does not give each site a hostname yet.** Every site lives under a path on one
+  hostname, `/s/<slug>/`. That is why base paths matter so much here.
+- **It does not delete a build to make room for a new one unless you ask.** Every
+  deployment is kept whole, which is what makes rollback a pointer move — and what makes
+  [retention limits](/docs/operate/storage) worth setting.

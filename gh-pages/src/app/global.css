@@ -1,0 +1,179 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/* Fumadocs toggles a `.dark` class on <html>; Tailwind v4's default `dark:` variant reads
+   prefers-color-scheme instead. Without this line the theme switcher moves the Fumadocs
+   colours and leaves every `dark:` utility on this site behind. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/**
+ * PageBox documentation — the panel's console, opened out into a reading surface.
+ *
+ * The palette comes from src/app.css in the application: a cool near-neutral page,
+ * hairline rules instead of borders, and exactly one accent — the teal that means "this is
+ * the deployment being served". It is spent on that state and on links, and on nothing
+ * else, so it keeps meaning something here too.
+ *
+ * Three values are deliberately not the panel's. The console is glanced at; a docs page is
+ * read for ten minutes, so --pb-muted, --pb-faint and the light-mode accent are each a step
+ * darker than their counterparts, until every one of them clears 4.5:1 on the page behind
+ * it. Same hues, same relationships, more contrast.
+ *
+ * Three faces, each with a job the others do not do:
+ *   Instrument Sans  headings — the only place the site raises its voice
+ *   Inter            prose — the panel's own UI face
+ *   JetBrains Mono   anything the machine said: paths, slugs, ULIDs, status codes
+ *
+ * That last split is the house rule. The panel sets everything copyable in mono; this
+ * site keeps it, which is why `/s/<slug>/` reads the same on the landing page, in a code
+ * block and in a table cell.
+ */
+
+:root {
+  --pb-page: oklch(0.985 0.002 250);
+  --pb-rail: oklch(0.955 0.003 250);
+  --pb-panel: oklch(1 0 0);
+  --pb-ink: oklch(0.22 0.012 260);
+  --pb-muted: oklch(0.45 0.014 260);
+  --pb-faint: oklch(0.545 0.013 260);
+  --pb-line: oklch(0.22 0.012 260 / 0.11);
+  --pb-line-soft: oklch(0.22 0.012 260 / 0.06);
+  --pb-accent: oklch(0.5 0.115 172);
+  --pb-accent-ink: oklch(0.99 0 0);
+  --pb-accent-soft: oklch(0.5 0.115 172 / 0.12);
+  --pb-danger: oklch(0.53 0.19 25);
+  --pb-danger-soft: oklch(0.53 0.19 25 / 0.1);
+  --pb-warn: oklch(0.53 0.12 62);
+  --pb-warn-soft: oklch(0.53 0.12 62 / 0.12);
+  --pb-raise: oklch(0.972 0.003 250);
+  --pb-raise-hover: oklch(0.953 0.004 250);
+
+  color-scheme: light;
+}
+
+.dark {
+  --pb-page: oklch(0.19 0.008 260);
+  --pb-rail: oklch(0.165 0.008 260);
+  --pb-panel: oklch(0.215 0.008 260);
+  --pb-ink: oklch(0.93 0.006 260);
+  --pb-muted: oklch(0.7 0.012 260);
+  --pb-faint: oklch(0.625 0.012 260);
+  --pb-line: oklch(1 0 0 / 0.1);
+  --pb-line-soft: oklch(1 0 0 / 0.06);
+  --pb-accent: oklch(0.74 0.13 172);
+  --pb-accent-ink: oklch(0.17 0.02 172);
+  --pb-accent-soft: oklch(0.74 0.13 172 / 0.16);
+  --pb-danger: oklch(0.68 0.16 25);
+  --pb-danger-soft: oklch(0.68 0.16 25 / 0.14);
+  --pb-warn: oklch(0.78 0.12 75);
+  --pb-warn-soft: oklch(0.78 0.12 75 / 0.14);
+  --pb-raise: oklch(0.25 0.009 260);
+  --pb-raise-hover: oklch(0.278 0.01 260);
+
+  color-scheme: dark;
+}
+
+@theme {
+  /* Fumadocs reads these; every one of them resolves to a panel token above, which is
+     why the docs and the application cannot drift apart. `fd-accent` is a hover surface
+     in Fumadocs, not a brand colour — the brand teal is `fd-primary`. */
+  --color-fd-background: var(--pb-page);
+  --color-fd-foreground: var(--pb-ink);
+  --color-fd-muted: var(--pb-rail);
+  --color-fd-muted-foreground: var(--pb-muted);
+  --color-fd-popover: var(--pb-panel);
+  --color-fd-popover-foreground: var(--pb-ink);
+  --color-fd-card: var(--pb-panel);
+  --color-fd-card-foreground: var(--pb-ink);
+  --color-fd-border: var(--pb-line);
+  --color-fd-primary: var(--pb-accent);
+  --color-fd-primary-foreground: var(--pb-accent-ink);
+  --color-fd-secondary: var(--pb-raise);
+  --color-fd-secondary-foreground: var(--pb-ink);
+  --color-fd-accent: var(--pb-raise);
+  --color-fd-accent-foreground: var(--pb-ink);
+  --color-fd-ring: var(--pb-accent);
+
+  /* Named for what they mean, not for their hue: the same teal is `live` on the ledger
+     and the link colour in prose, and it should be obvious in the markup which one is
+     being asked for. */
+  --color-pb-page: var(--pb-page);
+  --color-pb-panel: var(--pb-panel);
+  --color-pb-rail: var(--pb-rail);
+  --color-pb-ink: var(--pb-ink);
+  --color-pb-muted: var(--pb-muted);
+  --color-pb-faint: var(--pb-faint);
+  --color-pb-line: var(--pb-line);
+  --color-pb-line-soft: var(--pb-line-soft);
+  --color-pb-live: var(--pb-accent);
+  --color-pb-live-ink: var(--pb-accent-ink);
+  --color-pb-live-soft: var(--pb-accent-soft);
+  --color-pb-refused: var(--pb-danger);
+  --color-pb-refused-soft: var(--pb-danger-soft);
+  --color-pb-redirect: var(--pb-warn);
+  --color-pb-redirect-soft: var(--pb-warn-soft);
+  --color-pb-raise: var(--pb-raise);
+  --color-pb-raise-hover: var(--pb-raise-hover);
+
+  --font-display: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+html {
+  scrollbar-gutter: stable;
+  -webkit-font-smoothing: antialiased;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* Numbers in a table are read against each other — sizes, counts, timestamps. */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  /* The panel's own label style, down to the tracking. It marks a section without
+     spending a heading level on it. */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--pb-muted);
+  }
+
+  /* Headings raise their voice by tightening, not by growing: the display face is cut
+     for it, and a console should not shout. */
+  .display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.028em;
+    line-height: 1.04;
+    text-wrap: balance;
+  }
+}
+
+/* Docs pages: give the titles the display face too, so a page heading and a landing
+   heading are recognisably the same voice. */
+#nd-page h1,
+#nd-page h2,
+#nd-page h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+#nd-page h1 {
+  font-weight: 600;
+}
+
+/* The sidebar and the table of contents are navigation, not prose — the panel sets its
+   rail in the same small, quiet register. */
+#nd-docs-layout [data-slot='sidebar'] {
+  font-size: 0.875rem;
+}

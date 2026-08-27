@@ -1,0 +1,106 @@
+---
+title: Storage and retention
+description: Why the bucket grows, how to bound it, and how quotas add up.
+---
+
+Every deployment is a **full** copy of the build. That is what makes rollback a pointer move
+— and what makes a site deployed on every push grow without bound.
+
+Two mechanisms bound it: retention, per site, and quotas, per admin.
+
+## Retention
+
+A site can carry a retention limit — set when it is created, or later in its settings. Each
+upload then deletes the deployments that fall past it.
+
+Two things it never does:
+
+- **prune the live deployment**, whatever its position in the list;
+- **prune before the new build is stored**, so a failed upload cannot cost you the history
+  as well.
+
+It is not silent either. The panel names what the next deploy will delete before you press
+it, and the API answers with `pruned` and `prunedBytes`.
+
+```json
+{
+  "retentionLimit": 5,
+  "pruned": ["01JQ2C0BE5T7Q1WH6D4N"],
+  "prunedBytes": 4693110
+}
+```
+
+<Callout type="info" title="Pick a number you would actually roll back to">
+Five is a reasonable default for a site deployed a few times a day. The value of a
+deployment is that you might make it live again; a build from two hundred pushes ago is
+storage, not insurance.
+</Callout>
+
+Without a limit, `retentionLimit` is `null` and nothing is ever pruned automatically. You can
+always delete a deployment by hand — `DELETE /api/v1/sites/{slug}/deployments/{id}`, which
+answers `409` on the live one.
+
+## Quotas
+
+An admin may occupy so many bytes of the bucket, counted across **every deployment their
+sites still hold** — not just the live one, because a build kept for rollback takes exactly
+as much disk as the one being served.
+
+Storage is charged to the site's **owner**, so a deployer pushing to somebody else's site
+spends that owner's allowance.
+
+### The pool
+
+`PAGEBOX_STORAGE_BYTES` is what the instance has to give away, and it is a number somebody
+writes down: S3 has no capacity API, and MinIO and Garage report disk size only through their
+own non-S3 admin interfaces. Leave it unset and per-admin quotas still hold — there is just
+no pool arithmetic.
+
+With it set, the pool is hard:
+
+- quotas may not sum past the total;
+- the **superadmin has no quota of its own**. Its allowance is the remainder, so every quota
+  it hands out visibly shrinks its own room;
+- an allocation is refused twice over: when the pool has not got it, and when it would leave
+  the seat less than it is already using.
+
+### What happens at the edges
+
+| Situation | What happens |
+| --------- | ------------ |
+| Upload larger than what is left | `413`, with `reason: "quota"` and the figures. Nothing is written — the archive's own directory is measured first |
+| Retention would free space on this deploy | Counted **before** the fact, so a site keeping its last *N* builds stays deployable at its ceiling |
+| Quota lowered below current usage | Allowed. Sites keep serving, nothing is deleted; the next upload is refused until they are under it |
+| Admin demoted while owning sites | Refused. Only admins hold quota, so transfer the sites first |
+| Site handed to another admin | Its bytes move to the new owner's allocation, refused unless that admin has room |
+| Site with no owner | Unmetered, and reported as such — it occupies the bucket against nobody's allocation |
+
+Existing admins are given `PAGEBOX_DEFAULT_QUOTA_BYTES` at the first boot after the quota
+feature was added, so an upgrade does not leave anybody at zero.
+
+## The upload cap
+
+`MAX_UPLOAD_BYTES` defaults to **100 MB**. The default exists because Cloudflare's proxy
+rejects larger request bodies on non-Enterprise plans, which is the first deployment target.
+
+A deployment that is not behind Cloudflare — plain Traefik, a LAN, Tailscale, a direct port —
+can raise it freely. The value also becomes adapter-node's `BODY_SIZE_LIMIT`, so the
+app-level cap and the HTTP-level cap can never drift apart.
+
+<Callout type="warn" title="413 has two meanings">
+`reason: "quota"` is the owner being out of room. No reason, or a plain 413 with no body, is
+the request being larger than the cap. They need different fixes.
+</Callout>
+
+## Reading the numbers
+
+The Sites screen totals what the instance is holding, and each site's row carries its own:
+
+<Shot
+  name="sites"
+  alt="The Sites screen: six sites with their address, access, storage and when each went live"
+  caption="Sites, live count, what is being served, what is stored behind it, and the room left."
+/>
+
+**Stored** is every deployment a site still holds. **Serving** is just the live one. The gap
+between them is what retention is for.

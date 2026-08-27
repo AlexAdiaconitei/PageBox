@@ -1,0 +1,203 @@
+---
+title: Troubleshooting
+description: What each answer means, starting from what you saw.
+---
+
+Organised by symptom, because that is what you have when you arrive here.
+
+## The site
+
+<Accordions>
+
+<Accordion title="Everything 404s, including the front page">
+Four things answer the same 404 on purpose, so work through them in order:
+
+1. **No such slug.** Check the spelling against the panel.
+2. **Serving is switched off.** *Disable serving* takes a site off the air without deleting
+   anything. The site page says so.
+3. **No deployment yet.** An upload that failed leaves the site with nothing live.
+4. **Private, and you have no grant.** Sign in on the sites host, or ask for one.
+
+The identical answer is deliberate: it stops the sites host being a way to find out which
+private sites exist. See [how a site is served](/docs/operate/serving#when-a-site-answers-404).
+</Accordion>
+
+<Accordion title="The page loads but every image is missing">
+The base path is set and the assets are not going through it. This is the normal failure and
+it has a page: [base paths](/docs/deploy/base-paths), then
+[your generator](/docs/generators) for the helper that covers the gap.
+
+Confirm it in one command:
+
+```bash
+curl -s https://pages.example.com/s/docs/ | grep -o 'src="[^"]*"'
+```
+
+Anything starting `/` and not `/s/docs/` will 404.
+</Accordion>
+
+<Accordion title="The site root shows a directory listing or a 404, but the files are there">
+The archive had everything one level deep — `zip -r site.zip out` puts `out/` inside it.
+
+PageBox detects the single-top-level-directory case and uses it as the root, reporting
+`"root": "out"`, but a mixed archive is left alone. Zip from inside:
+
+```bash
+(cd out && zip -qr ../site.zip .)
+```
+</Accordion>
+
+<Accordion title="Deep links 404, but the front page works">
+A client-routed application without **SPA fallback**. Switch it on in the site's settings and
+an unmatched path answers `index.html` with a 200.
+
+The reverse symptom — every typo answering the front page instead of your `404.html` — is the
+fallback switched on where it should not be. [How a site is served](/docs/operate/serving#spa-fallback).
+</Accordion>
+
+<Accordion title="A new deploy is live but browsers still show the old page">
+Check what is actually live in the panel first — the marker, not the memory.
+
+If it is right, the response is being cached somewhere in front. PageBox serves unhashed
+files `must-revalidate` and hashed files `immutable`, so an unhashed `index.html` should
+never be stale. A CDN configured to cache HTML regardless will be. Purge it, and stop it
+caching HTML on this host.
+</Accordion>
+
+</Accordions>
+
+## The upload
+
+<Accordions>
+
+<Accordion title="400 with a reason">
+| `reason` | Fix |
+| -------- | --- |
+| `zip-slip` | an entry escapes the root — rebuild the archive from inside the output directory |
+| `symlink` | remove the symlink, or dereference it when zipping (`zip -y` keeps them; omit it) |
+| `too-many-files` | over `MAX_FILES`. Usually `node_modules` got in |
+| `too-large` | expands past `MAX_UNCOMPRESSED_BYTES` |
+| `ratio` | compression ratio over `MAX_ZIP_RATIO`:1 — treated as a bomb |
+| `empty` | the archive holds no files |
+| `unreadable` | not a zip, or corrupt. Check the `Content-Type` and that `--data-binary` was used, not `-d` |
+</Accordion>
+
+<Accordion title="413">
+Two different problems.
+
+- **`reason: "quota"`** — the site's owner is out of [storage](/docs/operate/storage). The
+  figures are in the response. Set a retention limit, delete some deployments, or raise the
+  quota.
+- **No reason** — the body is over `MAX_UPLOAD_BYTES`, 100 MB by default. Raise it if nothing
+  in front of PageBox imposes a smaller cap; behind Cloudflare on a non-Enterprise plan, it
+  cannot go higher.
+</Accordion>
+
+<Accordion title="401">
+The token is unknown, disabled or expired. Reissue it — a token is stored only as a hash and
+cannot be recovered.
+</Accordion>
+
+<Accordion title="404 on a site you can see in the panel">
+The token is scoped to a different site. Tokens are per site, and pointing one at another
+gets the same answer as a slug that does not exist.
+
+It can also mean the owner's permission changed: a token resolves its owner's grant on every
+call, so a revoked grant or a suspended account produces exactly this.
+</Accordion>
+
+<Accordion title="429">
+This token has made too many calls in its window — 120 an hour by default. **Retry, do not
+rotate.** A new key gets a fresh window and hides the fact that something is calling far more
+often than it needs to.
+</Accordion>
+
+<Accordion title="403 from the drop area, but the API works">
+A cookie-authenticated upload must carry an `Origin` from the admin host. That is the request
+a browser can be tricked into making, so it is checked. If you are proxying the panel, make
+sure the `Origin` header survives.
+</Accordion>
+
+</Accordions>
+
+## Startup
+
+<Accordions>
+
+<Accordion title="The container exits immediately">
+Read the last line before the exit. The usual causes:
+
+- **the two hostnames match** — `PAGEBOX_ADMIN_HOST` and `PAGEBOX_SITES_HOST` must differ;
+- **a placeholder secret with a real hostname** — the shipped `AUTH_SECRET` and bootstrap
+  password are recognised and refused once the host is not `*.localhost`;
+- **`PAGEBOX_REPLICAS` above 1 with no `REDIS_URL`** — the grant cache would be per-process;
+- **an unreachable database or bucket** — migrations and bucket creation run at boot, and a
+  failure exits rather than serving half-configured traffic.
+</Accordion>
+
+<Accordion title="The app starts in development and then refuses to serve">
+`.env` was not loaded. Vite does not put `.env` into `process.env`; the `dev` script reads
+both `.env` and `.env.local` through Node's `--env-file-if-exists`. Run `pnpm dev` rather
+than `vite dev`. See [development](/docs/install/development#why-there-are-two-env-files).
+</Accordion>
+
+<Accordion title="Plain localhost answers 404">
+It is meant to. PageBox routes by hostname, and a request that is neither the admin host nor
+the sites host is not its business. Use `pagebox.localhost` and `pages.localhost`, or send a
+`Host` header:
+
+```bash
+curl -H "Host: pagebox.localhost" http://127.0.0.1:3000/healthz
+```
+</Accordion>
+
+<Accordion title="*.localhost does not resolve">
+Some systems do not map it to `127.0.0.1`. Add both names to your hosts file, or address the
+app with a `Host` header as above.
+</Accordion>
+
+</Accordions>
+
+## Access
+
+<Accordions>
+
+<Accordion title="Nobody can sign in and the superadmin password is lost">
+There is no email delivery yet, so recovery needs access to the deployment:
+
+```bash
+node scripts/set-password.mjs --email you@example.com --password "…"
+```
+
+It revokes every session of that account and requires the password to be changed at next
+sign-in. [Recovery](/docs/operate/access#recovery).
+</Accordion>
+
+<Accordion title="An admin cannot see an account they are sure they created">
+An admin only administers accounts it issued — `created_by_user_id`. Accounts that predate
+that column belong to nobody, and only the superadmin can act on them.
+</Accordion>
+
+<Accordion title="An admin cannot open a site that clearly exists">
+`admin` resolves to no per-site permission. It reaches a site by having created it or by
+being granted it, exactly like anyone else. Grant it, or act as the superadmin.
+</Accordion>
+
+<Accordion title="Sign-ins are being throttled for everybody at once">
+`XFF_DEPTH` is wrong. Rate limiting keys on the client address taken from
+`X-Forwarded-For`, and with two proxies in front and `XFF_DEPTH=1` every caller looks like
+the inner proxy. [Behind a proxy](/docs/operate/configuration#behind-a-proxy).
+</Accordion>
+
+</Accordions>
+
+## Still stuck
+
+`/healthz` probes Postgres and S3 and answers on any host:
+
+```bash
+curl -H "Host: pagebox.example.com" https://pagebox.example.com/healthz
+```
+
+Then the [activity log](/docs/operate/access#the-audit-log), filtered to the site or the
+actor. Every deploy, rollback, grant, token and sign-in attempt is in it, successful or not.

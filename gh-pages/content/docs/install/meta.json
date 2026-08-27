@@ -1,0 +1,4 @@
+{
+  "title": "Installing",
+  "pages": ["docker-compose", "dokploy", "development"]
+}

@@ -1,0 +1,174 @@
+---
+title: Quickstart
+description: A running instance and a site serving a real build, in about five minutes.
+---
+
+This gets you a PageBox on your own machine with its own Postgres and MinIO, so there is
+nothing to provision first. It is the same image and the same startup path you would run on
+a server — only the database and bucket are throwaway.
+
+<Callout type="info" title="What you need">
+Docker with the Compose plugin, and a free port 80 (or 3000, if you skip the proxy).
+</Callout>
+
+<Steps>
+
+<Step>
+
+### Get the repository and write a configuration
+
+```bash
+git clone https://github.com/AlexAdiaconitei/PageBox
+cd PageBox
+cp .env.example .env
+```
+
+Open `.env` and set three things. Everything else has a working default for a local run.
+
+```bash
+# A long random string. Sessions and tokens are derived from it.
+AUTH_SECRET=$(openssl rand -base64 48)
+
+# The first account. You will be made to replace this password at first sign-in.
+BOOTSTRAP_ADMIN_EMAIL=you@example.com
+BOOTSTRAP_ADMIN_PASSWORD=change-me-at-first-login
+```
+
+<Callout type="warn" title="The two hostnames must differ">
+`PAGEBOX_ADMIN_HOST` and `PAGEBOX_SITES_HOST` ship as `pagebox.localhost` and
+`pages.localhost`. If you change them, keep them different — the process exits at startup
+when they match, because a shared origin would let any hosted page call the admin API with
+your admin cookie attached.
+</Callout>
+
+</Step>
+
+<Step>
+
+### Start it
+
+```bash
+docker compose up -d                     # app + postgres + minio
+docker compose --profile proxy up -d     # + traefik, routing both hostnames on :80
+```
+
+The first boot does everything it needs on its own, and says so:
+
+```
+[pagebox] migrations applied
+[pagebox] bucket "pagebox" created
+[pagebox] bootstrap superadmin created: you@example.com (must change password at first login)
+[pagebox] ready in 336ms · admin=pagebox.localhost sites=pages.localhost/s/<slug>/ cache=memory upload-cap=100 MB
+```
+
+If any of those steps fails the process exits rather than serving half-configured traffic,
+so a container that is up is a container that is ready.
+
+Two more profiles exist and neither is needed yet: `--profile cache` adds Valkey, which
+becomes mandatory only past one replica.
+
+</Step>
+
+<Step>
+
+### Sign in
+
+Open **http://pagebox.localhost/** and sign in with the bootstrap credentials.
+
+You will be asked to replace the password before anything else opens. That is not a
+formality: the bootstrap password came out of a deployment UI and somebody's shell history,
+so PageBox treats it as a handover credential rather than a password.
+
+<Callout type="warn" title="If *.localhost does not resolve">
+Some systems do not map `*.localhost` to `127.0.0.1`. Add both names to your hosts file, or
+skip the proxy profile and address the app by header instead:
+
+```bash
+curl -H "Host: pagebox.localhost" http://127.0.0.1:3000/healthz
+```
+</Callout>
+
+</Step>
+
+<Step>
+
+### Create a site
+
+**New site** on the Sites screen. A site needs two things:
+
+- a **slug** — lowercase, dash-separated. It becomes the address, `/s/<slug>/`, and it is
+  taken from a namespace shared with every other site on the instance.
+- an **access** setting — `public` or `private`. Public means anyone with the address can
+  read it. Private means every request for every file resolves the caller's grant, and
+  [what comes back](/docs/operate/access#what-a-private-site-answers) depends on who they
+  are.
+
+Leave it public for now. You can change it later, and changing it takes effect on the next
+request.
+
+</Step>
+
+<Step>
+
+### Put something on it
+
+The repository ships five example builds, each a different shape. Drag one onto the drop
+area on the site's page:
+
+```
+examples/04-multipage/
+```
+
+The drop area runs a [preflight](/docs/deploy/preflight) before anything is uploaded: it
+picks the site root, drops junk like `.DS_Store`, and reads the HTML for absolute URLs that
+would break under `/s/<slug>/`. The examples use relative URLs throughout, so this one goes
+through clean.
+
+Then open the address the panel shows you — **http://pages.localhost/s/&lt;slug&gt;/**.
+
+<Shot
+  name="served-site"
+  alt="An example site served from the sites host"
+  caption="A deployed example, served from the sites host. Nothing was built here — this is the folder you dropped, stored whole."
+/>
+
+</Step>
+
+<Step>
+
+### Deploy it again, and roll it back
+
+Change something in the example and drop it again. The site page now lists two deployments,
+newest first, with their size, file count and source.
+
+Press **Make live** on the first one. The site serves it again immediately: nothing is
+rebuilt, nothing is re-uploaded, and the deployment you just made is still there to move
+back to.
+
+That is the whole rollback story. Every deployment is a full copy of the build, which is
+also why a site deployed on every push grows without bound — see
+[retention limits](/docs/operate/storage#retention) when you get there.
+
+</Step>
+
+</Steps>
+
+## Where to go next
+
+<Cards>
+  <Card
+    title="How it fits together"
+    href="/docs/start/concepts"
+    description="What a site, a deployment, a grant and a token each are, and how they relate."
+  />
+  <Card
+    title="Deploy from CI"
+    href="/docs/deploy/ci"
+    description="Issue a token, ask it for your base path, push a zip on every green build."
+  />
+  <Card
+    title="Your build 404s its assets"
+    href="/docs/deploy/base-paths"
+    description="It works locally because locally the base path is /. Here it is /s/<slug>/."
+  />
+</Cards>

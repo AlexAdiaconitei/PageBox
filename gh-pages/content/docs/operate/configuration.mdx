@@ -1,0 +1,143 @@
+---
+title: Configuration
+description: Every environment variable, what it defaults to, and the ones with a reason behind the number.
+---
+
+An invalid configuration stops the process with a list of what is wrong, rather than serving
+traffic with a missing secret. Everything without a default is required.
+
+## Hosts
+
+| Variable | Default | Notes |
+| -------- | ------- | ----- |
+| `PAGEBOX_ADMIN_HOST` | `pagebox.localhost` | the panel and the API |
+| `PAGEBOX_SITES_HOST` | `pages.localhost` | the deployed sites |
+| `PAGEBOX_SITES_PREFIX` | `/s` | the path segment sites live under |
+| `PAGEBOX_PUBLIC_SCHEME` | `http` | used to build absolute URLs behind a tunnel. Never derived from `X-Forwarded-Proto` |
+| `PAGEBOX_REPLICAS` | `1` | more than one requires `REDIS_URL` |
+
+<Callout type="warn" title="The two hostnames must differ">
+If they match, the process exits at startup. Hosted static content would otherwise be able
+to call the admin API with the admin cookie attached.
+</Callout>
+
+## Database
+
+| Variable | Default |
+| -------- | ------- |
+| `DATABASE_URL` | *required* |
+| `DATABASE_POOL_MAX` | `10` |
+
+## Cache
+
+| Variable | Default | Notes |
+| -------- | ------- | ----- |
+| `REDIS_URL` | unset | empty means an in-process cache, fine for one replica. Required past that, because the grant cache would otherwise be per-process |
+
+## Object storage
+
+Anything that speaks S3. MinIO and Garage both need path-style addressing.
+
+| Variable | Default |
+| -------- | ------- |
+| `S3_ENDPOINT` | *required* |
+| `S3_REGION` | `us-east-1` |
+| `S3_ACCESS_KEY` | *required* |
+| `S3_SECRET_KEY` | *required* |
+| `S3_BUCKET` | *required* |
+| `S3_FORCE_PATH_STYLE` | `true` |
+
+## Auth
+
+| Variable | Notes |
+| -------- | ----- |
+| `AUTH_SECRET` | 32+ characters. `openssl rand -base64 48` |
+| `BOOTSTRAP_ADMIN_EMAIL` | the first superadmin, created only while the instance has no users |
+| `BOOTSTRAP_ADMIN_PASSWORD` | a first-login credential; stored with `must_change_password` |
+
+<Callout type="info" title="The placeholders are known placeholders">
+The shipped values for `AUTH_SECRET` and `BOOTSTRAP_ADMIN_PASSWORD` are recognised. Once
+`PAGEBOX_ADMIN_HOST` or `PAGEBOX_SITES_HOST` is a real hostname, the process refuses to start
+while either is still one of them. They stay usable under `*.localhost`, where nobody else
+can reach them.
+</Callout>
+
+## Behind a proxy
+
+```bash
+# XFF_DEPTH=1
+```
+
+The entrypoint points adapter-node at the proxy headers, because PageBox serves two
+hostnames from one process and the request URL has to come from them.
+
+`XFF_DEPTH` says how many proxies sit in front. It decides which hop of `X-Forwarded-For` is
+taken as the client, and **that address is what rate limiting and the audit trail key on**.
+
+| In front | Value |
+| -------- | ----- |
+| Traefik alone, or Cloudflare alone | `1` (the default) |
+| Cloudflare **and** Traefik | `2` |
+
+<Callout type="warn" title="Getting this wrong disables rate limiting">
+Leave it at `1` with two proxies and every caller looks like the inner proxy — so one
+attacker exhausts the login budget for everybody.
+</Callout>
+
+Do **not** set `ORIGIN`. A fixed origin collapses the two hostnames into one and disables the
+host split.
+
+## Storage quotas
+
+| Variable | Default | Notes |
+| -------- | ------- | ----- |
+| `PAGEBOX_STORAGE_BYTES` | unset | what the instance has to give away. A declaration, not a measurement — S3 exposes no capacity figure |
+| `PAGEBOX_DEFAULT_QUOTA_BYTES` | `5368709120` (5 GB) | what a newly seated admin is offered on the form. Existing admins are given it once, at the first boot after upgrading |
+
+The full model is on [storage and retention](/docs/operate/storage#quotas).
+
+## Limits
+
+| Variable | Default | Is |
+| -------- | ------- | -- |
+| `MAX_UPLOAD_BYTES` | `104857600` (100 MB) | the request body cap. Also becomes adapter-node's `BODY_SIZE_LIMIT` |
+| `MAX_UNCOMPRESSED_BYTES` | `524288000` (500 MB) | what an archive may expand to |
+| `MAX_FILES` | `20000` | entries per archive |
+| `MAX_ZIP_RATIO` | `100` | compression ratio over this is treated as a bomb |
+
+The 100 MB default exists because Cloudflare's proxy rejects larger request bodies on
+non-Enterprise plans. Raise it freely when nothing between the client and PageBox imposes a
+smaller cap.
+
+## Credential throttling
+
+| Variable | Default | Is |
+| -------- | ------- | -- |
+| `LOGIN_MAX_ATTEMPTS` | `10` | failed sign-ins per window, counted per IP **and** per account. Successful sign-ins do not count |
+| `LOGIN_WINDOW_SECONDS` | `300` | the window |
+| `API_KEY_MAX_REQUESTS` | `120` | per deploy token, on every call |
+| `API_KEY_WINDOW_SECONDS` | `3600` | the window |
+
+Raise the attempt count for a team that shares one public address. The token limit bounds
+what a leaked key is worth — a CI job uploads a handful of times an hour.
+
+## Startup tasks
+
+| Variable | Default | Does |
+| -------- | ------- | ---- |
+| `PAGEBOX_MIGRATE_ON_START` | `true` | applies pending migrations under an advisory lock |
+| `PAGEBOX_ENSURE_BUCKET_ON_START` | `true` | creates the bucket if it is missing |
+
+Switch either off to run it yourself. Any failure exits the process rather than serving
+half-configured traffic.
+
+## Compose-only
+
+`POSTGRES_PASSWORD`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `PAGEBOX_PORT`, `MINIO_PORT`,
+`MINIO_CONSOLE_PORT`, `POSTGRES_PORT`, `TRAEFIK_PORT`. They configure the bundled services,
+not the application.
+
+## Not yet in use
+
+`PAGEBOX_BASE_DOMAIN` and `PAGEBOX_SUBDOMAIN_MODE` belong to per-site hostnames, which is v2.
+They have no effect today.

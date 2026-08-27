@@ -1,0 +1,98 @@
+---
+title: Nuxt
+description: nuxt generate, app.baseURL, and useRuntimeConfig for the rest.
+---
+
+The command matters as much as the option here: `nuxt build` produces a server, and PageBox
+hosts files.
+
+<SiteTargetField />
+
+<Recipe id="nuxt" />
+
+<Steps>
+
+<Step>
+
+### The config
+
+```ts title="nuxt.config.ts"
+export default defineNuxtConfig({
+  app: {
+    // Nuxt wants the trailing slash, which is how PageBox reports it.
+    baseURL: process.env.SITE_BASE_PATH ?? '/',
+  },
+});
+```
+
+</Step>
+
+<Step>
+
+### Generate, do not build
+
+```bash
+npx nuxt generate
+```
+
+The output lands in `.output/public`. That is the directory to zip — not `.output`, and not
+`.nuxt`.
+
+```bash
+(cd .output/public && zip -qr ../../site.zip .)
+```
+
+</Step>
+
+<Step>
+
+### Prefix your own paths
+
+The built bundle is served under the configured `baseURL`. Paths you assemble, and `public/`
+assets written absolutely, are not:
+
+```vue
+<script setup>
+const { app } = useRuntimeConfig();
+</script>
+
+<template>
+  <img :src="`${app.baseURL}brand/logo.png`" alt="" />
+</template>
+```
+
+`<NuxtLink to="/guide">` is handled — it goes through the router, which knows the base.
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+grep -ro 'src="/[^"]*"' .output/public/ | grep -v '/s/<slug>/'
+```
+
+</Step>
+
+</Steps>
+
+<Callout type="warn" title="Routes that cannot be prerendered">
+`nuxt generate` crawls your site to discover routes. A page reachable only through a form
+submission or a dynamic parameter it cannot guess will not be emitted. List them explicitly:
+
+```ts
+export default defineNuxtConfig({
+  nitro: {
+    prerender: { routes: ['/guide/advanced', '/changelog'] },
+  },
+});
+```
+</Callout>
+
+## Official documentation
+
+- [`app.baseURL`](https://nuxt.com/docs/api/nuxt-config)
+- [Static hosting](https://nuxt.com/docs/getting-started/deployment#static-hosting)
+- [`useRuntimeConfig()`](https://nuxt.com/docs/api/composables/use-runtime-config)
+- [Nitro prerender routes](https://nuxt.com/docs/getting-started/deployment#prerendering)

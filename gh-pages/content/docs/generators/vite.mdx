@@ -1,0 +1,110 @@
+---
+title: Vite
+description: The best-behaved of the set — base rewrites almost everything, and the exception is worth knowing.
+---
+
+Covers plain Vite and anything scaffolded with it: React, Vue and Svelte single-page
+applications.
+
+<SiteTargetField />
+
+<Recipe id="vite" />
+
+<Steps>
+
+<Step>
+
+### The config
+
+```ts title="vite.config.ts"
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  // Vite wants both slashes, which is exactly how PageBox reports the base path —
+  // no rewriting needed.
+  base: process.env.SITE_BASE_PATH ?? '/',
+});
+```
+
+</Step>
+
+<Step>
+
+### What Vite rewrites for you
+
+More than any other tool here:
+
+- assets imported in JavaScript or TypeScript (`import url from './logo.png'`);
+- `url()` references in CSS;
+- `src` and `href` attributes written in `index.html`;
+- anything under the emitted `assets/` directory.
+
+</Step>
+
+<Step>
+
+### The one thing it cannot
+
+A path assembled at runtime is a string until the browser runs it:
+
+```ts
+// Broken under a subpath — Vite never sees this as a path.
+const src = '/icons/' + name + '.svg';
+
+// Correct.
+const src = import.meta.env.BASE_URL + 'icons/' + name + '.svg';
+```
+
+`import.meta.env.BASE_URL` carries the trailing slash, so join without a leading one.
+
+</Step>
+
+<Step>
+
+### Client-side routing
+
+A router needs to be told too, or every route it builds starts at the host root:
+
+<Tabs items={['React Router', 'Vue Router', 'TanStack Router']}>
+<Tab value="React Router">
+```tsx
+<BrowserRouter basename={import.meta.env.BASE_URL}>
+```
+</Tab>
+<Tab value="Vue Router">
+```ts
+createRouter({ history: createWebHistory(import.meta.env.BASE_URL) });
+```
+</Tab>
+<Tab value="TanStack Router">
+```ts
+createRouter({ routeTree, basepath: import.meta.env.BASE_URL });
+```
+</Tab>
+</Tabs>
+
+Then switch **SPA fallback** on in the site's settings, so a deep link answers `index.html`
+with a 200 rather than a 404. See [how a site is served](/docs/operate/serving#spa-fallback).
+
+</Step>
+
+<Step>
+
+### Check the build
+
+```bash
+npm run build
+grep -o 'src="[^"]*"' dist/index.html
+grep -ro "'/[a-z]" dist/assets/*.js | head    # runtime-assembled paths, if any
+```
+
+</Step>
+
+</Steps>
+
+## Official documentation
+
+- [`base`](https://vite.dev/config/shared-options.html#base)
+- [Public base path](https://vite.dev/guide/build.html#public-base-path)
+- [`import.meta.env`](https://vite.dev/guide/env-and-mode.html)
+- [The `public` directory](https://vite.dev/guide/assets.html#the-public-directory)

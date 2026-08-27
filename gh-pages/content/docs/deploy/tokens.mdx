@@ -1,0 +1,84 @@
+---
+title: Deploy tokens
+description: What a token can do, what it cannot outrank, and how to lose one safely.
+---
+
+A deploy token is a `pbx_` key issued from a site's page in the panel. It is the credential
+CI uses.
+
+## Issuing one
+
+Site page → **Deploy tokens** → issue. You choose a name and, optionally, an expiry.
+
+<Callout type="warn" title="Shown once">
+The token is stored only as a hash. A lost token is reissued, never recovered — there is no
+screen anywhere that will show it to you again.
+</Callout>
+
+Put it in your CI provider's secret store. On GitHub that is
+**Settings → Secrets and variables → Actions**; the [workflow](/docs/deploy/ci) reads it as
+`${{ secrets.PAGEBOX_TOKEN }}`.
+
+## What it is worth
+
+A token belongs to a person, and **it can never outrank them**.
+
+Every call resolves the owner's permission on the site *as it stands now*, not as it stood
+when the key was cut. Revoke their grant, demote them or suspend the account and the token
+stops working immediately — with a `404`, the same answer as a site that does not exist.
+Revoking the key itself is still the direct route; this is what makes the grant the source
+of truth rather than the key.
+
+A token is scoped to exactly **one** site, the one it was issued for. Pointed at another
+site it gets a `404`, so it cannot be used to find out which sites exist. A key carrying no
+scope authorises nothing at all.
+
+The owner needs `deployer` on the site for the token to be able to upload. `viewer` reads
+and nothing more.
+
+## Rate limits
+
+Tokens are better-auth API keys, so each one is limited on its own: **120 calls an hour** by
+default, configurable with `API_KEY_MAX_REQUESTS` and `API_KEY_WINDOW_SECONDS`.
+
+Over the limit the API answers `429`. Retry — do not rotate the token. A workflow that
+deploys on every push to a busy repository is nowhere near this; a workflow that polls is.
+
+## Rotating
+
+<Steps>
+<Step>
+### Issue the new token
+Both keys work at once, so nothing is down while you change the secret.
+</Step>
+<Step>
+### Update the secret in CI
+And run the workflow once to confirm it works.
+</Step>
+<Step>
+### Revoke the old one
+From the site's page. The revocation lands in the audit log with who did it.
+</Step>
+</Steps>
+
+## If a token leaks
+
+Revoke it. That is immediate and complete: the key is refused from the next call, and there
+is nothing cached anywhere that would keep it alive.
+
+Then read the [audit log](/docs/operate/access#the-audit-log) filtered to that site. Every
+deploy carries its actor, IP and the notes header it was sent with, so what the key did
+while it was out is on the record. Anything it deployed is still there as its own
+deployment — **Make live** on the last good one puts the site back without a rebuild.
+
+## Using a session instead
+
+The same endpoint accepts a panel session, which is what the drop area uses. It differs in
+three ways:
+
+- no `Authorization` header — the browser session identifies the caller, who needs
+  `deployer` on the site;
+- it must carry an `Origin` from the admin host, or it is refused with `403`. A
+  cookie-authenticated upload is the one a browser can be tricked into making;
+- it can pass `?warnings=<codes>&acknowledged=1` to record what the
+  [preflight](/docs/deploy/preflight) reported and that somebody accepted it.

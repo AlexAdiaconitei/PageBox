@@ -1,0 +1,120 @@
+---
+title: Base paths
+description: What each generator prefixes for you, and what it leaves for you to wrap.
+---
+
+A PageBox site is served under `/s/<slug>/`, never at a domain root. Every static site
+generator has an option for that, and **in all of them the option is necessary and not
+sufficient** — each one prefixes some things automatically and leaves the rest to you.
+
+The gap is where a site half-works: pages navigate fine, images 404, the favicon is missing.
+That failure is invisible locally, because locally the base path is `/`.
+
+<SiteTargetField />
+
+## Pick your generator
+
+<RecipeTabs />
+
+Each of these has [its own page](/docs/generators) with the worked version: where the helper
+goes, what to check in the build, and links to the official documentation for every option
+named here.
+
+## The shape of the problem
+
+| Generator | Prefixed for you | Yours to wrap |
+| --------- | ---------------- | ------------- |
+| [Next.js](/docs/generators/next) | `next/link`, `_next/static`, bundler-imported images | `next/image` with a literal `src`, `metadata.icons`, `public/` paths |
+| [Docusaurus](/docs/generators/docusaurus) | markdown links, `<Link to>` | raw `<img src="/img/x.png">` |
+| [Astro](/docs/generators/astro) | the `_astro/` bundle, and nothing else | every `<a href>`, every `public/` asset |
+| [VitePress](/docs/generators/vitepress) | markdown links, theme navigation | literal asset paths in components or frontmatter |
+| [SvelteKit](/docs/generators/sveltekit) | `_app/immutable/` | your own hrefs and asset paths |
+| [Vite](/docs/generators/vite) | imported assets, CSS `url()`, paths in `.html` | a `public/` path assembled at runtime |
+| [Nuxt](/docs/generators/nuxt) | the built bundle | paths you assemble, `public/` assets written absolutely |
+| [Hugo](/docs/generators/hugo) | anything built with the URL functions | any leading-slash path in a template |
+
+## The slashes are not guessable
+
+This is the reason the recipes above are a table rather than a sentence. Every value was
+read off the official documentation, and they do not agree:
+
+| Convention | Tools |
+| ---------- | ----- |
+| trailing slash **required** | Docusaurus, VitePress, Vite, Nuxt |
+| **no** trailing slash | Next.js, Astro, SvelteKit |
+| a whole absolute URL | Hugo |
+
+<Callout type="warn" title="Do not hardcode the value">
+Ask for it. `GET /api/v1/whoami` answers with this site's `basePath`, and when a site later
+moves to its own hostname the same call returns `"basePath": "/"` — so the next build comes
+out right without anyone editing a workflow.
+</Callout>
+
+## What PageBox checks for you
+
+PageBox runs the same check twice, without being told which generator produced the build.
+
+<Steps>
+
+<Step>
+### Before the upload
+The drop area's [preflight](/docs/deploy/preflight) reads the HTML in the build and warns
+about references that start at the server root instead of this site's base path, naming the
+config line for the generator it detected. It is a blocking warning: you can deploy anyway,
+and the acknowledgement is recorded on the deployment.
+</Step>
+
+<Step>
+### After it goes live
+PageBox reads the deployed `index.html`, resolves everything it references the way the site
+actually serves it, and records what is missing. The upload response carries `brokenAssets`
+and names the first few in `brokenAssetSamples`.
+</Step>
+
+</Steps>
+
+### Two limits worth knowing
+
+They are exactly where a Next.js favicon slips through:
+
+- the post-deploy check reads **only `index.html`**, and only its first 25 references;
+- the preflight samples **at most 10 HTML files** from the build.
+
+So a broken asset on a subpage, or the eleventh page of a docs site, is caught by neither.
+On a build you are unsure about, grep the output yourself:
+
+```bash
+grep -ro 'src="/[^"]*"' out/ | grep -v '/s/<slug>/'
+grep -ro 'href="/[^"]*"' out/ | grep -v '/s/<slug>/'
+```
+
+## Which generators PageBox can recognise
+
+Detection runs on the filenames in an uploaded build, so only the tools with an unmistakable
+tell are named:
+
+| Generator | Tell |
+| --------- | ---- |
+| Next.js | `_next/` |
+| Astro | `_astro/` |
+| SvelteKit | `_app/immutable/` |
+| Docusaurus | `.docusaurus/`, `docusaurus.*.js` |
+| Vite | `assets/index-<hash>.js` |
+| Hugo, VitePress, Nuxt | none — ordinary directories with no signature |
+
+The last row is deliberate. Naming a config file somebody does not have is worse than saying
+nothing, so those three appear in the recipe tabs and are never guessed.
+
+## Adding a generator
+
+`src/lib/preflight.ts` in the PageBox repository holds the table: the option, its value for
+a given site, the snippet, the build command, the output directory, the documentation link,
+and the `handled` / `manual` pair this page expands on. Both the preflight warning and the
+panel's deploy recipe read it, so they cannot disagree about what to change.
+
+Two things to get right when adding one:
+
+- **The slashes.** Read them off the official documentation rather than assuming — the link
+  in `docs` is where the next person will check your work.
+- **`test` only if it is certain.** A generator with no unambiguous tell gets no `test` and
+  is never guessed.

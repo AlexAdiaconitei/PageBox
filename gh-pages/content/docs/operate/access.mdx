@@ -1,0 +1,159 @@
+---
+title: Accounts, roles and grants
+description: Who can do what, why a private site answers 404, and how to get back in.
+---
+
+Everything on this page lives on the **admin host**. The sites host only ever offers
+sign-in, sign-out and the sites themselves.
+
+## There is no sign-up page
+
+Accounts come from somebody who already has one. The first boot creates a superadmin from
+`BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`, and that password is treated as a
+handover credential rather than a password: the account is flagged `must_change_password`
+and nothing in the panel opens until it has been replaced.
+
+The same flag is set on every account an admin creates or resets.
+
+Once anyone exists, those two variables stop doing anything — a restart must not reopen a
+closed account.
+
+<Shot
+  name="users"
+  alt="The Users screen: accounts, their roles, who issued them and their storage"
+  caption="An admin sees only the accounts it created. The boundary is the query, not a filter on the page."
+/>
+
+## Global roles
+
+What someone is on the **instance**. What they can do to any particular site is a grant.
+
+| Role | Count | Is |
+| ---- | ----- | -- |
+| `superadmin` | one | the platform. Every site, every account, every group. |
+| `admin` | many | runs their own patch: the sites they create, the accounts they issue, the groups they own. |
+| `user` | many | no standing on the instance at all; everything comes from a grant. |
+
+### One superadmin, and it moves rather than multiplies
+
+Postgres enforces it — a partial unique index over `role = 'superadmin'`, not a check
+somebody has to remember. It is created at first boot, and after that **Hand over seat** on
+the Users page demotes the holder to `admin` and promotes the target in the same
+transaction, so there is never a moment with two of them or none.
+
+That seat is not an editable row. Nobody suspends it, demotes it, resets its password or
+deletes it, including itself. The only ways out are handing it over, or `set-password.mjs`
+with access to the deployment.
+
+### What an admin can and cannot do
+
+An admin **creates sites** (becoming their owner), **issues accounts**, **owns groups**, and
+administers all three. It is closed upwards and sideways:
+
+- it cannot create or promote an admin, and cannot demote the account that seated it;
+- it **only administers the accounts it issued**. Not its peers, not their users, not
+  accounts that predate the column. Without that rule any admin could reset any password,
+  sign in as that person, and reach whatever sites they reach — so it is the single boundary
+  the tier rests on;
+- a group belongs to the admin who created it, for the same reason: membership is a grant
+  with an extra step, and a shared group list would be a way into somebody else's sites;
+- it can only grant a site to accounts it administers and groups it owns;
+- the activity it reads is its own. The superadmin reads the whole instance.
+
+<Callout type="warn" title="admin is not a key to other people's sites">
+It resolves to no per-site permission whatsoever. An admin reaches a site by having created
+it or by being granted it, exactly like anyone else. Only `superadmin` short-circuits to
+`owner` everywhere.
+</Callout>
+
+## Per-site roles
+
+Granted to a person or to a group:
+
+| Role | Can |
+| ---- | --- |
+| `viewer` | read the site |
+| `deployer` | read, deploy, activate and roll back |
+| `owner` | all of the above, plus grants, deploy tokens and visibility |
+
+Effective permission on a site is the **highest** of:
+
+- superadmin → `owner`;
+- being the site's owner → `owner`;
+- any grant to the person, or to a group they belong to;
+- for a **public** site → `viewer`.
+
+`admin` is deliberately absent from that list.
+
+Deleting a site releases its slug on the shared hostname, so it takes both halves: `admin`
+or above **and** `owner` on that site. A plain user granted `owner` manages the site and
+cannot delete it.
+
+<Callout type="info" title="Why a public site does not appear in your list">
+The panel lists sites you can *act* on, and `deployer` is the floor for opening a site's
+page. A site you cannot act on answers 404, never 403, so the panel does not confirm which
+sites exist.
+</Callout>
+
+## What a private site answers
+
+A private site authorises **every file**. Checking only the HTML leaves the content readable
+to anyone who learns an asset URL, which is not privacy — it is obscurity with extra steps.
+
+| Caller | Answer |
+| ------ | ------ |
+| granted, directly or through a group | the file |
+| signed in, no grant | **404** — the same answer as a site that does not exist |
+| anonymous, navigating | **302** to the sign-in page |
+| anonymous, sub-resource | **401**, no `Location` |
+
+The last two differ on purpose. A 302 answering a `<script src>` arrives as HTML where code
+was expected, so a session expiring mid-visit would break the page in silence instead of
+prompting a sign-in.
+
+Every private response — 404s and redirects included — carries `private, no-store` plus the
+CDN-specific headers, because one private asset cached at an edge is readable without a
+session.
+
+## Two sessions, one user table
+
+| Cookie | Host | Lifetime | Unlocks |
+| ------ | ---- | -------- | ------- |
+| `pb_admin.session_token` | the admin host | 30 days | the panel, and the API by cookie |
+| `pb_view.session_token` | the sites host | 12 hours | reading private sites |
+
+Both are host-only — no `Domain` attribute, so neither travels to any other subdomain — and
+every session row records which host it was minted for. A session presented on the other host
+is treated as no session at all, and the mismatch is written to the audit log.
+
+## The audit log
+
+<Shot
+  name="audit"
+  alt="The Activity screen: deploys, rollbacks, grants, tokens and sign-ins with actor, target and detail"
+  caption="Filterable by action, searchable by actor, target or address."
+/>
+
+Every deploy, rollback, grant, token and sign-in attempt — successful or not — lands here
+with its actor, target, IP and detail. An admin sees what it and its accounts did, and what
+was done to sites it can act on; the superadmin sees the instance.
+
+## Recovery
+
+There is no email delivery yet, so a forgotten superadmin password has no way back through
+the interface. The way back is physical access to the deployment:
+
+```bash
+node scripts/set-password.mjs --email you@example.com --password "…"
+node scripts/set-password.mjs --email you@example.com --password "…" --keep
+node scripts/set-password.mjs --from-env    # put the .env bootstrap credentials back
+```
+
+It revokes every session of that account and flags the password as one that must be changed
+at next sign-in — a password typed on a command line has been in a shell history. `--keep`
+skips that.
+
+<Callout type="warn" title="--from-env is opt-in on purpose">
+Run by accident, the `.env` fallback would replace a password its owner chose. A recovery
+tool should not do that quietly, so it takes an explicit flag.
+</Callout>
