@@ -5,7 +5,7 @@ Next.js and exported to static files. It is its own pnpm project — it does not
 application's lockfile, and nothing here installs the app.
 
 ```bash
-pnpm install --ignore-workspace
+pnpm install        # gh-pages/pnpm-workspace.yaml is the root here, not the app's
 pnpm dev            # http://localhost:3000
 pnpm build          # → out/
 pnpm preview        # build, then serve out/ so you see it as deployed

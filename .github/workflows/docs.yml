@@ -39,7 +39,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: gh-pages/pnpm-lock.yaml
 
-      - run: pnpm install --frozen-lockfile --ignore-workspace
+      # No --ignore-workspace: gh-pages/pnpm-workspace.yaml is this project's own
+      # workspace root, and it carries the supply-chain policy exclusions. Ignoring
+      # it discards those settings and the install fails the minimumReleaseAge check.
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm types:check
 
