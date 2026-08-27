@@ -29,7 +29,10 @@ jobs:
         working-directory: gh-pages
     steps:
       - uses: actions/checkout@v4
+      # No packageManager field in either package.json, so the version is pinned here.
       - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22
