@@ -39,15 +39,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U pagebox"
           --health-interval 5s --health-timeout 5s --health-retries 10
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: pagebox
-          MINIO_ROOT_PASSWORD: pageboxpagebox
-        ports: ['9000:9000']
-        options: >-
-          --health-cmd "mc ready local"
-          --health-interval 5s --health-timeout 5s --health-retries 20
 
     env:
       NODE_ENV: production
@@ -82,8 +73,29 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      # MinIO is not a service container. Bitnami withdrew bitnami/minio from Docker Hub
+      # (the repository now has no tags at all), and the official image needs `server /data`
+      # as its command — which a service container has no way to pass. So it runs as a step,
+      # started here to warm up alongside the build and waited on below.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=pagebox \
+            -e MINIO_ROOT_PASSWORD=pageboxpagebox \
+            minio/minio:latest server /data
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
+
+      - name: Wait for MinIO
+        run: |
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1; then
+              echo "up after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO never became healthy:"; docker logs minio; exit 1
 
       # Migrations, the bucket and the bootstrap superadmin all happen in-process at boot
       # (src/lib/server/startup.ts), so starting the built server is the whole setup.
@@ -114,9 +126,15 @@ jobs:
         if: always()
         run: cat server.log
 
+      - name: MinIO log
+        if: failure()
+        run: docker logs minio
+
       - name: Stop PageBox
         if: always()
-        run: kill "$(cat server.pid)" || true
+        run: |
+          kill "$(cat server.pid)" || true
+          docker rm -f minio || true
 
   # Building the image on every push is what keeps the deployment path from rotting
   # unnoticed: it is the same Dockerfile Dokploy and compose use.
