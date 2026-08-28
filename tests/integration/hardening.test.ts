@@ -72,14 +72,20 @@ run('hardening', () => {
 				});
 
 			let throttled = false;
-			// The production default is 10 in 5 minutes; CI raises it, so this walks until it
-			// bites rather than assuming a number.
-			for (let i = 0; i < 260 && !throttled; i++) {
+			// The production default is 10 in 5 minutes; CI raises it so the rest of the suite
+			// can sign in repeatedly from one address. Walk until the limiter bites rather than
+			// assuming a number — but bound the walk by the budget it was actually given, or a
+			// raised limit turns a real failure into 260 pointless requests.
+			const budget = Number(process.env.LOGIN_MAX_ATTEMPTS) || 10;
+			for (let i = 0; i < budget + 60 && !throttled; i++) {
 				throttled = (await attempt().then((res) => res.text())).includes('Too many attempts');
 			}
 			expect(throttled, `${host} never throttled`).toBe(true);
 		}
-	});
+		// One request at a time, because better-auth's counter lives in Postgres and
+		// concurrent attempts race it into undercounting. Two hosts at the CI budget of 200
+		// is over 400 round trips, which does not fit vitest's 5s default.
+	}, 120_000);
 
 	it('rejects an archive carrying a symlink', async () => {
 		// yauzl reports the mode in the external attributes; fflate cannot set them, so the
