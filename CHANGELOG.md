@@ -3,7 +3,9 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] — 2026-08-29
+## [0.1.0] — 2026-08-29
+
+First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
 ### Added — a licence, so the published thing can actually be used
 
@@ -30,10 +32,6 @@ trade entirely.
 `BUSL-1.1` identifier, so the answer is the same wherever somebody looks, and the image now
 ships `LICENSE` itself: an image is a distribution, and BSL asks that the licence be
 displayed on every copy of the work.
-
-## [0.1.0] — 2026-08-29
-
-First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
 
 ### Added — the image is published, and it is checked before it is
 
