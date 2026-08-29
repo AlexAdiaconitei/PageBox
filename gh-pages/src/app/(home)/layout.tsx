@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { baseOptions } from '@/lib/layout.shared';
 import { PageBoxMark } from '@/components/pagebox-mark';
-import { appName, gitUrl } from '@/lib/shared';
+import { appName, gitUrl, licence } from '@/lib/shared';
 
 const FOOTER = [
   {
@@ -52,6 +52,16 @@ export default function Layout({ children }: LayoutProps<'/'>) {
             >
               Source on GitHub
             </a>
+
+            <p className="mt-4 text-[0.8rem] leading-relaxed text-pb-muted">
+              <a href={licence.file} className="hover:text-pb-ink">
+                {licence.spdx}
+              </a>{' '}
+              — free for personal use. Organisations need a licence:{' '}
+              <a href={`mailto:${licence.email}`} className="font-medium text-pb-live hover:underline">
+                {licence.email}
+              </a>
+            </p>
           </div>
 
           <nav className="grid gap-8 sm:grid-cols-3" aria-label="Documentation">

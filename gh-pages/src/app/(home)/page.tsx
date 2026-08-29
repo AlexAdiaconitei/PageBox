@@ -9,6 +9,8 @@ import { ResponseMatrix } from '@/components/home/response-matrix';
 import { FeatureGrid } from '@/components/home/feature-grid';
 import { CopyCommand } from '@/components/home/copy-command';
 import { DeploymentLedger } from '@/components/home/deployment-ledger';
+import { Licence } from '@/components/home/licence';
+import { PageBoxMark } from '@/components/pagebox-mark';
 import { appName, example, gitUrl, tagline } from '@/lib/shared';
 
 export const metadata: Metadata = {
@@ -26,19 +28,30 @@ export default function HomePage() {
     <main className="mx-auto w-full max-w-[74rem] px-5 sm:px-8">
       {/* --- hero ------------------------------------------------------------ */}
       <section className="pt-14 pb-16 sm:pt-20 lg:pt-24 lg:pb-20">
-        <p className="eyebrow">Self-hosted static hosting</p>
+        {/* The mark and the name carry the hero now. What used to be the headline reads
+            underneath at subtitle size: a first-time visitor needs to know what this is
+            called before being told what it does, and the sentence was doing both jobs at
+            once at a size that let it wrap over four lines. */}
+        <div className="flex items-center gap-3 sm:gap-4">
+          <PageBoxMark className="size-11 shrink-0 text-pb-live sm:size-14" strokeWidth={1.6} />
+          <h1 className="display text-[clamp(2.6rem,8vw,4.5rem)] leading-none text-pb-ink">
+            {appName}
+          </h1>
+        </div>
 
-        <h1 className="display mt-5 max-w-[19ch] text-[clamp(2.4rem,6.4vw,4.15rem)] text-pb-ink">
+        <p className="mt-6 max-w-[52ch] text-[1.0125rem] leading-relaxed text-pb-muted sm:text-[1.075rem]">
           Static hosting you run yourself, with access control that reaches{' '}
-          <span className="text-pb-live">every file</span>.
-        </h1>
-
-        <p className="mt-6 max-w-[54ch] text-[1.075rem] leading-relaxed text-pb-muted">
-          It never builds anything. Send a{' '}
+          <span className="text-pb-ink">every file</span>. It never builds anything: send a{' '}
           <code className="font-mono text-[0.9em] text-pb-ink">dist/</code>, a zip or a lone{' '}
-          <code className="font-mono text-[0.9em] text-pb-ink">index.html</code>; PageBox
-          stores it whole and serves it — and on a private site authorises every asset, not
-          just the HTML.
+          <code className="font-mono text-[0.9em] text-pb-ink">index.html</code>, and PageBox
+          stores it whole and serves it.
+        </p>
+
+        <p className="mt-4 text-[0.85rem] text-pb-muted">
+          Free for personal use ·{' '}
+          <Link href="#licence" className="font-medium text-pb-live hover:underline">
+            organisations need a licence
+          </Link>
         </p>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -199,6 +212,17 @@ export default function HomePage() {
           ]}
         />
       </Section>
+
+      <div id="licence" className="scroll-mt-20">
+        <Section
+          label="Licence"
+          title="Free for you. Licensed for your company."
+          lede="The line runs between a person and an organisation, not between public and
+            private — so find your own case rather than guess from a licence name."
+        >
+          <Licence />
+        </Section>
+      </div>
 
       {/* --- close ------------------------------------------------------------ */}
       <section className="border-t border-pb-line py-16 sm:py-20 lg:py-24">
