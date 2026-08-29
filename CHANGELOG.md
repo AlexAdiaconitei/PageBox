@@ -3,7 +3,7 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] — 2026-08-29
 
 ### Added — a licence, so the published thing can actually be used
 
@@ -17,7 +17,9 @@ not granted and is left to a separate conversation.
 It matters more than a file usually does: 0.1.0 went out public, with a public image, and
 until now carried no licence at all — which in copyright terms means nobody had permission
 to run it. `package.json` and the image's `org.opencontainers.image.licenses` label both
-carry the SPDX identifier, so the answer is the same wherever somebody looks.
+carry the SPDX identifier, so the answer is the same wherever somebody looks, and the
+image itself now carries `LICENSE` — an image is a distribution, and PolyForm's Notices
+section asks that whoever gets a copy gets the terms with it.
 
 ## [0.1.0] — 2026-08-29
 
