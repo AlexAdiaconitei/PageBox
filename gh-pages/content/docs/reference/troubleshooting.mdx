@@ -156,6 +156,23 @@ Some systems do not map it to `127.0.0.1`. Add both names to your hosts file, or
 app with a `Host` header as above.
 </Accordion>
 
+<Accordion title="The domain has a certificate and answers 404 on everything">
+The proxy routes it and the app does not recognise it. Traefik (or Dokploy, or Caddy) keeps
+its own list of hostnames, and PageBox keeps another one — `PAGEBOX_ADMIN_HOST` and
+`PAGEBOX_SITES_HOST` — and both have to name the same two hosts, spelled identically.
+
+The giveaway is that the 404 is *unbranded*: PageBox only puts its name on a page when it
+knows which of its two surfaces the request was for. A branded 404 means the host matched
+and the site did not.
+</Accordion>
+
+<Accordion title="Two domains, and one of them shows the wrong thing">
+Both domains must point at the same application on container port 3000, not at two apps and
+not at two ports. PageBox is one process; the `Host` header picks the surface. If the panel
+appears on the sites hostname, the two variables are swapped relative to the two domains.
+See [Dokploy](/docs/install/dokploy#two-domains-one-container-one-port).
+</Accordion>
+
 </Accordions>
 
 ## Access

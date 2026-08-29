@@ -7,9 +7,8 @@
 
 services:
   pagebox:
-    build:
-      context: .
-    # image: ghcr.io/OWNER/pagebox:latest
+    image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:-latest}
+    pull_policy: always
     env_file: .env
     restart: unless-stopped
     networks:

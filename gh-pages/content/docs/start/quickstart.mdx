@@ -15,13 +15,21 @@ Docker with the Compose plugin, and a free port 80 (or 3000, if you skip the pro
 
 <Step>
 
-### Get the repository and write a configuration
+### Get a compose file and a configuration
+
+The image is published, so there is nothing to build and nothing to clone — two files in an
+empty directory are the whole install:
 
 ```bash
-git clone https://github.com/AlexAdiaconitei/PageBox
-cd PageBox
-cp .env.example .env
+mkdir pagebox && cd pagebox
+curl -O  https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/.env.example
 ```
+
+<Callout type="info" title="Cloning instead is fine">
+`git clone` gets you the same two files plus `examples/`, the five sample builds this
+quickstart deploys in a moment. Without the clone, use any built site you already have.
+</Callout>
 
 Open `.env` and set three things. Everything else has a working default for a local run.
 

@@ -9,10 +9,11 @@
 
 services:
   app:
-    build:
-      context: .
-    # Or pin a published image instead of building:
-    # image: ghcr.io/OWNER/pagebox:latest
+    # The published image, so this file works in a directory that holds nothing but this
+    # file and a .env. Override the tag with PAGEBOX_TAG=0.1.0 to pin, or swap the two
+    # lines below for `build: { context: . }` to run the checkout instead of the release.
+    image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:-latest}
+    pull_policy: always
     env_file: .env
     environment:
       DATABASE_URL: postgres://pagebox:${POSTGRES_PASSWORD:-pagebox}@postgres:5432/pagebox

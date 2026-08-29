@@ -1,21 +1,64 @@
 # Deploying PageBox on Dokploy
 
-Two routes. **Use the Application one** unless you have a reason not to: Dokploy's
-Compose stacks are not routed by "Add Domain", so they need a hand-written Traefik dynamic
-file (`traefik-dynamic.example.yml`).
+The image is published, so the shortest route pulls it rather than building on your server:
 
-## Application (Dockerfile) — recommended
+```
+ghcr.io/alexadiaconitei/pagebox:0.1.0
+```
 
-1. **Project** → create `app-pagebox` (it is an app, not a shared resource, so it does not
+| Route                      | Use it when                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| **Application → Docker**   | almost always: pull a released tag, "Add Domain" works              |
+| Application → Dockerfile   | you are running a fork, or a commit that has no tag                 |
+| Compose                    | you already manage the stack as compose — routing is then yours     |
+
+## Two domains, one container, one port
+
+The part that surprises people. **PageBox is one process listening on one port.** Not two
+containers, not two ports, not two paths. Which surface a request reaches is decided by the
+`Host` header, before routing:
+
+```
+Host: pagebox.example.com   →  the panel and the API
+Host: pages.example.com     →  the hosted sites, under /s/<slug>/
+Host: anything else         →  404
+```
+
+In Dokploy that is **one application with two domains on it**, both at container port 3000.
+Traefik matches the hostname and forwards to the same container; PageBox reads the
+forwarded host and picks.
+
+Why not two ports, or two paths — neither separates what has to be separated. The sites
+host runs JavaScript somebody else uploaded, and the panel's cookie has to be unreachable
+from it.
+
+- **Ports do not isolate cookies.** A cookie set on `example.com:3000` is sent to
+  `example.com:3001` too: the cookie jar is keyed by host, not by origin. A second port
+  would look like a boundary and enforce nothing.
+- **Paths are the same origin outright.** With `/panel` and `/sites`, a page you host could
+  `fetch('/panel/api/v1/…')` with your admin cookie attached and act as you. It would also
+  put every hosted site one directory deeper — the base-path problem, doubled.
+
+Different hostnames are the only split browsers enforce for cookies, so that is the one
+PageBox uses, and it refuses to start if the two are equal.
+
+Both are single-level names under a domain you already own, so one wildcard DNS record and
+one wildcard certificate cover them. There is no per-site DNS: a new site is a new path on
+the sites host.
+
+## Application → Docker (recommended)
+
+1. **Project** → create `app-pagebox` (an application, not a shared resource, so it does not
    belong in a `core`-style project).
-2. **Create Application** → source: this Git repository → Build Type: **Dockerfile**
-   (`./Dockerfile`), no build args needed.
-3. **Domains** → **Add Domain** twice, both pointing at container port **3000**:
-   - `pagebox.<your-domain>` — panel and API
-   - `pages.<your-domain>` — the hosted sites
+2. **Create Application** → *General* → provider **Docker** → image
+   `ghcr.io/alexadiaconitei/pagebox:0.1.0`. The package is public, so no registry
+   credentials are needed. Pin the version: `latest` moves on the next release.
+3. **Domains** → **Add Domain** twice, on this same application:
 
-   Both are single-level hostnames, so an existing `*.<your-domain>` wildcard certificate
-   and tunnel rule already cover them: no per-site DNS, no catch-all router.
+   | Host                    | Container port | HTTPS               |
+   | ----------------------- | -------------- | ------------------- |
+   | `pagebox.<your-domain>` | 3000           | on, Let's Encrypt   |
+   | `pages.<your-domain>`   | 3000           | on, Let's Encrypt   |
 
 4. **Environment** — the required set:
 
@@ -25,7 +68,7 @@ file (`traefik-dynamic.example.yml`).
    PAGEBOX_PUBLIC_SCHEME=https
 
    DATABASE_URL=postgres://pagebox:...@<pg-host>:5432/pagebox
-   # REDIS_URL=redis://<valkey-host>:6379      # optional; required if you scale past 1 replica
+   # REDIS_URL=redis://<valkey-host>:6379      # optional; required past 1 replica
 
    S3_ENDPOINT=http://192.168.1.197:3900       # Garage
    S3_ACCESS_KEY=...
@@ -40,13 +83,19 @@ file (`traefik-dynamic.example.yml`).
    MAX_UPLOAD_BYTES=104857600                  # 100 MB — see note below
    ```
 
-   Provision Postgres with `bash /scripts/provision-pg.sh pagebox` on the database host,
-   and a Garage key scoped to the `pagebox` bucket (`PROVISIONING.md §S3`). PageBox creates
-   the bucket itself if the key is allowed to; otherwise create it first.
+   The two hostnames must match the two domains exactly: they are what the app compares the
+   incoming host against. A domain Traefik routes but the app does not know answers 404.
 
-5. **Health check** → path `/healthz`. It probes Postgres and S3, and answers on any host
-   (including Dokploy's internal IP probe), so a dependency outage marks the container
-   unhealthy instead of silently serving errors.
+   Provision Postgres with `bash /scripts/provision-pg.sh pagebox` on the database host, and
+   a Garage key scoped to the `pagebox` bucket (`PROVISIONING.md §S3`). PageBox creates the
+   bucket itself if the key is allowed to; otherwise create it first.
+
+   The proxy headers (`HOST_HEADER`, `PROTOCOL_HEADER`) and `BODY_SIZE_LIMIT` are set by the
+   image's entrypoint. Leave them alone, and never set `ORIGIN`.
+
+5. **Health check** → path `/healthz`, port 3000. It probes Postgres and S3, and answers on
+   any host (including Dokploy's internal IP probe), so a dependency outage marks the
+   container unhealthy instead of silently serving errors.
 
 6. Deploy. The first boot logs migrations, bucket state and the bootstrap superadmin:
 
@@ -57,20 +106,42 @@ file (`traefik-dynamic.example.yml`).
    [pagebox] ready in 336ms · admin=pagebox.<domain> sites=pages.<domain>/s/<slug>/ cache=memory upload-cap=100 MB
    ```
 
+## Application → Dockerfile
+
+Same domains, same environment, same health check; only the source differs — this Git
+repository, Build Type **Dockerfile** (`./Dockerfile`), no build args. Your server then
+builds on every deploy: minutes instead of seconds, and enough RAM to run a Vite build.
+Worth it for a fork, not to run a release.
+
 ## Compose (only if you must)
 
-`docker-compose.dokploy.yml` runs the app alone against external services. Remember:
+`docker-compose.dokploy.yml` runs the app alone against external services, pulling the same
+published image. Remember:
 
-- Compose stacks in Dokploy **ignore** "Add Domain" and container labels for routing.
-  Copy `traefik-dynamic.example.yml` into Dokploy's dynamic config directory (usually
-  `/etc/dokploy/traefik/dynamic/pagebox.yml`), adjust hostnames and the container name.
+- Compose stacks in Dokploy **ignore** "Add Domain" and container labels for routing. Copy
+  `deploy/traefik-dynamic.example.yml` into Dokploy's dynamic config directory (usually
+  `/etc/dokploy/traefik/dynamic/pagebox.yml`), adjust hostnames and the container name. Both
+  routers point at one service — the same split, written by hand.
 - The service must be attached to the `dokploy-network`.
+
+## Upgrading
+
+Deployments are immutable in S3 and the schema migrates forward on boot, so an upgrade is a
+new tag and a redeploy: change the image tag, press Deploy, look for `migrations applied`.
+Back the database up first when skipping a version. Nothing in the object store is rewritten
+by a migration.
+
+Rolling the application back is the previous tag. Rolling a site back is unrelated and never
+needs a redeploy — it is a pointer move in the panel.
 
 ## Things that bite
 
 - **Both hostnames must differ.** If they match, the container exits at boot with an
   explicit message. That is intentional: a shared origin lets any hosted page call the
   admin API with your admin cookie.
+- **A domain Traefik routes but the app does not know answers 404.** Traefik and PageBox
+  each keep their own list; adding one without the other gets you a certificate, a working
+  route, and a 404 on everything behind it.
 - **Upload cap and Cloudflare.** `MAX_UPLOAD_BYTES` defaults to 100 MB because Cloudflare's
   proxy rejects bigger request bodies on non-Enterprise plans. Raise it when nothing in
   front imposes a smaller cap; it propagates to adapter-node's `BODY_SIZE_LIMIT`

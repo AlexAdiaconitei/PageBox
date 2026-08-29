@@ -3,9 +3,18 @@ title: Docker Compose
 description: The standalone stack — app, Postgres, MinIO, and optionally Traefik and Valkey.
 ---
 
-The compose file brings its own database and object store, so a fresh clone runs with no
-external dependencies. Point it at your own Postgres and S3 when you want to keep what is
-on it.
+The compose file brings its own database and object store and pulls a published image, so an
+empty directory with `docker-compose.yml` and a `.env` in it runs. Point it at your own
+Postgres and S3 when you want to keep what is on it.
+
+```yaml
+image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:-latest}
+```
+
+`PAGEBOX_TAG` in your `.env` pins the version — `0.1.0`, or `0.1` to follow the patches of
+one minor. Pin it on anything you care about: `latest` moves on the next release, and
+`pull_policy: always` means a restart is enough to pick that up. To run the checkout instead
+of a release, replace that line with `build: { context: . }`.
 
 ## The four profiles
 
@@ -102,11 +111,10 @@ the container unhealthy instead of letting it serve errors quietly.
 ## Upgrading
 
 Deployments are immutable objects in S3 and the schema is migrated forward on boot, so an
-upgrade is a new image and a restart:
+upgrade is a new tag and a restart:
 
 ```bash
-docker compose pull
-docker compose up -d
+PAGEBOX_TAG=0.1.1 docker compose up -d      # or edit .env and: docker compose up -d
 ```
 
 Take a database backup first if you are moving more than one version. Nothing in the object
