@@ -8,7 +8,22 @@
 
 ---
 
-## Estado: M0 → M4 + M6 implementados (2026-08-17)
+## Estado: 0.1.0 publicada (2026-08-29)
+
+**M0–M7 completos.** M8 (homelab definitivo, 3 sitios reales) es despliegue, no código: la
+imagen está en `ghcr.io/alexadiaconitei/pagebox` y la ruta de Dokploy está en
+`docs/dokploy.md`.
+
+Cerrado en esta última vuelta, además de las decisiones de §8:
+
+- **M5** — rotación y revocación de deploy tokens desde el panel, `last_used_at` por token,
+  rollback a un clic (mover el puntero con `activate`), `audit_log` filtrable.
+- **M7** — el §10 del brief vive como suite (`tests/integration/hardening.test.ts`) y corre
+  en CI junto a la integración real contra Postgres + MinIO; retención por sitio; README con
+  capturas; sitio de documentación en `gh-pages/`; imagen publicada y verificada antes de
+  publicarse.
+
+### Historial: M0 → M4 + M6 implementados (2026-08-17)
 
 ### M6 — drag & drop en el panel
 
@@ -556,14 +571,26 @@ después. Recomendado si el primer uso es "publicar mis docs ya".
 
 ---
 
-## 8. Decisiones que quedan abiertas
+## 8. Decisiones cerradas antes de 0.1.0
 
-1. **Cap de subida**: propongo 100 MB por la limitación de Cloudflare (§1.1 B2), no 200 MB.
-   Si algún build pasa de ahí, la vía es la skill `s3-direct-upload` (presigned multipart),
-   fuera de v1.
-2. **CF Access delante del panel**: decidir antes de M8. Si sí → service tokens en el CI.
-3. **Retención de deployments**: ¿guardar los N últimos por sitio, o por antigüedad? Default
-   propuesto: **10 últimos + el activo siempre**, configurable.
-4. **Registro de imagen**: ¿GHCR con build en CI (compose usa `image:`), o build en Dokploy
-   desde el repo? Propongo **ambas**: Dokploy compila del repo, y CI publica en GHCR para el
-   perfil compose.
+Las cuatro que quedaban abiertas, con lo que se hizo y dónde está.
+
+1. **Cap de subida → 100 MB, configurable.** `MAX_UPLOAD_BYTES` por defecto 104857600 por
+   la limitación de Cloudflare (§1.1 B2). El entrypoint propaga el mismo valor a
+   `BODY_SIZE_LIMIT` de adapter-node, así que el cap de la app y el de HTTP no pueden
+   divergir. Un build más grande sigue siendo caso de `s3-direct-upload` (presigned
+   multipart), fuera de v1.
+2. **CF Access delante del panel → no por defecto.** Rompe el API por token, que vive en el
+   host de admin. Si se pone: política de bypass para `/api/v1/*` o service tokens en el
+   workflow. Delante del host de sitios, nunca — los sitios públicos dejarían de serlo.
+   Documentado en `docs/dokploy.md`.
+3. **Retención → los N últimos por sitio, nunca por antigüedad.** Configurable por sitio,
+   mínimo 2 (`MIN_RETENTION`), y el deployment activo no se poda esté donde esté en el
+   orden. Por antigüedad se descartó: un sitio que no se despliega en meses no debe perder
+   su historial por el paso del tiempo. `src/lib/server/deploy/retention.ts`.
+4. **Registro de imagen → GHCR, y ambas vías.** `.github/workflows/release.yml` publica
+   `ghcr.io/alexadiaconitei/pagebox` en cada tag `v*` (`{version}`, `{major}.{minor}` y
+   `latest` si no es pre-release), tras arrancar la imagen contra Postgres + MinIO y
+   comprobarla (`scripts/smoke-image.sh`) — lo que no responde no se publica. Los dos
+   compose usan `image:` con `PAGEBOX_TAG`; Dokploy puede seguir compilando desde el repo
+   (Application/Dockerfile) para forks o commits sin tag.

@@ -3,9 +3,66 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — 0.1.0
+## [0.1.0] — 2026-08-29
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).
+
+### Added — the image is published, and it is checked before it is
+
+- **`ghcr.io/alexadiaconitei/pagebox`**, built and pushed by `.github/workflows/release.yml`
+  on every `v*` tag: `{version}`, `{major}.{minor}`, and `latest` only when the tag carries
+  no pre-release suffix. A tag is the only trigger, so a version in the registry is always a
+  version that exists in the history.
+- **Nothing is published that has not answered a request.** The workflow builds the image,
+  loads it locally, and runs `scripts/smoke-image.sh` against a throwaway Postgres and
+  MinIO: it waits for `/healthz` — which means migrations applied and the bucket exists —
+  then asserts the panel host serves the panel, the sites host answers an unknown slug with
+  PageBox's own 404 document rather than a line of text, an unknown host reaches neither,
+  and the bootstrap superadmin was created. Only then does it push. The push is a cache hit,
+  not a second build.
+- **Both compose files pull that image** instead of building: `PAGEBOX_TAG` pins the
+  version, `latest` is the default, and `pull_policy: always` makes a restart enough to pick
+  up a release. Installing is now two files in an empty directory — `docker-compose.yml` and
+  a `.env` — with no clone and no build. Building the checkout is still one line away.
+- linux/amd64 only for now. The image builds the SvelteKit app inside itself, and doing that
+  for arm64 under emulation turns a two-minute release into a twenty-minute one.
+
+### Added — what to do with two domains in Dokploy
+
+The question the deployment docs never answered directly: two hostnames, but *how* — two
+apps, two ports, two paths?
+
+- **One application, two domains, both at container port 3000.** PageBox is a single process
+  on a single port; the `Host` header picks the surface before routing happens. Dokploy's
+  Docker provider pulls the released image, and *Add Domain* twice on that same application
+  is the whole routing setup.
+- **Why the alternatives do not work**, since "use two hostnames" reads like a preference
+  until you know: ports do not isolate cookies — a cookie set on `:3000` is sent to `:3001`,
+  because the cookie jar is keyed by host, not by origin — so a port split would look like a
+  boundary and enforce nothing. Paths are the same origin outright, which is the property
+  the whole design exists to avoid, and would put every site one directory deeper. Different
+  hostnames are the only split browsers enforce for cookies.
+- **The failure mode nobody guesses**, now written down: a domain Traefik routes but the app
+  does not know answers 404 — a certificate, a working route, and nothing behind it. Traefik
+  and PageBox each keep their own list, and both have to agree.
+- `docs/dokploy.md` and the documentation site's Dokploy page both lead with the image route
+  now, keep Dockerfile as the fork route, and cover upgrading: a new tag and a redeploy,
+  with the object store untouched.
+
+### Added — the panel says which PageBox it is
+
+The rail's footer links to the repository and shows the running version, compiled in from
+`package.json` at build time rather than read from disk. An instance outlives whoever
+deployed it: the version is the first thing anyone reporting a problem is asked for, and
+until now the only way to know it was to inspect the image.
+
+### Changed — the four open decisions are closed
+
+`docs/IMPLEMENTATION-PLAN.md` §8 was a list of questions; it is now a record of answers.
+Upload cap: 100 MB, configurable, propagated to `BODY_SIZE_LIMIT` so the two caps cannot
+drift. Cloudflare Access: not in front of the panel by default, never in front of the sites
+host. Retention: the newest N per site, never by age, minimum 2, live deployment never
+pruned. Image registry: GHCR on tag, with the Dockerfile route kept for forks.
 
 ### Fixed — the Next.js recipe produced a site with no images
 
