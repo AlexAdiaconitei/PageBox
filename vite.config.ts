@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import adapter from '@sveltejs/adapter-node';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
@@ -30,7 +31,17 @@ function pageboxDevUrls(): Plugin {
 	};
 }
 
+// The panel shows the running version next to the repository link, and an image is the
+// one place where nobody can check `package.json` — so it is compiled in rather than read
+// from disk at runtime, where the file may or may not be beside the bundle.
+const { version } = JSON.parse(
+	readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+) as { version: string };
+
 export default defineConfig({
+	define: {
+		__PAGEBOX_VERSION__: JSON.stringify(version)
+	},
 	plugins: [
 		pageboxDevUrls(),
 		tailwindcss(),

@@ -2,6 +2,9 @@ import type { SessionUser } from '$lib/server/auth';
 import type { HostKind } from '$lib/server/config';
 
 declare global {
+	/** Compiled in by vite.config.ts from package.json. See $lib/meta.ts. */
+	const __PAGEBOX_VERSION__: string;
+
 	namespace App {
 		interface Error {
 			message: string;
