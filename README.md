@@ -5,6 +5,13 @@
   </picture>
 </p>
 
+<p align="center">
+  <a href="https://github.com/AlexAdiaconitei/PageBox/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/AlexAdiaconitei/PageBox?label=release&color=1f6feb" /></a>
+  <a href="https://github.com/AlexAdiaconitei/PageBox/pkgs/container/pagebox"><img alt="Image" src="https://img.shields.io/badge/ghcr.io-pagebox-1f6feb" /></a>
+  <a href="https://github.com/AlexAdiaconitei/PageBox/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/AlexAdiaconitei/PageBox/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://alexadiaconitei.github.io/PageBox/"><img alt="Docs" src="https://img.shields.io/badge/docs-pagebox-black" /></a>
+</p>
+
 **PageBox is static hosting you run yourself, with access control that reaches every file.**
 One superadmin runs the instance and seats admins; each admin runs their own sites,
 accounts and groups. A site is `public` or `private`, and on a private one **every asset** —
@@ -161,10 +168,21 @@ touch targets on coarse pointers only — a mouse keeps the tighter console.
 
 ## Run it
 
+The image is published, so nothing here builds anything:
+
+```
+ghcr.io/alexadiaconitei/pagebox:0.1.0
+```
+
 ### Standalone (Postgres + MinIO included)
 
+Two files in an empty directory — no clone needed, though cloning also gets you the example
+builds in [`examples/`](examples/README.md):
+
 ```bash
-cp .env.example .env          # set AUTH_SECRET and the bootstrap admin credentials
+curl -O  https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/.env.example
+# set AUTH_SECRET, the bootstrap admin credentials, and PAGEBOX_TAG=0.1.0 to pin the image
 docker compose up -d          # app + postgres + minio
 docker compose --profile cache up -d   # + valkey (needed for >1 replica)
 docker compose --profile proxy up -d   # + traefik routing both hostnames on :80
@@ -187,8 +205,14 @@ credential, not a password: nothing else in the panel opens until it has been re
 
 ### Dokploy
 
-See [`docs/dokploy.md`](docs/dokploy.md). Short version: Application → Dockerfile → two
-domains → environment variables → health check path `/healthz`.
+One application, provider **Docker**, image `ghcr.io/alexadiaconitei/pagebox:0.1.0`, then
+**Add Domain twice on that same application** — both at container port 3000, one for the
+panel and one for the sites. Not two apps, not two ports, not two paths: PageBox listens on
+one port and splits by `Host`, and hostnames are the only split browsers enforce for
+cookies. Environment variables next, then health check path `/healthz`.
+
+Full walkthrough, including why the port and path variants do not work:
+[`docs/dokploy.md`](docs/dokploy.md) · [documentation site](https://alexadiaconitei.github.io/PageBox/docs/install/dokploy).
 
 ### Development
 
@@ -299,13 +323,16 @@ tokens, Tailwind 4, and optionally Valkey once there is more than one replica. N
 
 ## Status
 
-**M0–M4 complete** — two-host dispatch, schema and migrations, health check, Docker image,
-compose stack and Dokploy guide; serving from S3 with the full resolution, caching and range
-semantics; the deploy API with rollback and an audit trail; the admin panel with users,
-groups, grants, deploy tokens and deployment history; private sites enforced on every file;
-drag & drop uploads with the preflight. What is left is hardening and the homelab
-deployment — see the milestone table in
-[`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md).
+**0.1.0, published.** Two-host dispatch, schema and migrations, health check, the image on
+GHCR, compose stack and Dokploy guide; serving from S3 with the full resolution, caching and
+range semantics; the deploy API with rollback and an audit trail; the admin panel with
+users, groups, grants, deploy tokens, quotas, retention and deployment history; private
+sites enforced on every file; drag & drop uploads with the preflight; the security checklist
+running as an integration suite in CI against a real Postgres and a real S3.
+
+Every milestone through M7 is done and the four decisions that were left open are closed —
+see [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md). What is left is not code:
+one hostname per site, and whatever the first instances ask for.
 
 ## Documentation
 
