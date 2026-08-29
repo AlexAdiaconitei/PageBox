@@ -171,7 +171,7 @@ touch targets on coarse pointers only — a mouse keeps the tighter console.
 The image is published, so nothing here builds anything:
 
 ```
-ghcr.io/alexadiaconitei/pagebox:0.1.1
+ghcr.io/alexadiaconitei/pagebox:0.1.0
 ```
 
 ### Standalone (Postgres + MinIO included)
@@ -205,7 +205,7 @@ credential, not a password: nothing else in the panel opens until it has been re
 
 ### Dokploy
 
-One application, provider **Docker**, image `ghcr.io/alexadiaconitei/pagebox:0.1.1`, then
+One application, provider **Docker**, image `ghcr.io/alexadiaconitei/pagebox:0.1.0`, then
 **Add Domain twice on that same application** — both at container port 3000, one for the
 panel and one for the sites. Not two apps, not two ports, not two paths: PageBox listens on
 one port and splits by `Host`, and hostnames are the only split browsers enforce for
