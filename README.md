@@ -301,6 +301,10 @@ leave it unset and the per-admin limits still hold on their own. Quotas cannot s
 total, an over-quota admin keeps serving but cannot deploy, and a site can be handed to
 another admin along with its storage.
 
+Sizes are written the way they are said — `PAGEBOX_STORAGE_BYTES=1GB`, `500MB`, `1.5GB`,
+`2TB` — or as a plain number of bytes. The units are 1024-based, so what the panel prints
+back is what you typed.
+
 ## Upload cap
 
 `MAX_UPLOAD_BYTES` defaults to **100 MB** and is configurable. The default exists because

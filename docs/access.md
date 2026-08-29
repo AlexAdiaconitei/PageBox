@@ -123,6 +123,9 @@ writes down: S3 has no capacity API, and MinIO and Garage report disk size only 
 their own non-S3 admin interfaces. Unset, per-admin quotas still hold and there is no pool
 arithmetic.
 
+Sizes take a unit — `1GB`, `1gb`, `500MB`, `1.5GB`, `2TB` — or a plain number of bytes; the
+units are 1024-based, and `GB` and `GiB` mean the same thing.
+
 The pool is hard — quotas may not sum past the total — and the superadmin has no quota of
 its own. Its allowance is the remainder, so every quota it hands out visibly shrinks its
 own room. An allocation is refused twice over: when the pool has not got it, and when it

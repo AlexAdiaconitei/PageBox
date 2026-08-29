@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseConfig, formatBytes, isPlaceholder } from '../../src/lib/server/config';
+import { parseConfig, formatBytes, isPlaceholder, parseSize } from '../../src/lib/server/config';
 
 const base = {
 	PAGEBOX_ADMIN_HOST: 'pagebox.example.com',
@@ -77,6 +77,88 @@ describe('config', () => {
 	it('formats byte labels', () => {
 		expect(formatBytes(104857600)).toBe('100 MB');
 		expect(formatBytes(1536)).toBe('1.5 KB');
+	});
+
+	/**
+	 * Sizes are typed by a human reading a disk, so they are written the way a human says
+	 * them. Binary units on purpose — `formatBytes` divides by 1024 and prints `GB`, so
+	 * anything else here would not survive a round trip through the panel.
+	 */
+	describe('size units', () => {
+		it('reads a size the way it is spoken', () => {
+			expect(parseSize('1GB')).toBe(1024 ** 3);
+			expect(parseSize('1gb')).toBe(1024 ** 3);
+			expect(parseSize('500MB')).toBe(500 * 1024 ** 2);
+			expect(parseSize('500mb')).toBe(500 * 1024 ** 2);
+			expect(parseSize('1.5 GB')).toBe(1.5 * 1024 ** 3);
+			expect(parseSize('2TB')).toBe(2 * 1024 ** 4);
+			expect(parseSize('512K')).toBe(512 * 1024);
+		});
+
+		it('treats GiB and GB as the same thing, and a bare number as bytes', () => {
+			expect(parseSize('1GiB')).toBe(parseSize('1GB'));
+			expect(parseSize('104857600')).toBe(104857600);
+			expect(parseSize('104857600B')).toBe(104857600);
+		});
+
+		// Every configuration written before units existed has to keep its exact meaning.
+		it('parses the old plain-number settings unchanged', () => {
+			const { config } = parseConfig({
+				...base,
+				MAX_UPLOAD_BYTES: '104857600',
+				PAGEBOX_STORAGE_BYTES: '500000000000'
+			});
+			expect(config?.MAX_UPLOAD_BYTES).toBe(104857600);
+			expect(config?.PAGEBOX_STORAGE_BYTES).toBe(500000000000);
+		});
+
+		it('accepts units on every size setting', () => {
+			const { config, errors } = parseConfig({
+				...base,
+				MAX_UPLOAD_BYTES: '200MB',
+				MAX_UNCOMPRESSED_BYTES: '1GB',
+				PAGEBOX_STORAGE_BYTES: '1gb',
+				PAGEBOX_DEFAULT_QUOTA_BYTES: '0.5GB'
+			});
+			expect(errors).toEqual([]);
+			expect(config?.MAX_UPLOAD_BYTES).toBe(200 * 1024 ** 2);
+			expect(config?.MAX_UNCOMPRESSED_BYTES).toBe(1024 ** 3);
+			expect(config?.PAGEBOX_STORAGE_BYTES).toBe(1024 ** 3);
+			expect(config?.PAGEBOX_DEFAULT_QUOTA_BYTES).toBe(512 * 1024 ** 2);
+			expect(config?.maxUploadLabel).toBe('200 MB');
+		});
+
+		// Taking the digits off the front of a typo is how a cap ends up ten times smaller
+		// than the operator believes it is.
+		it('refuses a near-miss instead of reading part of it', () => {
+			expect(parseSize('100 MB free')).toBeNull();
+			expect(parseSize('1 gigabyte')).toBeNull();
+			expect(parseSize('1,5GB')).toBeNull();
+			expect(parseSize('-1GB')).toBeNull();
+			expect(parseSize('')).toBeNull();
+
+			const { config, errors } = parseConfig({ ...base, PAGEBOX_STORAGE_BYTES: '1 terabyte' });
+			expect(config).toBeUndefined();
+			expect(errors.join(' ')).toMatch(/PAGEBOX_STORAGE_BYTES: must be a size like 500MB/);
+		});
+
+		// The pool is the one setting whose absence means something, so an empty value has
+		// to land on "unset" rather than on an error about a size that was never given.
+		it('leaves the pool unset when it is absent or empty', () => {
+			expect(parseConfig(base).config?.PAGEBOX_STORAGE_BYTES).toBeUndefined();
+			expect(
+				parseConfig({ ...base, PAGEBOX_STORAGE_BYTES: '' }).config?.PAGEBOX_STORAGE_BYTES
+			).toBeUndefined();
+		});
+
+		it('still catches a default quota bigger than the pool, in units', () => {
+			const { errors } = parseConfig({
+				...base,
+				PAGEBOX_STORAGE_BYTES: '1GB',
+				PAGEBOX_DEFAULT_QUOTA_BYTES: '5GB'
+			});
+			expect(errors.join(' ')).toMatch(/PAGEBOX_DEFAULT_QUOTA_BYTES cannot exceed/);
+		});
 	});
 
 	// The label used to stop at GB, so a few terabytes of stored builds rendered as

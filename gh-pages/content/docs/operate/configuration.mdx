@@ -87,12 +87,32 @@ attacker exhausts the login budget for everybody.
 Do **not** set `ORIGIN`. A fixed origin collapses the two hostnames into one and disables the
 host split.
 
+## Sizes
+
+Every `*_BYTES` setting takes a unit, or a plain number of bytes:
+
+```bash
+PAGEBOX_STORAGE_BYTES=1GB        # also: 1gb, 500MB, 1.5GB, 2TB, 512K
+MAX_UPLOAD_BYTES=104857600       # a bare number is still bytes
+```
+
+Units are **1024-based**, and `GB` and `GiB` mean the same thing — `1GB` is `1073741824`.
+That is deliberate: the panel divides by 1024 and prints `GB`, so a decimal reading here
+would answer `931.3 GB` to somebody who typed `1TB`.
+
+A value it cannot read is refused at boot with the variable named. It does not take the
+digits off the front of a typo: `100 MB free` is not 100 MB.
+
 ## Storage quotas
 
 | Variable | Default | Notes |
 | -------- | ------- | ----- |
 | `PAGEBOX_STORAGE_BYTES` | unset | what the instance has to give away. A declaration, not a measurement — S3 exposes no capacity figure |
-| `PAGEBOX_DEFAULT_QUOTA_BYTES` | `5368709120` (5 GB) | what a newly seated admin is offered on the form. Existing admins are given it once, at the first boot after upgrading |
+| `PAGEBOX_DEFAULT_QUOTA_BYTES` | `5GB` | what a newly seated admin is offered on the form. Existing admins are given it once, at the first boot after upgrading |
+
+`PAGEBOX_DEFAULT_QUOTA_BYTES` may not exceed `PAGEBOX_STORAGE_BYTES`; a pool smaller than
+the default quota stops the process at boot rather than at the first attempt to seat an
+admin. Declaring `PAGEBOX_STORAGE_BYTES=1GB` means lowering the default quota too.
 
 The full model is on [storage and retention](/docs/operate/storage#quotas).
 
@@ -100,8 +120,8 @@ The full model is on [storage and retention](/docs/operate/storage#quotas).
 
 | Variable | Default | Is |
 | -------- | ------- | -- |
-| `MAX_UPLOAD_BYTES` | `104857600` (100 MB) | the request body cap. Also becomes adapter-node's `BODY_SIZE_LIMIT` |
-| `MAX_UNCOMPRESSED_BYTES` | `524288000` (500 MB) | what an archive may expand to |
+| `MAX_UPLOAD_BYTES` | `100MB` | the request body cap. Also becomes adapter-node's `BODY_SIZE_LIMIT` |
+| `MAX_UNCOMPRESSED_BYTES` | `500MB` | what an archive may expand to |
 | `MAX_FILES` | `20000` | entries per archive |
 | `MAX_ZIP_RATIO` | `100` | compression ratio over this is treated as a bomb |
 
