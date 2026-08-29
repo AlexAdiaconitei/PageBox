@@ -104,8 +104,26 @@ AUTH_SECRET=<openssl rand -base64 48>
 BOOTSTRAP_ADMIN_EMAIL=you@example.com
 BOOTSTRAP_ADMIN_PASSWORD=<replaced at first sign-in>
 
-MAX_UPLOAD_BYTES=104857600                  # 100 MB — see below
+MAX_UPLOAD_BYTES=100MB                      # see below
+PAGEBOX_STORAGE_BYTES=1GB                   # what this instance has to give away
+PAGEBOX_DEFAULT_QUOTA_BYTES=1GB             # never above the line above
 ```
+
+Sizes take a unit — `1GB`, `1gb`, `500MB`, `1.5GB`, `2TB` — or a plain number of bytes.
+Units are 1024-based, and `GB` and `GiB` mean the same thing, so the panel prints back what
+you typed.
+
+`PAGEBOX_STORAGE_BYTES` is what the panel divides into quotas: allocated, free, and a
+superadmin whose own room is whatever the admins leave over. It is a **declaration, not a
+measurement** — S3 has no capacity API — so write down what the bucket's disk actually has.
+Leave it out and per-admin quotas still hold; there is simply no pool.
+
+<Callout type="warn" title="A small pool needs a smaller default quota">
+`PAGEBOX_DEFAULT_QUOTA_BYTES` may not exceed `PAGEBOX_STORAGE_BYTES`, and it defaults to
+**5 GB**. Declaring a 1 GB pool without lowering it refuses to start — deliberately, because
+a default nobody could ever be given is better caught at boot than at the first attempt to
+seat an admin.
+</Callout>
 
 The two hostnames must match the two domains you just added, exactly: they are what the app
 compares the incoming host against. A domain Traefik routes but the app does not know

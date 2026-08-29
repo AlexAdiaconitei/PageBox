@@ -33,6 +33,32 @@ trade entirely.
 ships `LICENSE` itself: an image is a distribution, and BSL asks that the licence be
 displayed on every copy of the work.
 
+### Added — sizes are written the way they are said
+
+`PAGEBOX_STORAGE_BYTES=1GB`, `500MB`, `1.5GB`, `2TB`, `512K` — every `*_BYTES` setting now
+takes a unit, and a plain number is still a number of bytes, so nothing written before this
+changes meaning. The units are 1024-based and `GB` and `GiB` are the same thing, because the
+panel divides by 1024 and prints `GB`: a decimal reading here would answer `931.3 GB` to
+somebody who typed `1TB`.
+
+It applies to `PAGEBOX_STORAGE_BYTES`, `PAGEBOX_DEFAULT_QUOTA_BYTES`, `MAX_UPLOAD_BYTES` and
+`MAX_UNCOMPRESSED_BYTES`. A value that is not a size is refused at boot with the variable
+named, and near-misses are refused rather than half-read — `100 MB free` is not 100 MB, and
+taking the digits off the front of a typo is how a cap ends up ten times smaller than
+intended. The image's entrypoint understands the same grammar, so `MAX_UPLOAD_BYTES=150MB`
+still reaches adapter-node as a `BODY_SIZE_LIMIT` of `157286400`; the release smoke test
+boots the image with units set and asserts both halves agree.
+
+The pool was the reason. It is the one figure an operator reads off a disk and types in, and
+`500000000000` is how a terabyte becomes a gigabyte.
+
+**Also documented, which it barely was.** `PAGEBOX_STORAGE_BYTES` was missing from the
+Dokploy environment block that people copy — the one place it most needed to be — so an
+instance would be stood up with no pool at all and no sign that there was one to declare.
+Both Dokploy guides now carry it, along with the trap next to it: `PAGEBOX_DEFAULT_QUOTA_BYTES`
+defaults to 5 GB and may not exceed the pool, so declaring a 1 GB pool without lowering it
+refuses to start.
+
 ### Added — the image is published, and it is checked before it is
 
 - **`ghcr.io/alexadiaconitei/pagebox`**, built and pushed by `.github/workflows/release.yml`

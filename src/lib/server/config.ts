@@ -14,8 +14,92 @@ export { formatBytes };
  * (see docs/PLAN-static-hosting.md §D1), so it is not a warning.
  */
 
+/**
+ * Sizes are written the way people say them out loud: `1GB`, `1gb`, `500MB`, `1.5 GB`. A
+ * plain number is still a number of bytes, so every configuration written before this
+ * parses to exactly what it did.
+ *
+ * The units are binary — `1GB` is 1073741824, and `GB` and `GiB` mean the same thing. That
+ * is the unfashionable reading, and it is the one that round-trips: `formatBytes` divides by
+ * 1024 and prints `GB`, so a decimal `GB` here would mean the panel answers `931.3 GB` to
+ * somebody who typed `1TB`, which reads as a bug in the arithmetic rather than a difference
+ * of opinion about SI prefixes.
+ *
+ * Fractions are allowed and round to the nearest byte: `0.5GB` is a reasonable quota, and
+ * nobody should have to multiply it out by hand.
+ */
+const SIZE_UNITS: Record<string, number> = {
+	'': 1,
+	b: 1,
+	k: 1024,
+	kb: 1024,
+	kib: 1024,
+	m: 1024 ** 2,
+	mb: 1024 ** 2,
+	mib: 1024 ** 2,
+	g: 1024 ** 3,
+	gb: 1024 ** 3,
+	gib: 1024 ** 3,
+	t: 1024 ** 4,
+	tb: 1024 ** 4,
+	tib: 1024 ** 4,
+	p: 1024 ** 5,
+	pb: 1024 ** 5,
+	pib: 1024 ** 5
+};
+
+const SIZE_HINT =
+	'must be a size like 500MB, 1.5GB or 1073741824 (plain numbers are bytes; ' +
+	'KB/MB/GB/TB are 1024-based, and KiB/MiB/GiB mean the same)';
+
+/**
+ * `null` for anything that is not a size — including the near-misses that would otherwise
+ * be read as something smaller than intended. `100 MB free` is not 100 MB, and quietly
+ * taking the digits off the front of a typo is how a cap ends up an order of magnitude off.
+ */
+export function parseSize(raw: unknown): number | null {
+	const match = /^(\d+(?:\.\d+)?)\s*([a-z]*)$/i.exec(String(raw ?? '').trim());
+	if (!match) return null;
+	const unit = SIZE_UNITS[match[2].toLowerCase()];
+	if (unit === undefined) return null;
+	const value = Number(match[1]) * unit;
+	return Number.isFinite(value) ? Math.round(value) : null;
+}
+
+/**
+ * A size with a default. Written against `unknown` rather than `z.coerce.number()` because
+ * the input is now a small language rather than a number, and the failure has to say so:
+ * `MAX_UPLOAD_BYTES: must be a size like 500MB` is actionable, `expected number, received
+ * string` is not.
+ */
 const bytes = (fallback: number) =>
-	z.coerce.number().int().positive().default(fallback).describe('size in bytes');
+	z
+		.unknown()
+		.optional()
+		.transform((raw, ctx) => {
+			if (raw === undefined || raw === '') return fallback;
+			const parsed = parseSize(raw);
+			if (parsed === null || parsed <= 0) {
+				ctx.addIssue({ code: 'custom', message: SIZE_HINT });
+				return z.NEVER;
+			}
+			return parsed;
+		});
+
+/** The same, for a setting whose absence is itself meaningful. */
+const optionalBytes = () =>
+	z
+		.unknown()
+		.optional()
+		.transform((raw, ctx) => {
+			if (raw === undefined || raw === '') return undefined;
+			const parsed = parseSize(raw);
+			if (parsed === null || parsed <= 0) {
+				ctx.addIssue({ code: 'custom', message: SIZE_HINT });
+				return z.NEVER;
+			}
+			return parsed;
+		});
 
 const hostname = z
 	.string()
@@ -61,6 +145,8 @@ const schema = z.object({
 	// designed for. It is a *default*, not a law: a deployment without Cloudflare in
 	// front (plain Traefik, LAN, Tailscale…) can raise it freely. Whatever value is
 	// set here also becomes adapter-node's BODY_SIZE_LIMIT, so the two can never drift.
+	//
+	// Every *_BYTES setting takes a unit — `100MB`, `1.5GB` — or a plain number of bytes.
 	MAX_UPLOAD_BYTES: bytes(100 * 1024 * 1024),
 	MAX_UNCOMPRESSED_BYTES: bytes(500 * 1024 * 1024),
 	MAX_FILES: z.coerce.number().int().positive().default(20_000),
@@ -74,7 +160,11 @@ const schema = z.object({
 	// and the pool becomes real: allocated, free, and a superadmin whose own room shrinks
 	// with every quota it hands out. Leave it unset and per-admin quotas still hold; there
 	// is simply no pool arithmetic to do.
-	PAGEBOX_STORAGE_BYTES: z.coerce.number().int().positive().optional(),
+	//
+	// Written with a unit — `PAGEBOX_STORAGE_BYTES=1GB`, `500GB`, `2TB` — or as a plain
+	// number of bytes. It is the one figure an operator reads off a disk and types in, and
+	// eleven digits is how a terabyte becomes a gigabyte.
+	PAGEBOX_STORAGE_BYTES: optionalBytes(),
 	// What a newly seated admin is offered on the form. Editable there; this is the
 	// starting figure, not a cap.
 	PAGEBOX_DEFAULT_QUOTA_BYTES: bytes(5 * 1024 * 1024 * 1024),

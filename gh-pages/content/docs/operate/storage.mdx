@@ -56,6 +56,10 @@ writes down: S3 has no capacity API, and MinIO and Garage report disk size only 
 own non-S3 admin interfaces. Leave it unset and per-admin quotas still hold — there is just
 no pool arithmetic.
 
+Write it the way you say it — `PAGEBOX_STORAGE_BYTES=1GB`, `500GB`, `2TB` — or as a plain
+number of bytes. Units are 1024-based and `GB` and `GiB` are the same, so the panel prints
+back what you typed.
+
 With it set, the pool is hard:
 
 - quotas may not sum past the total;
@@ -76,7 +80,15 @@ With it set, the pool is hard:
 | Site with no owner | Unmetered, and reported as such — it occupies the bucket against nobody's allocation |
 
 Existing admins are given `PAGEBOX_DEFAULT_QUOTA_BYTES` at the first boot after the quota
-feature was added, so an upgrade does not leave anybody at zero.
+feature was added, so an upgrade does not leave anybody at zero. It defaults to **5 GB** and
+may not exceed the pool: declaring a pool smaller than that without lowering it refuses to
+start, rather than leaving a default nobody could ever be given.
+
+<Callout title="What the panel's “free” means">
+`free` is what is left to **hand out** — the pool minus the quotas allocated from it. It is
+not free space in the bucket: nothing here measures the bucket, and an admin's usage counts
+against their own quota whether or not anybody else has been given one.
+</Callout>
 
 ## The upload cap
 

@@ -80,8 +80,19 @@ the sites host.
    BOOTSTRAP_ADMIN_EMAIL=you@example.com
    BOOTSTRAP_ADMIN_PASSWORD=<first-login password, changed on first use>
 
-   MAX_UPLOAD_BYTES=104857600                  # 100 MB — see note below
+   MAX_UPLOAD_BYTES=100MB                      # see note below
+   PAGEBOX_STORAGE_BYTES=1GB                   # what this instance has to give away
+   PAGEBOX_DEFAULT_QUOTA_BYTES=1GB             # never above the line above
    ```
+
+   Sizes take a unit — `1GB`, `1gb`, `500MB`, `1.5GB`, `2TB` — or a plain number of bytes.
+   Units are 1024-based, and `GB` and `GiB` mean the same thing.
+
+   `PAGEBOX_STORAGE_BYTES` is what the panel divides into quotas, and it is a declaration,
+   not a measurement: S3 has no capacity API, so write down what the bucket's disk has.
+   Leave it out and per-admin quotas still hold; there is just no pool. Note that
+   `PAGEBOX_DEFAULT_QUOTA_BYTES` defaults to 5 GB and may not exceed the pool — a 1 GB pool
+   without lowering it refuses to start, and says so.
 
    The two hostnames must match the two domains exactly: they are what the app compares the
    incoming host against. A domain Traefik routes but the app does not know answers 404.

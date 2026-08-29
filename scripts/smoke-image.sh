@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Boots the built image against a throwaway Postgres and MinIO and asserts the four things
+# Boots the built image against a throwaway Postgres and MinIO and asserts the five things
 # that make an image publishable at all: it starts, it migrates, it splits the two hosts,
-# and it answers with PageBox's own error page rather than the runtime's.
+# it answers with PageBox's own error page rather than the runtime's, and it reads the size
+# settings the documentation tells people to write.
 #
 # Runs in the release workflow between building and pushing, so a broken image never
 # reaches the registry.
@@ -57,6 +58,9 @@ docker run -d --name pbx-smoke-app --network "$NET" -p "${PORT}:3000" \
 	-e BOOTSTRAP_ADMIN_PASSWORD=smoke-bootstrap-password \
 	-e HOST_HEADER=x-forwarded-host \
 	-e PROTOCOL_HEADER=x-forwarded-proto \
+	-e MAX_UPLOAD_BYTES=150MB \
+	-e PAGEBOX_STORAGE_BYTES=20GB \
+	-e PAGEBOX_DEFAULT_QUOTA_BYTES=2GB \
 	"$IMAGE" >/dev/null
 
 echo "smoke: waiting for /healthz"
@@ -97,5 +101,20 @@ code=$(status unknown.example.com /)
 # The bootstrap superadmin is created on first boot; without it a fresh instance has no
 # way in at all.
 docker logs pbx-smoke-app 2>&1 | grep -qi 'bootstrap' || fail "no bootstrap line in the boot log"
+
+# The sizes above are written with units, which the app and the entrypoint parse separately
+# — the app for its own cap, the entrypoint for adapter-node's BODY_SIZE_LIMIT. The boot
+# line reports what the app read, so it catches the two disagreeing here rather than at
+# somebody's first upload.
+docker logs pbx-smoke-app 2>&1 | grep -q 'upload-cap=150 MB' ||
+	fail "MAX_UPLOAD_BYTES=150MB was not read as 150 MB"
+#
+# Read off the node process rather than `docker exec … echo $BODY_SIZE_LIMIT`: exec gets the
+# environment the container was *configured* with, and this variable is one the entrypoint
+# computes at boot, so that spelling would report empty however well it worked.
+pid=$(docker exec pbx-smoke-app pgrep -f 'node build/index.js' 2>/dev/null | head -1 || true)
+limit=$(docker exec pbx-smoke-app cat "/proc/${pid:-1}/environ" 2>/dev/null |
+	tr '\0' '\n' | sed -n 's/^BODY_SIZE_LIMIT=//p' || true)
+[ "$limit" = 157286400 ] || fail "BODY_SIZE_LIMIT is '${limit:-unset}', expected 157286400"
 
 echo "smoke: ok — $IMAGE"
