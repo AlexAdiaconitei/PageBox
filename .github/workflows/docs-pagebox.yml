@@ -29,11 +29,26 @@ jobs:
       run:
         working-directory: gh-pages
     steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      # A release must not go red because nobody has stood an instance up yet. Until the
+      # secrets exist this is a deliberate no-op with a line saying so, not a failure.
+      - id: configured
+        working-directory: .
+        run: |
+          if [ -n "${{ secrets.PAGEBOX_ADMIN }}" ] && [ -n "${{ secrets.PAGEBOX_TOKEN }}" ] && [ -n "${{ vars.PAGEBOX_SLUG }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "No PageBox instance configured (secrets.PAGEBOX_ADMIN / secrets.PAGEBOX_TOKEN / vars.PAGEBOX_SLUG). Skipping." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - if: steps.configured.outputs.ready == 'true'
+        uses: actions/checkout@v7
+      - if: steps.configured.outputs.ready == 'true'
+        uses: pnpm/action-setup@v6
         with:
           version: 11
-      - uses: actions/setup-node@v7
+      - if: steps.configured.outputs.ready == 'true'
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -42,9 +57,11 @@ jobs:
       # No --ignore-workspace: gh-pages/pnpm-workspace.yaml is this project's own
       # workspace root, and it carries the supply-chain policy exclusions. Ignoring
       # it discards those settings and the install fails the minimumReleaseAge check.
-      - run: pnpm install --frozen-lockfile
+      - if: steps.configured.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
 
-      - run: ./scripts/deploy-to-pagebox.sh
+      - if: steps.configured.outputs.ready == 'true'
+        run: ./scripts/deploy-to-pagebox.sh
         env:
           PAGEBOX_ADMIN: ${{ secrets.PAGEBOX_ADMIN }}
           PAGEBOX_TOKEN: ${{ secrets.PAGEBOX_TOKEN }}

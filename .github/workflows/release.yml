@@ -1,0 +1,98 @@
+name: Release
+
+# Publishes the image to GHCR. A tag is the trigger, so the version in the registry can
+# only ever be a version that exists in the history:
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#     -> ghcr.io/alexadiaconitei/pagebox:0.1.0, :0.1, :latest
+#
+# workflow_dispatch rebuilds the same tags without moving the git tag, for when a base
+# image picks up a security fix and nothing in the source changed.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag to rebuild (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/pagebox
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # `latest` only on a real semver tag, and only when it is not a pre-release:
+          # v0.2.0-rc.1 must not become what a fresh `docker pull` gets.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+          labels: |
+            org.opencontainers.image.title=PageBox
+            org.opencontainers.image.description=Self-hosted static site hosting with a panel, a deploy API and private sites
+            org.opencontainers.image.licenses=MIT
+
+      # Built once, loaded locally, and only pushed after it has answered a request. The
+      # second build-push step is a cache hit, not a rebuild.
+      #
+      # linux/amd64 only: the image builds the SvelteKit app inside itself, and doing that
+      # for arm64 under QEMU turns a two-minute release into a twenty-minute one. Add
+      # `platforms:` to both steps when there is an arm64 host that needs it.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: pagebox:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the image that is about to be published
+        run: bash scripts/smoke-image.sh pagebox:smoke
+
+      - name: Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+
+      - name: Summary
+        run: |
+          {
+            echo "### Published"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
