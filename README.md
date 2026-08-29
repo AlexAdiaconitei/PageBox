@@ -353,3 +353,18 @@ kept beside the code:
 - [Example sites](examples/README.md)
 - [Design brief](docs/PLAN-static-hosting.md) · [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Changelog](CHANGELOG.md)
+
+## Licence
+
+[PolyForm Noncommercial 1.0.0](LICENSE) — use it, run it, change it and share it for any
+**noncommercial** purpose. Personal instances, hobby projects, study and research, and use
+by charities, schools, public research bodies and government institutions are all covered,
+whoever funds them.
+
+Commercial use is not: hosting your company's sites on it, running it as a service you
+charge for, or bundling it into a product. If that is what you want,
+[open an issue](https://github.com/AlexAdiaconitei/PageBox/issues) and ask — a separate
+licence is a conversation, not a refusal.
+
+The sites *you* deploy on PageBox are yours. This licence covers PageBox itself, not the
+content it serves.

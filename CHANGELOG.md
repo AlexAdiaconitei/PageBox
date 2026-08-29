@@ -3,6 +3,22 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — a licence, so the published thing can actually be used
+
+`LICENSE`, **PolyForm Noncommercial 1.0.0** — the licence written for exactly this
+condition, rather than a Creative Commons one bent into software or a bespoke paragraph that
+nobody can rely on. Noncommercial use is permitted outright, and the licence spells out what
+that includes: personal use, study, research, hobby projects, and charities, schools, public
+research bodies and government institutions regardless of who funds them. Commercial use is
+not granted and is left to a separate conversation.
+
+It matters more than a file usually does: 0.1.0 went out public, with a public image, and
+until now carried no licence at all — which in copyright terms means nobody had permission
+to run it. `package.json` and the image's `org.opencontainers.image.licenses` label both
+carry the SPDX identifier, so the answer is the same wherever somebody looks.
+
 ## [0.1.0] — 2026-08-29
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).

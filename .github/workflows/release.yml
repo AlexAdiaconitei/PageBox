@@ -91,10 +91,9 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
-          # No image.licenses label: the repository carries no LICENSE file yet, and a label
-          # claiming one would be the only place a licence was ever asserted.
           labels: |
             org.opencontainers.image.title=PageBox
             org.opencontainers.image.description=Self-hosted static hosting with a panel, a deploy API and private sites
             org.opencontainers.image.version=${{ steps.tags.outputs.version }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=PolyForm-Noncommercial-1.0.0
