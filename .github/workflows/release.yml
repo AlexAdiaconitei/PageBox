@@ -96,4 +96,4 @@ jobs:
             org.opencontainers.image.description=Self-hosted static hosting with a panel, a deploy API and private sites
             org.opencontainers.image.version=${{ steps.tags.outputs.version }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.licenses=PolyForm-Noncommercial-1.0.0
+            org.opencontainers.image.licenses=BUSL-1.1
