@@ -31,6 +31,9 @@ COPY --from=build --chown=app:app /app/node_modules ./node_modules
 # Migrations are applied by the app at startup, so they must ship with it.
 COPY --from=build --chown=app:app /app/drizzle ./drizzle
 COPY --chown=app:app package.json ./
+# The licence travels with the thing it licenses: an image is a distribution, and PolyForm's
+# Notices section asks that whoever gets a copy gets the terms with it.
+COPY --chown=app:app LICENSE ./
 # chmod explicitly: a checkout from Windows carries no executable bit.
 COPY --chown=app:app --chmod=755 deploy/entrypoint.sh ./entrypoint.sh
 
