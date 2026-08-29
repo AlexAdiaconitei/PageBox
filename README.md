@@ -356,14 +356,22 @@ kept beside the code:
 
 ## Licence
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — use it, run it, change it and share it for any
-**noncommercial** purpose. Personal instances, hobby projects, study and research, and use
-by charities, schools, public research bodies and government institutions are all covered,
-whoever funds them.
+[Business Source License 1.1](LICENSE), with **Apache 2.0** as the Change License on
+**2030-08-29** — on that date this version becomes open source outright, and every later
+version four years after its own release.
 
-Commercial use is not: hosting your company's sites on it, running it as a service you
-charge for, or bundling it into a product. If that is what you want,
-[open an issue](https://github.com/AlexAdiaconitei/PageBox/issues) and ask — a separate
+Until then:
+
+| You are | Running it costs |
+| ------- | ---------------- |
+| an individual, personally — a home instance, a hobby project, study, research | nothing |
+| an organisation — company, government body, public institution, school, non-profit | a commercial licence, **including private internal deployment** |
+
+Anyone may read, modify, fork and redistribute the source, and anyone may run it
+non-production to evaluate it. What needs a licence is production use by an organisation,
+whether or not the sites it hosts are public and whether or not anyone is charged for them.
+
+Want one? [Open an issue](https://github.com/AlexAdiaconitei/PageBox/issues) — a commercial
 licence is a conversation, not a refusal.
 
 The sites *you* deploy on PageBox are yours. This licence covers PageBox itself, not the

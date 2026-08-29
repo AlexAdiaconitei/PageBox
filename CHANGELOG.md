@@ -7,19 +7,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added — a licence, so the published thing can actually be used
 
-`LICENSE`, **PolyForm Noncommercial 1.0.0** — the licence written for exactly this
-condition, rather than a Creative Commons one bent into software or a bespoke paragraph that
-nobody can rely on. Noncommercial use is permitted outright, and the licence spells out what
-that includes: personal use, study, research, hobby projects, and charities, schools, public
-research bodies and government institutions regardless of who funds them. Commercial use is
-not granted and is left to a separate conversation.
+`LICENSE`, **Business Source License 1.1**, Change License Apache 2.0, Change Date
+**2030-08-29**. It matters more than a file usually does: 0.1.0 went out public, with a
+public image, and carried no licence at all — which in copyright terms means nobody had
+permission to run it.
 
-It matters more than a file usually does: 0.1.0 went out public, with a public image, and
-until now carried no licence at all — which in copyright terms means nobody had permission
-to run it. `package.json` and the image's `org.opencontainers.image.licenses` label both
-carry the SPDX identifier, so the answer is the same wherever somebody looks, and the
-image itself now carries `LICENSE` — an image is a distribution, and PolyForm's Notices
-section asks that whoever gets a copy gets the terms with it.
+The Additional Use Grant is where the intent lives. Production use is free for an
+individual, personally — a home instance, a hobby project, study, research — and needs a
+commercial licence for **any organisation**: company, government body, public institution,
+school, non-profit alike, *including* a private internal deployment nobody outside ever
+sees, and whether or not the sites it hosts are public or paid for. Everything else BSL
+grants stays granted: read, modify, fork, redistribute, and run it non-production to
+evaluate it. On the Change Date this version becomes Apache 2.0, and each later version four
+years after its own release.
+
+The alternatives were tried on and did not fit. A noncommercial licence hands free use to
+governments, schools and charities by name — the opposite of the intent here. AGPL permits
+commercial use outright and asks only that modifications be published, which is a different
+trade entirely.
+
+`package.json` and the image's `org.opencontainers.image.licenses` label both carry the
+`BUSL-1.1` identifier, so the answer is the same wherever somebody looks, and the image now
+ships `LICENSE` itself: an image is a distribution, and BSL asks that the licence be
+displayed on every copy of the work.
 
 ## [0.1.0] — 2026-08-29
 
