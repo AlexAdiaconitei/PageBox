@@ -23,7 +23,7 @@ import {
 
 const run = configured ? describe : describe.skip;
 const HANDOVER = 'handover-password-1';
-const GB = 1024 ** 3;
+const MB = 1024 ** 2;
 
 run('storage quotas', () => {
 	const mark = tag();
@@ -42,14 +42,15 @@ run('storage quotas', () => {
 		// "Storage" with a total means a pool was declared; without it the strip says so.
 		pooled = users.includes('Allocated') && !users.includes('is unset');
 
-		// 0.01 GB ≈ 10.2 MB: small enough that a handful of megabytes crosses it, large
-		// enough to hold a real build first.
+		// 10 MB: small enough that a handful of megabytes crosses it, large enough to hold a
+		// real build first. Written with its unit, exactly as the environment writes sizes —
+		// the panel field takes the same language, which is the point of this figure.
 		await post('/users?/create', seat, {
 			email: adminEmail,
 			name: 'Quota admin',
 			password: HANDOVER,
 			role: 'admin',
-			quota: '0.01'
+			quota: '10MB'
 		});
 		admin = await signIn({ email: adminEmail, password: HANDOVER });
 		await post('/account/password?/changePassword', admin, {
@@ -69,7 +70,7 @@ run('storage quotas', () => {
 		const history = await (
 			await request(`/api/v1/sites/${slug}/deployments`, { jar: admin })
 		).json();
-		expect(history.quota.limit).toBe(Math.round(0.01 * GB));
+		expect(history.quota.limit).toBe(10 * MB);
 		expect(history.quota.used).toBeGreaterThan(0);
 		expect(history.quota.remaining).toBeGreaterThan(0);
 		expect(history.quota.over).toBe(false);
@@ -110,7 +111,7 @@ run('storage quotas', () => {
 
 	it('lets a quota be lowered below usage, and stops deploys until it is not', async () => {
 		const lowered = await actionResult(
-			await post('/users?/setQuota', seat, { userId: adminId, quota: '0.001' })
+			await post('/users?/setQuota', seat, { userId: adminId, quota: '1MB' })
 		);
 		expect(lowered.type).toBe('success');
 		expect(lowered.raw).toContain('over it');
@@ -122,7 +123,7 @@ run('storage quotas', () => {
 		const blocked = await upload(slug, buildOfSize(1, 'tiny'), { jar: admin });
 		expect(blocked.status).toBe(413);
 
-		await post('/users?/setQuota', seat, { userId: adminId, quota: '0.02' });
+		await post('/users?/setQuota', seat, { userId: adminId, quota: '20MB' });
 		const unblocked = await upload(slug, buildOfSize(1, 'tiny-again'), { jar: admin });
 		expect(unblocked.status).toBe(201);
 	});
@@ -130,7 +131,7 @@ run('storage quotas', () => {
 	it('refuses a quota the pool has not got', async () => {
 		if (!pooled) return; // No declared total: there is no pool to exhaust.
 		const greedy = await actionResult(
-			await post('/users?/setQuota', seat, { userId: adminId, quota: '999999' })
+			await post('/users?/setQuota', seat, { userId: adminId, quota: '999999GB' })
 		);
 		expect(greedy.status).toBe(409);
 	});
@@ -147,7 +148,7 @@ run('storage quotas', () => {
 			email: heirEmail,
 			password: HANDOVER,
 			role: 'admin',
-			quota: '1'
+			quota: '1GB'
 		});
 		const heirId = userIdFor(await (await request('/users', { jar: seat })).text(), heirEmail);
 

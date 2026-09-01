@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { SIZE_HINT, parseSize } from '$lib/format';
 import { config, formatBytes } from './config';
 import { db, getSql } from './db';
 import { deployment, site, user } from './db/schema';
@@ -314,10 +315,23 @@ export async function ownerOf(siteId: string) {
 }
 
 export const GIB = 1024 * 1024 * 1024;
+export const MIB = 1024 * 1024;
+
+/** The floor a quota may not go under, other than zero. See `parseQuota`. */
+export const MIN_QUOTA_BYTES = MIB;
 
 /**
- * Parses the quota field, which is entered in GiB because nobody types eleven digits.
- * Fractions are allowed — 0.5 GB is a reasonable quota for a documentation site.
+ * Parses the quota field.
+ *
+ * It takes exactly what `PAGEBOX_STORAGE_BYTES` takes — `500MB`, `200mb`, `1.5GB`, `2TB`,
+ * or a plain number of bytes — because they are the same figure written in two places, and
+ * a field that only understood gigabytes meant the operator who sets `500MB` in the
+ * environment had to work out `0.48828125` to say the same thing in the panel. One parser,
+ * `parseSize`, so the two can never disagree about what `500MB` is.
+ *
+ * A plain number is bytes, as in the environment. That reading is safe here rather than
+ * merely consistent: the floor below rejects everything under 1 MB, so `5` typed for 5 GB
+ * comes back as an error naming the units, never as a quota of five bytes.
  */
 export function parseQuota(raw: FormDataEntryValue | null): {
 	value: number | null;
@@ -326,15 +340,23 @@ export function parseQuota(raw: FormDataEntryValue | null): {
 	const text = String(raw ?? '').trim();
 	if (!text) return { value: null };
 
-	const parsed = Number(text);
-	if (!Number.isFinite(parsed) || parsed < 0) {
-		return { value: null, error: 'The quota must be a number of gigabytes' };
+	const parsed = parseSize(text);
+	if (parsed === null) {
+		return { value: null, error: `The quota ${SIZE_HINT}` };
 	}
+	// Zero is a real quota — an admin who may hold nothing — and the only value under the
+	// floor that is ever meant.
 	if (parsed === 0) return { value: 0 };
 	// Below this the figure stops being a quota and starts being a way to lock somebody out
-	// by accident — one build of anything is bigger.
-	if (parsed * GIB < 1024 * 1024) {
-		return { value: null, error: 'Use at least 0.001 GB, or 0 to stop them storing anything' };
+	// by accident — one build of anything is bigger. It is also what catches a bare `5`
+	// meant as gigabytes: 5 bytes fails here rather than being stored.
+	if (parsed < MIN_QUOTA_BYTES) {
+		return {
+			value: null,
+			error:
+				'Use at least 1MB — write the unit, as in 200MB or 1.5GB — or 0 to stop them ' +
+				'storing anything'
+		};
 	}
-	return { value: Math.round(parsed * GIB) };
+	return { value: parsed };
 }

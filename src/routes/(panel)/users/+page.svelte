@@ -3,7 +3,7 @@
 	import ShieldHalf from '@lucide/svelte/icons/shield-half';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
-	import { formatBytes } from '$lib/format';
+	import { formatBytes, formatSizeInput, parseSize } from '$lib/format';
 
 	let { data, form } = $props();
 	let adding = $state(false);
@@ -14,10 +14,38 @@
 	const when = (value: string | Date) =>
 		new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
-	const GIB = 1024 * 1024 * 1024;
-	/** Quotas are entered in GiB; the stored value is bytes. */
-	const asGb = (bytes: number | null) =>
-		bytes === null ? '' : String(Math.round((bytes / GIB) * 1000) / 1000);
+	/**
+	 * Quotas are typed the way the environment writes them — `200MB`, `1.5GB`, or a plain
+	 * number of bytes — and `parseSize` here is the same function the server parses the
+	 * submitted field with, so what the preview says is what will be stored.
+	 */
+	const preview = (raw: string) => {
+		const bytes = parseSize(raw);
+		return bytes === null ? null : formatBytes(bytes);
+	};
+
+	// The figures people actually hand out. They are buttons rather than a `step`, because
+	// the useful values are not evenly spaced — the gap from 500MB to 1GB matters and the
+	// gap from 50GB to 51GB does not — and a numeric stepper made 200MB unreachable.
+	const PRESETS = ['100MB', '200MB', '500MB', '1GB', '5GB', '10GB', '50GB'];
+
+	// One draft per open form. Only one quota row is open at a time (`requota` holds a
+	// single id), so one field of state is the whole of it.
+	let newQuota = $state('');
+	let rowQuota = $state('');
+
+	// Each form is filled when it opens, not when the page loads: the figure it starts on
+	// is a snapshot to edit, and re-reading it on every render would overwrite what somebody
+	// is halfway through typing.
+	function openCreate() {
+		adding = !adding;
+		if (adding) newQuota = formatSizeInput(data.defaultQuota);
+	}
+
+	function openQuota(person: { id: string; quota: number | null }) {
+		requota = requota === person.id ? null : person.id;
+		if (requota) rowQuota = formatSizeInput(person.quota);
+	}
 
 	const orphanBytes = $derived(
 		(data.pool?.orphaned ?? []).reduce((sum, entry) => sum + entry.bytes, 0)
@@ -39,7 +67,7 @@
 				: 'The accounts you issued. They are yours to administer, and nobody else’s.'}
 		</p>
 	</div>
-	<button class="btn btn-primary" onclick={() => (adding = !adding)}>
+	<button class="btn btn-primary" onclick={openCreate}>
 		<UserPlus size={14} strokeWidth={2} />
 		Add user
 	</button>
@@ -147,24 +175,49 @@
 			<button class="btn btn-primary" type="submit">Create</button>
 		</div>
 		{#if data.canSetRoles}
-			<label class="field">
-				Storage quota (GB)
-				<!-- Pre-filled with the configured default and editable here, because a quota is
-				     part of seating an admin rather than a second errand afterwards. Asking for
-				     more than the pool has left is refused, never quietly trimmed. -->
-				<input
-					class="input"
-					type="number"
-					name="quota"
-					min="0"
-					step="0.5"
-					value={asGb(data.defaultQuota)}
-				/>
-			</label>
+			<div>
+				<label class="field" for="new-quota">
+					Storage quota
+					<!-- Pre-filled with the configured default and editable here, because a quota is
+					     part of seating an admin rather than a second errand afterwards. Asking for
+					     more than the pool has left is refused, never quietly trimmed. Text, not a
+					     number stepper: the field speaks the same size language as the environment
+					     — 200MB, 1.5GB, or a plain number of bytes — and a stepper could only
+					     offer gigabytes. -->
+					<input
+						class="input"
+						id="new-quota"
+						type="text"
+						name="quota"
+						inputmode="text"
+						placeholder="500MB"
+						autocomplete="off"
+						bind:value={newQuota}
+					/>
+				</label>
+				<div class="mt-1.5 flex flex-wrap gap-1">
+					{#each PRESETS as size (size)}
+						<button
+							class="btn btn-ghost btn-xs"
+							type="button"
+							aria-pressed={newQuota === size}
+							onclick={() => (newQuota = size)}
+						>
+							{size}
+						</button>
+					{/each}
+				</div>
+			</div>
 			<p class="text-muted self-end text-[0.8rem]">
-				Only admins hold a quota.
+				Only admins hold a quota. Sizes take a unit — <span class="mono">200MB</span>,
+				<span class="mono">1.5GB</span> — or a plain number of bytes.
 				{#if data.pool?.total !== null && data.pool}
 					{formatBytes(data.pool.free)} free of {formatBytes(data.pool.total)}.
+				{/if}
+				{#if newQuota.trim() && preview(newQuota) === null}
+					<span class="text-[color:var(--pb-danger)]">That is not a size.</span>
+				{:else if preview(newQuota)}
+					Stores {preview(newQuota)}.
 				{/if}
 			</p>
 		{/if}
@@ -263,10 +316,7 @@
 									Reset password
 								</button>
 								{#if data.canSetRoles && person.role === 'admin'}
-									<button
-										class="btn btn-ghost btn-xs"
-										onclick={() => (requota = requota === person.id ? null : person.id)}
-									>
+									<button class="btn btn-ghost btn-xs" onclick={() => openQuota(person)}>
 										Quota
 									</button>
 								{/if}
@@ -295,22 +345,46 @@
 						<td colspan="7" class="bg-line-soft">
 							<form method="POST" action="?/setQuota" class="flex flex-wrap items-end gap-3">
 								<input type="hidden" name="userId" value={person.id} />
-								<label class="field w-56 max-w-full">
-									Storage quota for {person.email} (GB)
-									<input
-										class="input"
-										type="number"
-										name="quota"
-										min="0"
-										step="0.5"
-										value={asGb(person.quota)}
-										required
-									/>
-								</label>
+								<div class="w-56 max-w-full">
+									<label class="field" for="quota-{person.id}">
+										Storage quota for {person.email}
+										<input
+											class="input"
+											id="quota-{person.id}"
+											type="text"
+											name="quota"
+											inputmode="text"
+											placeholder="500MB"
+											autocomplete="off"
+											bind:value={rowQuota}
+											required
+										/>
+									</label>
+									<div class="mt-1.5 flex flex-wrap gap-1">
+										{#each PRESETS as size (size)}
+											<button
+												class="btn btn-ghost btn-xs"
+												type="button"
+												aria-pressed={rowQuota === size}
+												onclick={() => (rowQuota = size)}
+											>
+												{size}
+											</button>
+										{/each}
+									</div>
+								</div>
 								<button class="btn btn-ghost" type="submit">Set</button>
 								<p class="text-muted pb-1.5 text-[0.8rem]">
-									Using {formatBytes(person.used)}. Setting it lower is allowed — nothing of theirs
-									is deleted, their next deploy is refused until they are under it.
+									Using {formatBytes(person.used)}. Sizes take a unit —
+									<span class="mono">200MB</span>, <span class="mono">1.5GB</span> — or a plain
+									number of bytes.
+									{#if rowQuota.trim() && preview(rowQuota) === null}
+										<span class="text-[color:var(--pb-danger)]">That is not a size.</span>
+									{:else if preview(rowQuota)}
+										Stores {preview(rowQuota)}.
+									{/if}
+									Setting it lower is allowed — nothing of theirs is deleted, their next deploy is refused
+									until they are under it.
 								</p>
 							</form>
 						</td>

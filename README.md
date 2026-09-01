@@ -303,7 +303,7 @@ another admin along with its storage.
 
 Sizes are written the way they are said — `PAGEBOX_STORAGE_BYTES=1GB`, `500MB`, `1.5GB`,
 `2TB` — or as a plain number of bytes. The units are 1024-based, so what the panel prints
-back is what you typed.
+back is what you typed, and the panel's own quota field takes the same sizes.
 
 ## Upload cap
 
