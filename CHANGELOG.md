@@ -59,6 +59,35 @@ Both Dokploy guides now carry it, along with the trap next to it: `PAGEBOX_DEFAU
 defaults to 5 GB and may not exceed the pool, so declaring a 1 GB pool without lowering it
 refuses to start.
 
+### Fixed — the quota field could not say 500MB
+
+The panel's storage quota was a number of gigabytes typed into a `<input type="number"
+step="0.5">`, so the environment and the panel disagreed about the same figure:
+`PAGEBOX_STORAGE_BYTES=500MB` was fine, but handing an admin 200 MB meant working out
+`0.1953125` — and the stepper's arrows offered `0`, `0.5`, `1`, which is where the value
+came from most of the time.
+
+- **The field takes the same sizes the environment does** — `200MB`, `200mb`, `500 MB`,
+  `1.5GB`, `2TB`, or a plain number of bytes — through `parseSize`, the same function that
+  reads `PAGEBOX_STORAGE_BYTES`. One parser, so `500MB` cannot come to mean two things on
+  two screens. Both places it is entered are fixed: seating an admin and re-quotaing one.
+- **`parseSize` moved to `$lib/format`**, beside `formatBytes`. It was in the server config
+  module, which the panel cannot import, and that is the whole reason there were two
+  readings of a size in the first place.
+- **Buttons for the usual figures** — 100MB, 200MB, 500MB, 1GB, 5GB, 10GB, 50GB — beside
+  the field, and the field says what it will store (`Stores 200 MB.`) as you type, using
+  the client half of the same parser. The useful quotas are not evenly spaced, which is
+  what a `step` assumes.
+- **A plain number is bytes, as in the environment.** Safe rather than merely consistent:
+  anything under 1MB other than `0` is refused with the units named, so `5` typed for five
+  gigabytes is an error, never a quota of five bytes. `0` stays a real quota — an admin who
+  may hold nothing.
+- **The pre-filled value round-trips.** The field is filled by `formatSizeInput`, which
+  picks the largest unit that divides the stored byte count exactly and falls back to plain
+  bytes, so opening a quota and pressing Set stores the number that was already there.
+  `formatBytes` rounds to one decimal for reading a column, and reading a column is not
+  editing a value.
+
 ### Added — the image is published, and it is checked before it is
 
 - **`ghcr.io/alexadiaconitei/pagebox`**, built and pushed by `.github/workflows/release.yml`

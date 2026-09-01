@@ -124,7 +124,10 @@ their own non-S3 admin interfaces. Unset, per-admin quotas still hold and there 
 arithmetic.
 
 Sizes take a unit — `1GB`, `1gb`, `500MB`, `1.5GB`, `2TB` — or a plain number of bytes; the
-units are 1024-based, and `GB` and `GiB` mean the same thing.
+units are 1024-based, and `GB` and `GiB` mean the same thing. The panel's quota field takes
+exactly the same sizes, with the same parser, so `500MB` means one thing on this instance
+and not two. It has buttons for the usual figures beside it, and it refuses anything under
+1MB other than `0` — which is a real quota, of nothing.
 
 The pool is hard — quotas may not sum past the total — and the superadmin has no quota of
 its own. Its allowance is the remainder, so every quota it hands out visibly shrinks its
