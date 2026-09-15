@@ -9,6 +9,8 @@
 	import PowerOff from '@lucide/svelte/icons/power-off';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
+	import Copy from '@lucide/svelte/icons/copy';
+	import Check from '@lucide/svelte/icons/check';
 	import Dropzone from '$lib/components/Dropzone.svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { formatBytes, fullDate, timeAgo } from '$lib/format';
@@ -71,6 +73,29 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 	// arrow keys work because that is what a radio group already does. Unique per site so
 	// two of these on one page could never share a group.
 	const tabGroup = $derived(`gen-${data.site.slug}`);
+
+	// The token is shown once and never again, so copying it has to work every time. The
+	// Clipboard API only exists in a secure context, and a panel reached over plain http on a
+	// LAN address is not one: there the fallback selects the value, so Ctrl+C is all it takes.
+	let tokenEl = $state<HTMLElement>();
+	let copied = $state(false);
+	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+	async function copyToken(token: string) {
+		try {
+			await navigator.clipboard.writeText(token);
+			copied = true;
+			clearTimeout(copiedTimer);
+			copiedTimer = setTimeout(() => (copied = false), 2000);
+		} catch {
+			if (!tokenEl) return;
+			const range = document.createRange();
+			range.selectNodeContents(tokenEl);
+			const selection = getSelection();
+			selection?.removeAllRanges();
+			selection?.addRange(range);
+		}
+	}
 </script>
 
 <svelte:head><title>{data.site.slug} — PageBox</title></svelte:head>
@@ -131,7 +156,23 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 {#if form?.token}
 	<div class="notice notice-ok mb-5">
 		<p class="font-medium">Token “{form.tokenName}” created — copy it now</p>
-		<p class="mono mt-1 break-all">{form.token}</p>
+		<div class="mt-1 flex items-start gap-2">
+			<p class="mono min-w-0 flex-1 break-all" bind:this={tokenEl}>{form.token}</p>
+			<button
+				class="btn btn-ghost btn-xs shrink-0 gap-1"
+				type="button"
+				onclick={() => copyToken(form.token)}
+			>
+				{#if copied}
+					<Check size={12} strokeWidth={2} /> Copied
+				{:else}
+					<Copy size={12} strokeWidth={1.75} /> Copy
+				{/if}
+			</button>
+			<span class="sr-only" aria-live="polite">
+				{copied ? 'Token copied to the clipboard' : ''}
+			</span>
+		</div>
 		<p class="text-muted mt-1 text-[0.78rem]">
 			Only its hash is stored. If it is lost, issue a new one.
 		</p>
