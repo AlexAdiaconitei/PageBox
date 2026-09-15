@@ -171,7 +171,7 @@ touch targets on coarse pointers only — a mouse keeps the tighter console.
 The image is published, so nothing here builds anything:
 
 ```
-ghcr.io/alexadiaconitei/pagebox:0.1.0
+ghcr.io/alexadiaconitei/pagebox:0.1.1
 ```
 
 ### Standalone (Postgres + MinIO included)
@@ -182,7 +182,7 @@ builds in [`examples/`](examples/README.md):
 ```bash
 curl -O  https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/docker-compose.yml
 curl -o .env https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/.env.example
-# set AUTH_SECRET, the bootstrap admin credentials, and PAGEBOX_TAG=0.1.0 to pin the image
+# set AUTH_SECRET, the bootstrap admin credentials, and PAGEBOX_TAG=0.1.1 to pin the image
 docker compose up -d          # app + postgres + minio
 docker compose --profile cache up -d   # + valkey (needed for >1 replica)
 docker compose --profile proxy up -d   # + traefik routing both hostnames on :80
@@ -205,7 +205,7 @@ credential, not a password: nothing else in the panel opens until it has been re
 
 ### Dokploy
 
-One application, provider **Docker**, image `ghcr.io/alexadiaconitei/pagebox:0.1.0`, then
+One application, provider **Docker**, image `ghcr.io/alexadiaconitei/pagebox:0.1.1`, then
 **Add Domain twice on that same application** — both at container port 3000, one for the
 panel and one for the sites. Not two apps, not two ports, not two paths: PageBox listens on
 one port and splits by `Host`, and hostnames are the only split browsers enforce for
@@ -327,7 +327,7 @@ tokens, Tailwind 4, and optionally Valkey once there is more than one replica. N
 
 ## Status
 
-**0.1.0, published.** Two-host dispatch, schema and migrations, health check, the image on
+**0.1.1, published.** Two-host dispatch, schema and migrations, health check, the image on
 GHCR, compose stack and Dokploy guide; serving from S3 with the full resolution, caching and
 range semantics; the deploy API with rollback and an audit trail; the admin panel with
 users, groups, grants, deploy tokens, quotas, retention and deployment history; private

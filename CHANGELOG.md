@@ -3,6 +3,38 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-09-15
+
+### Fixed — the SPA fallback answered missing assets with the app shell
+
+With **SPA fallback** on, a request for a file that did not exist answered `index.html` with
+a 200, whatever the file was. The documentation and the `05-spa` example both said the
+opposite, and the difference showed up in two places:
+
+- **In the browser, as the wrong error.** A missing `assets/index-a1b2c3.js` arrived as
+  `text/html` under `X-Content-Type-Options: nosniff`, so the page failed with a MIME-type
+  refusal instead of a 404. That is the one symptom that sends people looking at their
+  server configuration rather than at a stale or partial upload.
+- **In the post-deploy check, as silence.** Verification resolves each reference the way
+  the site serves it, so on an SPA site every missing asset "existed" — it was the shell.
+  `brokenAssetCount` was 0 for every SPA deployment, broken or not.
+
+The fallback now applies only to paths whose last segment has no extension: `/queue` and
+`/queue/` get the shell, `app.js` and `missing.html` get the site's `404.html` or the
+PageBox 404. The rule is the one resolution already used to decide whether to try
+`about.html` and `about/index.html`, so there is one definition of "looks like a file".
+
+The cost is a client route with a dot in its last segment (`/users/jane.doe`, `/v1.2`): it
+now 404s on a deep link, where before it got the shell. `docs/operate/serving` says so.
+
+### Added — deploy tokens have a Copy button
+
+A new token is shown once and never again, and it was a line of monospace text to select
+by hand. The notice now has a **Copy** button that confirms with *Copied* and announces it
+to screen readers. The Clipboard API only exists in a secure context, so on a panel reached
+over plain `http` — a LAN address, typically — the button selects the token instead, and
+Ctrl+C finishes the job.
+
 ## [0.1.0] — 2026-08-29
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).

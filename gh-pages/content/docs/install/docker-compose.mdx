@@ -11,7 +11,7 @@ Postgres and S3 when you want to keep what is on it.
 image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:-latest}
 ```
 
-`PAGEBOX_TAG` in your `.env` pins the version — `0.1.0`, or `0.1` to follow the patches of
+`PAGEBOX_TAG` in your `.env` pins the version — `0.1.1`, or `0.1` to follow the patches of
 one minor. Pin it on anything you care about: `latest` moves on the next release, and
 `pull_policy: always` means a restart is enough to pick that up. To run the checkout instead
 of a release, replace that line with `build: { context: . }`.
