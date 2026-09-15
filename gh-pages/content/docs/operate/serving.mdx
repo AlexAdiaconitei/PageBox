@@ -40,8 +40,14 @@ over.
 This is what a single-page application needs, and it means the site's own `404.html` never
 gets a chance to answer.
 
-It does **not** swallow assets: a request for a file that looks like an asset and is not
-there still 404s, so a missing chunk fails as a missing chunk rather than arriving as HTML.
+It does **not** swallow assets. The fallback only answers paths whose last segment has no
+extension: `/queue` and `/queue/` get `index.html`, while a missing `assets/index-a1b2c3.js`
+or `missing.html` still 404s. A missing chunk fails as a missing chunk rather than arriving
+as HTML, and the post-deploy check reports it as broken.
+
+The same rule means a route with a dot in its last segment — `/users/jane.doe`, `/v1.2` — is
+treated as a file and 404s on a deep link. Keep dots out of the last segment of client routes,
+or end them with a slash.
 </Tab>
 
 </Tabs>

@@ -54,6 +54,27 @@ describe('candidatePaths', () => {
 		]);
 	});
 
+	it('answers a directory-style route with the SPA shell too', () => {
+		expect(candidatePaths('deep/route/', { spaFallback: true })).toEqual([
+			{ path: 'deep/route/index.html', status: 200 },
+			{ path: 'index.html', status: 200 },
+			{ path: '404.html', status: 404 }
+		]);
+	});
+
+	// A missing chunk must fail as a missing chunk: index.html under nosniff is a MIME error
+	// in the browser, and the post-deploy check would count the chunk as present.
+	it('never answers a missing asset with the SPA shell', () => {
+		expect(candidatePaths('assets/index-DA1z9Qk0.js', { spaFallback: true })).toEqual([
+			{ path: 'assets/index-DA1z9Qk0.js', status: 200 },
+			{ path: '404.html', status: 404 }
+		]);
+		expect(candidatePaths('missing.html', { spaFallback: true }).map((c) => c.path)).toEqual([
+			'missing.html',
+			'404.html'
+		]);
+	});
+
 	it('never repeats a candidate', () => {
 		const paths = candidatePaths('', { spaFallback: true }).map((c) => c.path);
 		expect(paths).toEqual([...new Set(paths)]);

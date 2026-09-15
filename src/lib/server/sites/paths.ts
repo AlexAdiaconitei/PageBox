@@ -10,7 +10,7 @@ import { extensionOf } from './mime';
  *   2. subpath + ".html"          — Next/Fumadocs with trailingSlash: false
  *   3. subpath + "/index.html"    — Docusaurus, Next with trailingSlash: true
  *   4. subpath + "index.html"     — when the subpath already ends in '/'
- *   5. index.html with status 200 — only for SPA sites
+ *   5. index.html with status 200 — only for SPA sites, and only for paths with no extension
  *   6. 404.html with status 404, else a plain 404
  */
 
@@ -58,20 +58,26 @@ export function candidatePaths(subpath: string, options: { spaFallback: boolean 
 		if (path && !candidates.some((c) => c.path === path)) candidates.push({ path, status });
 	};
 
+	// A trailing slash leaves no last segment, so it can never name a file.
+	const looksLikeFile = !subpath.endsWith('/') && extensionOf(subpath) !== '';
+
 	if (subpath === '') {
 		push('index.html');
 	} else if (subpath.endsWith('/')) {
 		push(subpath + 'index.html');
 	} else {
 		push(subpath);
-		if (extensionOf(subpath) === '') {
+		if (!looksLikeFile) {
 			push(subpath + '.html');
 			push(subpath + '/index.html');
 		}
 	}
 
-	// Client-routed apps answer every unknown path with their shell, at status 200.
-	if (options.spaFallback) push('index.html');
+	// Client-routed apps answer every unknown route with their shell, at status 200 — but
+	// only routes. A missing `app-4f3a91b2.js` answered with index.html arrives as text/html
+	// under nosniff: the browser refuses it with a MIME error instead of a 404, and the
+	// post-deploy check counts the missing chunk as present.
+	if (options.spaFallback && !looksLikeFile) push('index.html');
 
 	push('404.html', 404);
 	return candidates;

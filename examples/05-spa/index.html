@@ -24,6 +24,8 @@
 			Real assets are still served as themselves. ./app/shell.css and ./app/router.js
 			resolve to files, so they are never swallowed by the fallback — which is the part
 			that goes wrong on hosts that implement it as "serve index.html for everything".
+			And a path with an extension never gets the fallback at all: delete router.js and
+			it answers 404, not this document.
 		-->
 		<a class="skip" href="#view">Skip to the list</a>
 
