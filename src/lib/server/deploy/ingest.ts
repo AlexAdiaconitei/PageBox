@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
 import { error } from '@sveltejs/kit';
 import { createWriteStream } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -17,6 +16,7 @@ import { allowanceFor, instanceUsage, ownerOf, quotaFor, usageFor } from '../quo
 import { invalidateSite, lookupSiteBySlug, type SiteRef } from '../sites/resolve';
 import { prunablePlan, pruneDeployments } from './retention';
 import { extractZipToS3, INGEST_VERSION, measureZip, ZipRejected } from './zip';
+import { claimUpload } from './upload-budget';
 
 /**
  * Turns an uploaded archive into an activated deployment.
@@ -67,19 +67,30 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 	const config = getConfig();
 	if (!input.body) return { ok: false, status: 400, message: 'empty request body' };
 
-	const dir = await mkdtemp(join(process.env.PAGEBOX_TMP_DIR ?? tmpdir(), 'pagebox-'));
-	const archivePath = join(dir, 'upload.zip');
+	const lease = await claimUpload();
+	const archivePath = join(lease.directory, 'upload.zip');
 	let deploymentId: string | null = null;
 
 	try {
-		const written = await writeArchive(input.body, archivePath, config.MAX_UPLOAD_BYTES);
+		const bodySignal = AbortSignal.any([
+			lease.signal,
+			AbortSignal.timeout(config.UPLOAD_BODY_TIMEOUT_SECONDS * 1000)
+		]);
+		const written = await writeArchive(
+			input.body,
+			archivePath,
+			config.MAX_UPLOAD_BYTES,
+			bodySignal
+		);
 		if (!written.ok) return written.error;
 
 		// An identical archive means the CI job is retrying: reuse what is already in S3
 		// instead of writing a second copy of the same bytes.
 		const measured = await measureZip(archivePath);
+		lease.signal.throwIfAborted();
 		return await withStorageLock(async () => {
 			try {
+				lease.signal.throwIfAborted();
 				const current = await lookupSiteBySlug(input.siteRef.slug);
 				if (!current || current.id !== input.siteRef.id) error(404, 'Site not found');
 				const [siteRow] = await db.select().from(site).where(eq(site.id, current.id)).limit(1);
@@ -120,6 +131,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 		});
 	} catch (err) {
 		if (deploymentId) await markFailed(input.siteRef.id, deploymentId);
+		if (lease.signal.aborted || (err as Error)?.name === 'AbortError')
+			error(408, 'Upload deadline exceeded');
 		if (err instanceof ZipRejected) {
 			return {
 				ok: false,
@@ -130,7 +143,11 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 		}
 		throw err;
 	} finally {
-		await rm(dir, { recursive: true, force: true }).catch(() => {});
+		try {
+			await rm(archivePath, { force: true });
+		} finally {
+			await lease.release();
+		}
 	}
 
 	/**
@@ -167,7 +184,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 				// The backstop: the pre-check above trusts what the archive says about itself,
 				// and this does not.
 				remainingQuota: budget.remaining
-			}
+			},
+			lease.signal
 		);
 
 		if (!(await input.authorize())) error(403, 'Deployment permission was revoked');
@@ -197,6 +215,8 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 				'quota'
 			);
 		}
+		lease.signal.throwIfAborted();
+		if (!(await input.authorize())) error(403, 'Deployment permission was revoked');
 		if (input.activate) await activate(input.siteRef, deploymentId);
 		const afterActivation = input.activate
 			? await applyRetention(input.siteRef, deploymentId, true)
@@ -385,7 +405,8 @@ type WriteResult =
 async function writeArchive(
 	body: ReadableStream<Uint8Array>,
 	path: string,
-	maxBytes: number
+	maxBytes: number,
+	signal: AbortSignal
 ): Promise<WriteResult> {
 	const hash = createHash('sha256');
 	let bytes = 0;
@@ -393,7 +414,7 @@ async function writeArchive(
 
 	try {
 		await pipeline(
-			Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]),
+			Readable.from(readBody(body, signal)),
 			async function* (source) {
 				for await (const chunk of source) {
 					const buffer = chunk as Buffer;
@@ -406,7 +427,8 @@ async function writeArchive(
 					yield buffer;
 				}
 			},
-			createWriteStream(path)
+			createWriteStream(path),
+			{ signal }
 		);
 	} catch (err) {
 		if (overflowed) {
@@ -426,4 +448,30 @@ async function writeArchive(
 		return { ok: false, error: { ok: false, status: 400, message: 'empty request body' } };
 	}
 	return { ok: true, checksum: hash.digest('hex'), bytes };
+}
+
+/** Stop reading at the deadline without destroying the HTTP socket before its error response. */
+async function* readBody(body: ReadableStream<Uint8Array>, signal: AbortSignal) {
+	const reader = body.getReader();
+	try {
+		for (;;) {
+			signal.throwIfAborted();
+			let abort: () => void = () => {};
+			try {
+				const next = await Promise.race([
+					reader.read(),
+					new Promise<never>((_resolve, reject) => {
+						abort = () => reject(signal.reason);
+						signal.addEventListener('abort', abort, { once: true });
+					})
+				]);
+				if (next.done) return;
+				yield next.value;
+			} finally {
+				signal.removeEventListener('abort', abort);
+			}
+		}
+	} finally {
+		reader.releaseLock();
+	}
 }

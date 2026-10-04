@@ -67,6 +67,7 @@ export default defineConfig({
 		})
 	],
 	test: {
+		fileParallelism: false,
 		include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
 		setupFiles: ['tests/setup-env.ts']
 	}

@@ -116,7 +116,8 @@ const BUFFER_LIMIT = 16 * 1024 * 1024;
 export async function extractZipToS3(
 	zipPath: string,
 	target: { siteId: string; deploymentId: string },
-	limits: ZipLimits
+	limits: ZipLimits,
+	signal?: AbortSignal
 ): Promise<ZipResult> {
 	// `zip -r site.zip out` is the obvious command and puts every path under `out/`, which
 	// would deploy a site whose root holds one directory and no index.html. The browser
@@ -125,11 +126,14 @@ export async function extractZipToS3(
 	const root = chooseRoot(await listEntryPaths(zipPath, limits.maxFiles)).root;
 
 	const zip = await openZip(zipPath);
+	const abort = () => zip.close();
+	signal?.addEventListener('abort', abort, { once: true });
 	const result: ZipResult = { fileCount: 0, totalBytes: 0, skipped: [], root };
 	let compressedTotal = 0;
 
 	try {
 		for await (const entry of entries(zip)) {
+			signal?.throwIfAborted();
 			const path = rebase(safeEntryPath(entry.fileName), root);
 			if (path === null) {
 				// Directory entries are not files and saying they were "skipped" reads like
@@ -179,25 +183,36 @@ export async function extractZipToS3(
 			}
 
 			const stream = await openEntry(zip, entry);
+			const abortEntry = () => stream.destroy(new Error('Upload aborted'));
+			signal?.addEventListener('abort', abortEntry, { once: true });
 			const key = objectKey(target.siteId, target.deploymentId, path);
 			const contentType = contentTypeFor(path);
 
-			if (entry.uncompressedSize <= BUFFER_LIMIT) {
-				const body = await readAll(stream, entry.uncompressedSize);
-				await putObject(key, body, { contentType, contentLength: body.length });
-				result.totalBytes += body.length;
-			} else {
-				await putObject(key, stream, {
-					contentType,
-					contentLength: entry.uncompressedSize
-				});
-				result.totalBytes += entry.uncompressedSize;
+			try {
+				if (entry.uncompressedSize <= BUFFER_LIMIT) {
+					const body = await readAll(stream, entry.uncompressedSize, signal);
+					signal?.throwIfAborted();
+					await putObject(key, body, { contentType, contentLength: body.length, signal });
+					result.totalBytes += body.length;
+				} else {
+					await putObject(key, stream, {
+						contentType,
+						contentLength: entry.uncompressedSize,
+						signal
+					});
+					result.totalBytes += entry.uncompressedSize;
+				}
+			} finally {
+				signal?.removeEventListener('abort', abortEntry);
+				stream.destroy();
 			}
 			result.fileCount += 1;
 		}
 	} finally {
+		signal?.removeEventListener('abort', abort);
 		zip.close();
 	}
+	signal?.throwIfAborted();
 
 	if (result.fileCount === 0) throw new ZipRejected('archive contains no files', 'empty');
 	return result;
@@ -320,6 +335,7 @@ async function* entries(zip: ZipFile): AsyncGenerator<Entry> {
 	zip.on('entry', (entry: Entry) => settle({ type: 'entry', entry }));
 	zip.on('end', () => settle({ type: 'end' }));
 	zip.on('error', (error: Error) => settle({ type: 'error', error }));
+	zip.on('close', () => settle({ type: 'error', error: new Error('Archive closed') }));
 
 	for (;;) {
 		const next = await new Promise<NextEntry>((resolve) => {
@@ -354,17 +370,21 @@ function openEntry(zip: ZipFile, entry: Entry): Promise<Readable> {
 	});
 }
 
-async function readAll(stream: Readable, expected: number): Promise<Buffer> {
+async function readAll(stream: Readable, expected: number, signal?: AbortSignal): Promise<Buffer> {
 	const chunks: Buffer[] = [];
 	let size = 0;
-	await pipeline(stream, async function (source) {
-		for await (const chunk of source) {
-			size += (chunk as Buffer).length;
-			if (size > expected) {
-				throw new ZipRejected('entry is larger than its declared size', 'ratio');
+	await pipeline(
+		stream,
+		async function (source) {
+			for await (const chunk of source) {
+				size += (chunk as Buffer).length;
+				if (size > expected) {
+					throw new ZipRejected('entry is larger than its declared size', 'ratio');
+				}
+				chunks.push(chunk as Buffer);
 			}
-			chunks.push(chunk as Buffer);
-		}
-	});
+		},
+		{ signal }
+	);
 	return Buffer.concat(chunks);
 }
