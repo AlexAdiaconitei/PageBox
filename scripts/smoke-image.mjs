@@ -2,8 +2,10 @@ import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { request } from 'node:http';
+import { readFile } from 'node:fs/promises';
 
 const image = process.argv[2];
+const expectedVersion = JSON.parse(await readFile('package.json', 'utf8')).version;
 if (!image) throw new Error('Usage: node scripts/smoke-image.mjs <local-image>');
 const mark = `pagebox-smoke-${randomUUID().slice(0, 8)}`;
 const docker = (...args) => {
@@ -111,10 +113,10 @@ try {
 			'-e',
 			'import { readFile } from "node:fs/promises"; console.log(JSON.parse(await readFile("package.json", "utf8")).version)'
 		),
-		'0.2.0'
+		expectedVersion
 	);
 	console.log(
-		'Docker smoke passed: migrations, bootstrap, host routing, non-root runtime, upload units, version 0.2.0.'
+		`Docker smoke passed: migrations, bootstrap, host routing, non-root runtime, upload units, version ${expectedVersion}.`
 	);
 } finally {
 	for (const name of containers.reverse()) docker('rm', '-f', name);

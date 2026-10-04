@@ -82,6 +82,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Smoke-test the image that is about to be published
+        # Uses only Node builtins and isolated local Docker fixtures.
         run: bash scripts/smoke-image.sh pagebox:smoke
 
       - name: Push
