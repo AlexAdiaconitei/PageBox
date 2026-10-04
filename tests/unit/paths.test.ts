@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	candidatePaths,
+	decodeSubpath,
 	encodedPathFor,
 	isForbiddenPath,
 	isImmutableAsset,
@@ -57,6 +58,26 @@ describe('candidatePaths', () => {
 	it('never repeats a candidate', () => {
 		const paths = candidatePaths('', { spaFallback: true }).map((c) => c.path);
 		expect(paths).toEqual([...new Set(paths)]);
+	});
+});
+
+describe('decodeSubpath', () => {
+	it('decodes spaces and Unicode once', () => {
+		expect(decodeSubpath('hello%20world.txt')).toBe('hello world.txt');
+		expect(decodeSubpath('caf%C3%A9.txt')).toBe('café.txt');
+	});
+	it('refuses separators, traversal, nested escapes and malformed encoding', () => {
+		for (const path of [
+			'a%2fb',
+			'a%5cb',
+			'%2e%2e/file',
+			'%252e%252e/file',
+			'%00',
+			'%zz',
+			'%c0%ae'
+		]) {
+			expect(decodeSubpath(path), path).toBeNull();
+		}
 	});
 });
 

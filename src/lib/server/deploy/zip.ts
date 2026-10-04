@@ -2,6 +2,7 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import yauzl, { type Entry, type ZipFile } from 'yauzl';
 import { chooseRoot } from '$lib/preflight';
+import { getConfig } from '../config';
 import { objectKey, putObject } from '../s3';
 import { contentTypeFor } from '../sites/mime';
 
@@ -18,8 +19,9 @@ import { contentTypeFor } from '../sites/mime';
  * bytes silently resurrect a deployment built by the old, wrong ones.
  *
  * 2: archives wrapping everything in a single directory are rebased onto it.
+ * 3: hidden paths are removed before rebasing, and metadata is bounded before extraction.
  */
-export const INGEST_VERSION = 2;
+export const INGEST_VERSION = 3;
 
 export type ZipLimits = {
 	maxFiles: number;
@@ -73,6 +75,9 @@ const JUNK = [/^__MACOSX\//, /(^|\/)\.DS_Store$/, /(^|\/)Thumbs\.db$/];
  */
 export function safeEntryPath(rawName: string): string | null {
 	if (rawName.length === 0) return null;
+	if (rawName.length > 4096 || /[\x00-\x1f\x7f]/.test(rawName)) {
+		throw new ZipRejected('Invalid or excessively long entry name', 'unreadable');
+	}
 
 	// Windows-built archives can carry backslashes; treat them as separators.
 	const name = rawName.replace(/\\/g, '/');
@@ -95,6 +100,7 @@ export function safeEntryPath(rawName: string): string | null {
 		parts.push(segment);
 	}
 	if (parts.length === 0) return null;
+	if (parts.some((segment) => segment.startsWith('.'))) return null;
 	return parts.join('/');
 }
 
@@ -116,7 +122,7 @@ export async function extractZipToS3(
 	// would deploy a site whose root holds one directory and no index.html. The browser
 	// already rebases a dropped folder; the API has to do the same or the friendliest
 	// possible mistake produces a site that 404s and says nothing about why.
-	const root = chooseRoot(await listEntryPaths(zipPath)).root;
+	const root = chooseRoot(await listEntryPaths(zipPath, limits.maxFiles)).root;
 
 	const zip = await openZip(zipPath);
 	const result: ZipResult = { fileCount: 0, totalBytes: 0, skipped: [], root };
@@ -211,36 +217,60 @@ export async function extractZipToS3(
  * can be refused in milliseconds instead of after writing a gigabyte and deleting it.
  */
 export async function measureZip(
-	zipPath: string
+	zipPath: string,
+	limits: Pick<ZipLimits, 'maxFiles' | 'maxUncompressedBytes' | 'maxRatio'> = {
+		maxFiles: getConfig().MAX_FILES,
+		maxUncompressedBytes: getConfig().MAX_UNCOMPRESSED_BYTES,
+		maxRatio: getConfig().MAX_ZIP_RATIO
+	}
 ): Promise<{ fileCount: number; totalBytes: number; root: string }> {
-	const root = chooseRoot(await listEntryPaths(zipPath)).root;
+	const root = chooseRoot(await listEntryPaths(zipPath, limits.maxFiles)).root;
 	const zip = await openZip(zipPath);
 	let fileCount = 0;
 	let totalBytes = 0;
+	let compressedBytes = 0;
 
 	try {
 		for await (const entry of entries(zip)) {
 			const path = rebase(safeEntryPath(entry.fileName), root);
 			if (path === null) continue;
-			// Symlinks and traversal are extraction's business to reject; measuring only asks
-			// how big the thing is, and answering that early must not change what is refused.
-			if (isSymlinkEntry(entry.externalFileAttributes)) continue;
+			// Reject hostile metadata before any upload row or S3 object is created.
+			if (isSymlinkEntry(entry.externalFileAttributes))
+				throw new ZipRejected('Symlink in archive', 'symlink');
 			fileCount += 1;
 			totalBytes += entry.uncompressedSize;
+			compressedBytes += entry.compressedSize;
+			if (totalBytes > limits.maxUncompressedBytes)
+				throw new ZipRejected('Archive expands beyond the byte limit', 'too-large');
+			if (compressedBytes > 4096 && totalBytes > compressedBytes * limits.maxRatio)
+				throw new ZipRejected('Archive compression ratio exceeds the limit', 'ratio');
 		}
 	} finally {
 		zip.close();
 	}
 
+	if (!fileCount) throw new ZipRejected('Archive contains no usable files', 'empty');
 	return { fileCount, totalBytes, root };
 }
 
 /** Entry names only: the central directory is read, no file data. */
-async function listEntryPaths(zipPath: string): Promise<string[]> {
+async function listEntryPaths(zipPath: string, maxEntries: number): Promise<string[]> {
 	const zip = await openZip(zipPath);
 	const paths: string[] = [];
+	let count = 0;
+	let metadataBytes = 0;
 	try {
+		if (zip.entryCount > maxEntries)
+			throw new ZipRejected(`Archive holds more than ${maxEntries} entries`, 'too-many-files');
 		for await (const entry of entries(zip)) {
+			if (++count > maxEntries)
+				throw new ZipRejected('Archive entry limit exceeded', 'too-many-files');
+			metadataBytes +=
+				Buffer.byteLength(entry.fileName, 'utf8') +
+				entry.extraFieldLength +
+				entry.fileCommentLength;
+			if (metadataBytes > 8 * 1024 * 1024)
+				throw new ZipRejected('Archive metadata exceeds 8MB', 'too-large');
 			const path = safeEntryPath(entry.fileName);
 			if (path !== null) paths.push(path);
 		}

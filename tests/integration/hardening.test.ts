@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { zipSync } from 'fflate';
 import {
 	adminHost,
 	base,
-	callerIp,
 	configured,
+	email,
 	hostHeader,
 	request,
+	password,
+	post,
+	signIn,
+	actionResult,
 	sitesHost,
 	tag,
 	upload
@@ -40,8 +43,10 @@ run('hardening', () => {
 			const res = await request('/login', {
 				host,
 				method: 'POST',
-				form: { email: `nobody-${tag()}@example.com`, password: 'wrong-password-here' }
+				form: { email: email!, password: password! }
 			});
+			expect((await actionResult(res)).type).toBe('redirect');
+			expect(res.headers.getSetCookie().length).toBeGreaterThan(0);
 			for (const cookie of res.headers.getSetCookie()) {
 				// A Domain attribute would send the panel cookie to every site subdomain,
 				// which is the escalation the two-host split exists to prevent.
@@ -90,18 +95,17 @@ run('hardening', () => {
 	it('rejects an archive carrying a symlink', async () => {
 		// yauzl reports the mode in the external attributes; fflate cannot set them, so the
 		// entry is assembled by hand — a real archive is the only way to test the guard.
-		const zip = zipSync({ 'index.html': new TextEncoder().encode('<h1>hi</h1>') }, { level: 0 });
+		const jar = await signIn();
+		const ownSlug = `symlink-${tag()}`;
+		expect(
+			(
+				await actionResult(
+					await post('/sites?/create', jar, { slug: ownSlug, name: ownSlug, visibility: 'public' })
+				)
+			).type
+		).toBe('redirect');
 		const withSymlink = symlinkArchive();
-		const res = await upload(`${slug}-api`, withSymlink, {
-			jar: undefined,
-			token: process.env.PAGEBOX_E2E_TOKEN
-		});
-		// Without a token this is a 401 before the archive is read, which proves nothing —
-		// so the assertion only stands when the suite was given one.
-		if (!process.env.PAGEBOX_E2E_TOKEN) {
-			expect(zip.length).toBeGreaterThan(0);
-			return;
-		}
+		const res = await upload(ownSlug, withSymlink, { jar });
 		expect(res.status).toBe(400);
 		expect(res.body.reason).toBe('symlink');
 	});

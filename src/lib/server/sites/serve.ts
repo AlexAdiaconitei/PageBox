@@ -8,6 +8,7 @@ import { getObject, headObject, objectKey, type ObjectHead } from '../s3';
 import { contentTypeFor, isCompressible, isHtml } from './mime';
 import {
 	candidatePaths,
+	decodeSubpath,
 	encodedPathFor,
 	isForbiddenPath,
 	isImmutableAsset,
@@ -54,7 +55,8 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
 
 	if (!siteRef.activeDeploymentId) return notFound(event, siteRef);
 
-	const subpath = normaliseSubpath(hit.subpath);
+	const decoded = decodeSubpath(hit.subpath);
+	const subpath = decoded === null ? null : normaliseSubpath(decoded);
 	if (subpath === null || isForbiddenPath(subpath)) return notFound(event, siteRef);
 
 	const deploymentId = siteRef.activeDeploymentId;
@@ -134,12 +136,11 @@ async function locate(
 	for (const candidate of candidates) {
 		if (wanted && isCompressible(candidate.path)) {
 			const encodedKey = objectKey(siteId, deploymentId, encodedPathFor(candidate.path, wanted));
-			if (await encodingWorthTrying(deploymentId, wanted)) {
+			if (await encodingWorthTrying(encodedKey)) {
 				const head = await headObject(encodedKey);
 				if (head) return { candidate, key: encodedKey, encoding: wanted, head };
-				// Most deployments ship no precompressed files. Remember that for this
-				// deployment so the miss costs one round-trip, not one per asset.
-				await cache.set(encodingKey(deploymentId, wanted), false, ENCODING_MISS_TTL);
+				// A miss only describes this asset; other files may have compressed siblings.
+				await cache.set(encodingKey(encodedKey), false, ENCODING_MISS_TTL);
 			}
 		}
 
@@ -150,11 +151,11 @@ async function locate(
 	return null;
 }
 
-async function encodingWorthTrying(deploymentId: string, encoding: 'br' | 'gzip') {
-	return (await cache.get<boolean>(encodingKey(deploymentId, encoding))) !== false;
+async function encodingWorthTrying(key: string) {
+	return (await cache.get<boolean>(encodingKey(key))) !== false;
 }
 
-const encodingKey = (deploymentId: string, encoding: string) => `enc:${deploymentId}:${encoding}`;
+const encodingKey = (key: string) => `enc:${key}`;
 
 async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Promise<Response> {
 	const headers = new Headers({
@@ -164,6 +165,7 @@ async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Pro
 	});
 	if (found.head.etag) headers.set('etag', found.head.etag);
 	if (found.head.lastModified) headers.set('last-modified', found.head.lastModified.toUTCString());
+	if (isCompressible(found.candidate.path)) headers.set('vary', 'Accept-Encoding');
 	if (found.encoding) {
 		headers.set('content-encoding', found.encoding);
 		headers.set('vary', 'Accept-Encoding');

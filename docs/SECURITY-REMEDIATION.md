@@ -59,3 +59,7 @@ no se modifica durante este trabajo.
   Tras corregir esa expectativa, las 24 pruebas de panel, locks y cuotas pasan.
 - Quedan pendientes las demás fases y la pasada final completa. Estos resultados
   parciales no certifican todavía la versión 0.2.0.
+- `542b325`: locks, cuotas, FK del despliegue activo y estados de limpieza reintentables.
+- ZIP y rutas: 34 pruebas unitarias y 31 pruebas HTTP de archivos, API y serving
+  correctas. La prueba de symlinks ejecuta ahora una subida autenticada, y la de
+  cookies exige que un login real emita cookies antes de comprobar sus atributos.

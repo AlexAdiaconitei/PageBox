@@ -16,6 +16,23 @@ import { extensionOf } from './mime';
 
 export type Candidate = { path: string; status: 200 | 404 };
 
+/** Decode once per segment, before validation. Encoded separators and nested escapes are refused. */
+export function decodeSubpath(path: string): string | null {
+	try {
+		const parts = path.split('/').map((segment) => decodeURIComponent(segment));
+		if (
+			parts.some(
+				(segment) =>
+					segment === '.' || segment === '..' || /[/\\\x00-\x1f\x7f]|%[0-9a-f]{2}/i.test(segment)
+			)
+		)
+			return null;
+		return parts.join('/');
+	} catch {
+		return null;
+	}
+}
+
 /** Paths a request may never reach, whatever the deployment contains. */
 export function isForbiddenPath(subpath: string): boolean {
 	if (subpath.startsWith('__pb/') || subpath === '__pb') return true;
