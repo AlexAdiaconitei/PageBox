@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -25,11 +26,16 @@ const run = base ? describe : describe.skip;
 const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-host';
 
 const get = (path: string, init: RequestInit = {}, host = sitesHost) =>
-	fetch(`${base}${path}`, {
-		...init,
-		redirect: 'manual',
-		headers: { [hostHeader]: host, ...(init.headers ?? {}) }
-	});
+	host === sitesHost && path.startsWith('/s/')
+		? siteRequest(path, {
+				method: init.method,
+				headers: Object.fromEntries(new Headers(init.headers).entries())
+			})
+		: fetch(`${base}${path}`, {
+				...init,
+				redirect: 'manual',
+				headers: { [hostHeader]: host, ...(init.headers ?? {}) }
+			});
 
 run('serving a deployment', () => {
 	it('serves the site root', async () => {

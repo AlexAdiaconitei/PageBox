@@ -136,10 +136,7 @@ function createAuth(kind: HostKind) {
 			// The rate limiter and the session rows record the caller's address, and behind
 			// Traefik or a tunnel the socket address is the proxy's.
 			ipAddress: { ipAddressHeaders: ['x-pagebox-client-ip'] },
-			// Yields `pb_admin.session_token` / `pb_view.session_token`, both host-only:
-			// no Domain attribute, so neither travels to any other subdomain.
-			cookiePrefix: kind === 'admin' ? 'pb_admin' : 'pb_view',
-			useSecureCookies: config.PAGEBOX_PUBLIC_SCHEME === 'https',
+			...cookiePolicy(kind, config.PAGEBOX_PUBLIC_SCHEME),
 			database: { generateId: () => newId() }
 		},
 
@@ -198,6 +195,18 @@ function createAuth(kind: HostKind) {
 					]
 				: [sveltekitCookies(getRequestEvent)]
 	});
+}
+
+/** Prevent sibling subdomains from planting a Domain cookie on a trusted login host. */
+export function cookiePolicy(kind: 'admin' | 'sites', scheme: 'http' | 'https') {
+	const secure = scheme === 'https';
+	return {
+		cookiePrefix: (secure ? '__Host-' : '') + (kind === 'admin' ? 'pb_admin' : 'pb_view'),
+		// Better Auth otherwise prepends __Secure- even to custom __Host- names.
+		useSecureCookies: false,
+		crossSubDomainCookies: { enabled: false },
+		defaultCookieAttributes: { secure, path: '/', httpOnly: true, sameSite: 'lax' as const }
+	};
 }
 
 export const adminAuth = lazy(() => createAuth('admin'));

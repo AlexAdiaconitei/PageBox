@@ -1,7 +1,7 @@
 import { and, eq, lt, or } from 'drizzle-orm';
 import { db } from '../db';
 import { withStorageLock } from '../db/locks';
-import { deployment, site } from '../db/schema';
+import { deployment, site, siteAuthorization, siteSession } from '../db/schema';
 import { deletePrefix, deploymentPrefix } from '../s3';
 import { deleteDeployment, deleteSite } from './lifecycle';
 
@@ -14,6 +14,9 @@ const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 export async function sweepStaleUploads(): Promise<number> {
 	return withStorageLock(async () => {
+		const now = new Date();
+		await db.delete(siteAuthorization).where(lt(siteAuthorization.expiresAt, now));
+		await db.delete(siteSession).where(lt(siteSession.expiresAt, now));
 		const cutoff = new Date(Date.now() - STALE_AFTER_MS);
 		const stale = await db
 			.select({ id: deployment.id, siteId: deployment.siteId })

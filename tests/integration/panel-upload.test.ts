@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 
@@ -93,7 +94,7 @@ run('panel uploads', () => {
 		const body = await res.json();
 		expect(body.fileCount).toBe(2);
 
-		const page = await fetch(`${base}/s/${slug}/`, { headers: proxyHeaders(sitesHost) });
+		const page = await siteRequest(`/s/${slug}/`);
 		expect(await page.text()).toContain(marker);
 	});
 

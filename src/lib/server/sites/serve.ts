@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import type { RequestEvent } from '@sveltejs/kit';
 import { cache } from '../cache';
 import { config } from '../config';
+import { accessUrl } from '../auth/reader';
 import { errorResponse, isNavigation, notFoundResponse } from '../errorPage';
 import { atLeast, permissionFor } from '../perms';
 import { getObject, headObject, objectKey, type ObjectHead } from '../s3';
@@ -54,6 +55,17 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
 	}
 
 	if (!siteRef.activeDeploymentId) return notFound(event, siteRef);
+	if (hit.needsTrailingSlashRedirect)
+		return new Response(null, {
+			status: 301,
+			headers: {
+				location: event.url.pathname + '/' + event.url.search,
+				'cache-control': 'private, no-store',
+				'cdn-cache-control': 'no-store',
+				'cloudflare-cdn-cache-control': 'no-store',
+				vary: 'Cookie'
+			}
+		});
 
 	const decoded = decodeSubpath(hit.subpath);
 	const subpath = decoded === null ? null : normaliseSubpath(decoded);
@@ -75,7 +87,10 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
  *
  * Returns a response when the request must not proceed, or null when it may.
  */
-async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Response | null> {
+export async function guardPrivate(
+	event: RequestEvent,
+	siteRef: SiteRef
+): Promise<Response | null> {
 	const permission = await permissionFor(event.locals.user, siteRef);
 	if (atLeast(permission, 'viewer')) return null;
 
@@ -105,7 +120,7 @@ async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Resp
 	return new Response(null, {
 		status: 302,
 		headers: {
-			location: `/login?next=${encodeURIComponent(next)}`,
+			location: accessUrl(siteRef, next),
 			'cache-control': 'private, no-store',
 			'cdn-cache-control': 'no-store',
 			vary: 'Cookie'
@@ -172,8 +187,7 @@ async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Pro
 	}
 	applyCachePolicy(headers, siteRef, found);
 
-	// Never emit Service-Worker-Allowed: the default scope rule is the only barrier
-	// between two sites sharing this origin, and that header would remove it.
+	// Keep service workers scoped inside this site's retained base path.
 
 	if (found.head.etag && matchesEtag(event.request.headers.get('if-none-match'), found.head.etag)) {
 		headers.delete('content-type');

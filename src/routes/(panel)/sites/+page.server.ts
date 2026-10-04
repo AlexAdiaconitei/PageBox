@@ -59,7 +59,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			const stored = storage.get(entry.id);
 			return {
 				...entry,
-				url: siteUrl(entry.basePath, url.port),
+				url: siteUrl(entry),
 				liveAt: live?.createdAt ?? null,
 				liveFileCount: live?.fileCount ?? null,
 				liveBytes: live?.totalBytes ?? null,

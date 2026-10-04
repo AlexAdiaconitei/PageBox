@@ -8,6 +8,8 @@
  * agreed on; nothing new is invented.
  */
 import { zipSync } from 'fflate';
+import postgres from 'postgres';
+import { afterAll } from 'vitest';
 
 export const base = process.env.PAGEBOX_E2E_BASE;
 export const email = process.env.PAGEBOX_E2E_EMAIL;
@@ -18,6 +20,44 @@ export const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-ho
 
 /** Set when the suite has an account to work with; otherwise these tests skip. */
 export const configured = Boolean(base && email && password);
+
+let fixtureSql: ReturnType<typeof postgres> | undefined;
+afterAll(async () => {
+	await fixtureSql?.end();
+});
+
+/** Read fixture IDs to address the actual per-site origin without bypassing HTTP auth. */
+export async function siteHost(slug: string): Promise<string | null> {
+	if (process.env.PAGEBOX_DB_TESTS !== '1')
+		throw new Error('Per-site tests require PAGEBOX_DB_TESTS=1 and a disposable database');
+	fixtureSql ??= postgres(process.env.DATABASE_URL_HOST ?? process.env.DATABASE_URL!, { max: 2 });
+	const [row] = await fixtureSql`select id from site where slug = ${slug}`;
+	return row ? `${slug.slice(0, 28)}-${row.id.toLowerCase()}.${sitesHost}` : null;
+}
+
+/** Obtain a site capability through the central reader flow, then request that origin. */
+export async function siteRequest(path: string, options: Parameters<typeof request>[1] = {}) {
+	const slug = /^\/s\/([^/?]+)/.exec(path)?.[1];
+	if (!slug) return request(path, options);
+	const host = await siteHost(slug);
+	if (!host) return request(path, { ...options, host: sitesHost });
+	const child: Jar = new Map();
+	if (options?.jar && [...options.jar.keys()].some((name) => name.includes('pb_view'))) {
+		const issued = await request(
+			'/access?site=' + encodeURIComponent(slug) + '&next=' + encodeURIComponent(path),
+			{ host: sitesHost, jar: options.jar }
+		);
+		if (issued.status === 404) return issued;
+		const location = issued.headers.get('location');
+		if (location?.includes('/__pb/accept?')) {
+			const url = new URL(location);
+			const accepted = await request(url.pathname + url.search, { host: url.host });
+			if (accepted.status !== 302) return accepted;
+			store(child, accepted);
+		}
+	}
+	return request(path, { ...options, host, jar: child });
+}
 
 /**
  * A fresh address per run. better-auth's rate limiter counts every request to

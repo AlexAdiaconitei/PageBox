@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
 	actionResult,
@@ -41,7 +42,7 @@ run('a site through its life', () => {
 	});
 
 	it('serves, then answers 404 for everyone once disabled', async () => {
-		expect((await request(`/s/${slug}/`, { host: sitesHost })).status).toBe(200);
+		expect((await siteRequest(`/s/${slug}/`, { host: sitesHost })).status).toBe(200);
 
 		const off = await actionResult(
 			await post(`/sites/${slug}?/serving`, jar, { disabled: 'true', reason: 'under test' })
@@ -51,12 +52,12 @@ run('a site through its life', () => {
 		// Every file, not only the HTML: a disabled site that still served its assets would
 		// leave the content reachable to anyone holding an asset URL.
 		for (const path of ['/', '/index.html']) {
-			const res = await request(`/s/${slug}${path}`, { host: sitesHost });
+			const res = await siteRequest(`/s/${slug}${path}`, { host: sitesHost });
 			expect(res.status, path).toBe(404);
 		}
 
 		// Off for its owner too — the check runs before visibility and before any grant.
-		expect((await request(`/s/${slug}/`, { host: sitesHost, jar })).status).toBe(404);
+		expect((await siteRequest(`/s/${slug}/`, { host: sitesHost, jar })).status).toBe(404);
 	});
 
 	it('keeps the build, and serves the same one again when enabled', async () => {
@@ -69,7 +70,7 @@ run('a site through its life', () => {
 		);
 		expect(on.type).toBe('success');
 
-		const back = await request(`/s/${slug}/`, { host: sitesHost });
+		const back = await siteRequest(`/s/${slug}/`, { host: sitesHost });
 		expect(back.status).toBe(200);
 		expect(await back.text()).toContain('one');
 	});
@@ -130,7 +131,7 @@ run('a site through its life', () => {
 		);
 		expect(gone.type).toBe('redirect');
 
-		expect((await request(`/s/${slug}/`, { host: sitesHost })).status).toBe(404);
+		expect((await siteRequest(`/s/${slug}/`, { host: sitesHost })).status).toBe(404);
 		expect((await request(`/sites/${slug}`, { jar })).status).toBe(404);
 
 		// The slug goes back into circulation — a name held forever by something that no

@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { describe, expect, it } from 'vitest';
 import {
 	adminHost,
@@ -33,7 +34,7 @@ run('hardening', () => {
 		// The default scope rule is the only barrier between two sites sharing this origin,
 		// and that header removes it. Checked on the HTML and on an asset.
 		for (const path of ['/', '/style.css', '/app.js']) {
-			const res = await request(`/s/${slug}${path}`, { host: sitesHost });
+			const res = await siteRequest(`/s/${slug}${path}`, { host: sitesHost });
 			expect(res.headers.get('service-worker-allowed'), path).toBeNull();
 		}
 	});

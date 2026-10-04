@@ -54,7 +54,11 @@ export const POST: RequestHandler = async (event) => {
 		activate,
 		authorize: async () => {
 			const current = await identifyCaller(event, event.params.slug);
-			return !('response' in current) && current.caller.siteRef.id === siteRef.id && current.caller.userId === caller.userId;
+			return (
+				!('response' in current) &&
+				current.caller.siteRef.id === siteRef.id &&
+				current.caller.userId === caller.userId
+			);
 		},
 		warnings,
 		acknowledgedAt: warnings.length > 0 ? new Date() : null
@@ -142,7 +146,7 @@ export const POST: RequestHandler = async (event) => {
 		retentionLimit: siteRef.retentionLimit,
 		pruned: outcome.pruned.ids,
 		prunedBytes: outcome.pruned.bytes,
-		url: siteUrl(siteRef.basePath, event.url.port)
+		url: siteUrl(siteRef)
 	});
 };
 
@@ -169,7 +173,7 @@ export const GET: RequestHandler = async (event) => {
 	return json(200, {
 		slug: siteRef.slug,
 		basePath: siteRef.basePath,
-		siteUrl: siteUrl(siteRef.basePath, event.url.port),
+		siteUrl: siteUrl(siteRef),
 		activeDeploymentId: siteRef.activeDeploymentId,
 		// Serving state, not just deployment state: a site can hold a live build and still
 		// answer 404 because an operator suspended it.

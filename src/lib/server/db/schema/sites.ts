@@ -1,6 +1,6 @@
 import * as t from 'drizzle-orm/pg-core';
 import { pgTable } from 'drizzle-orm/pg-core';
-import { user } from './auth';
+import { session, user } from './auth';
 
 /** Domain tables (docs/PLAN-static-hosting.md §4). Ids are ULIDs unless noted. */
 
@@ -177,6 +177,49 @@ export const siteGrant = pgTable(
 	(table) => [
 		t.uniqueIndex('site_grant_unique').on(table.siteId, table.principalType, table.principalId),
 		t.index('site_grant_principal_idx').on(table.principalType, table.principalId)
+	]
+);
+
+export const siteSession = pgTable(
+	'site_session',
+	{
+		id: t.text('id').primaryKey(),
+		tokenHash: t.text('token_hash').notNull(),
+		siteId: t
+			.text('site_id')
+			.notNull()
+			.references(() => site.id, { onDelete: 'cascade' }),
+		sessionId: t
+			.text('session_id')
+			.notNull()
+			.references(() => session.id, { onDelete: 'cascade' }),
+		expiresAt: t.timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	(table) => [
+		t.uniqueIndex('site_session_token_key').on(table.tokenHash),
+		t.uniqueIndex('site_session_parent_site_key').on(table.sessionId, table.siteId),
+		t.index('site_session_expires_idx').on(table.expiresAt)
+	]
+);
+
+export const siteAuthorization = pgTable(
+	'site_authorization',
+	{
+		codeHash: t.text('code_hash').primaryKey(),
+		siteId: t
+			.text('site_id')
+			.notNull()
+			.references(() => site.id, { onDelete: 'cascade' }),
+		sessionId: t
+			.text('session_id')
+			.notNull()
+			.references(() => session.id, { onDelete: 'cascade' }),
+		nextPath: t.text('next_path').notNull(),
+		expiresAt: t.timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	(table) => [
+		t.index('site_authorization_parent_idx').on(table.sessionId),
+		t.index('site_authorization_expires_idx').on(table.expiresAt)
 	]
 );
 

@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { zipSync, strToU8 } from 'fflate';
 
@@ -43,10 +44,9 @@ const api = (path: string, init: RequestInit = {}, bearer: string | null | undef
 	});
 
 const site = (path: string, init: RequestInit = {}) =>
-	fetch(`${base}${path}`, {
-		...init,
-		redirect: 'manual',
-		headers: { [hostHeader]: sitesHost, ...(init.headers ?? {}) }
+	siteRequest(path, {
+		method: init.method,
+		headers: Object.fromEntries(new Headers(init.headers).entries())
 	});
 
 function buildZip(files: Record<string, Uint8Array | string>): Uint8Array {
@@ -110,7 +110,7 @@ run('deploy API', () => {
 		const body = await res.json();
 		expect(body.slug).toBe(slug);
 		expect(body.basePath).toBe(`/s/${slug}/`);
-		expect(body.mode).toBe('path');
+		expect(body.mode).toBe('subdomain');
 	});
 
 	it('refuses anonymous and malformed credentials', async () => {

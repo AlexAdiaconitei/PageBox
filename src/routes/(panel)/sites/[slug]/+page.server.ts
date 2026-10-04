@@ -172,7 +172,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			disabledAt: row.disabledAt,
 			disabledReason: row.disabledReason,
 			retentionLimit: row.retentionLimit,
-			url: siteUrl(row.basePath, url.port)
+			url: siteUrl(row)
 		},
 		owner: owner ? { id: owner.id, email: owner.email } : null,
 		quota: allowance.metered
@@ -338,7 +338,8 @@ export const actions: Actions = {
 		const stored = (await siteStorage([siteRef.id])).get(siteRef.id);
 		const bytes = stored?.bytes ?? 0;
 		const used = (await usageByOwner([target.id])).get(target.id)?.bytes ?? 0;
-		if (siteRef.ownerUserId === target.id) return { message: `${siteRef.slug} already belongs to ${target.email}` };
+		if (siteRef.ownerUserId === target.id)
+			return { message: `${siteRef.slug} already belongs to ${target.email}` };
 		const targetQuota = (await quotaFor(target))!;
 		if (used + bytes > targetQuota) {
 			return fail(409, {

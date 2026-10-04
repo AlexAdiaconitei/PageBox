@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { brotliCompressSync } from 'node:zlib';
 import { zipSync, strToU8 } from 'fflate';
@@ -47,12 +48,12 @@ run('archive and serving path regressions', () => {
 			['hello%20world.txt', 'space'],
 			['caf%C3%A9.txt', 'unicode']
 		]) {
-			const res = await request(`/s/${slug}/${name}`, { host: sitesHost });
+			const res = await siteRequest(`/s/${slug}/${name}`, { host: sitesHost });
 			expect(res.status).toBe(200);
 			expect(await res.text()).toBe(body);
 		}
 		for (const path of ['config', '.env', '%2eenv', 'a%2fb.txt', 'a%5cb.txt', '%252eenv']) {
-			expect((await request(`/s/${slug}/${path}`, { host: sitesHost })).status, path).toBe(404);
+			expect((await siteRequest(`/s/${slug}/${path}`, { host: sitesHost })).status, path).toBe(404);
 		}
 	});
 	it('rejects a hidden-only ZIP without replacing the active deployment', async () => {
@@ -63,7 +64,7 @@ run('archive and serving path regressions', () => {
 		);
 		expect(result.status).toBe(400);
 		expect(result.body.reason).toBe('empty');
-		expect(await (await request(`/s/${slug}/`, { host: sitesHost })).text()).toBe('public');
+		expect(await (await siteRequest(`/s/${slug}/`, { host: sitesHost })).text()).toBe('public');
 	});
 	it('keeps partial precompression working after a sibling miss', async () => {
 		const body = 'compressed-asset-marker';
@@ -77,13 +78,13 @@ run('archive and serving path regressions', () => {
 			{ level: 0 }
 		);
 		expect((await upload(slug, zip, { jar })).status).toBe(201);
-		const plain = await request(`/s/${slug}/plain.js`, {
+		const plain = await siteRequest(`/s/${slug}/plain.js`, {
 			host: sitesHost,
 			headers: { 'accept-encoding': 'br' }
 		});
 		expect(plain.headers.get('content-encoding')).toBeNull();
 		expect(plain.headers.get('vary')).toContain('Accept-Encoding');
-		const encoded = await request(`/s/${slug}/encoded.js`, {
+		const encoded = await siteRequest(`/s/${slug}/encoded.js`, {
 			host: sitesHost,
 			headers: { 'accept-encoding': 'br' }
 		});

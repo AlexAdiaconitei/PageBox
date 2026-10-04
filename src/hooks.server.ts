@@ -1,42 +1,25 @@
 import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
 import { loadSession } from '$lib/server/auth/session';
-import { config, hostKind } from '$lib/server/config';
+import { acceptReader, accessUrl, loadSiteSession } from '$lib/server/auth/reader';
+import { config, hostKind, siteIdForHost, siteUrl } from '$lib/server/config';
 import { sameOriginMutation } from '$lib/server/auth/origin';
 import { errorResponse, notFoundResponse } from '$lib/server/errorPage';
 import { probeHealth } from '$lib/server/health';
 import { resolveSite } from '$lib/server/sites/resolve';
-import { serveSite } from '$lib/server/sites/serve';
+import { guardPrivate, serveSite } from '$lib/server/sites/serve';
 import { startup } from '$lib/server/startup';
 
 export const init: ServerInit = async () => {
 	await startup();
 };
-
-/**
- * Paths the *site* host is allowed to route into the SvelteKit app. Everything else on
- * that host is either a site path (`/s/<slug>/…`) or a 404.
- *
- * This list is a whitelist on purpose: it makes it impossible for a new admin route to
- * become reachable from the origin that hosts untrusted-ish static content (PLAN §7).
- */
-const SITES_HOST_ROUTES = new Set(['/', '/login', '/logout', '/healthz']);
-
-/** Admin-host paths reachable without a panel session. */
+const SITES_HOST_ROUTES = new Set(['/', '/login', '/logout', '/healthz', '/access']);
 const PUBLIC_ADMIN_ROUTES = new Set(['/login', '/logout', '/healthz']);
-
-/**
- * The deploy API authenticates with a bearer token and answers in JSON. Redirecting it to
- * a login page would turn every unauthenticated call into a 303 that a CI job reads as
- * success, so it opts out of the session gate and does its own 401.
- */
 const isApiPath = (pathname: string) => pathname === '/api' || pathname.startsWith('/api/');
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const kind = hostKind(event.url.host);
-
-	// Container and orchestrator probes (Docker HEALTHCHECK, Dokploy, compose
-	// `service_healthy`) reach the app by IP, so they carry neither hostname. They still
-	// need a real answer — but a reduced one, since the caller is unidentified.
+	event.locals.user = null;
+	event.locals.sessionId = null;
 	if (!kind && event.url.pathname === '/healthz') {
 		const health = await probeHealth();
 		return new Response(JSON.stringify({ status: health.ok ? 'ok' : 'degraded' }), {
@@ -44,85 +27,95 @@ export const handle: Handle = async ({ event, resolve }) => {
 			headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
 		});
 	}
-
-	// Anything else that is neither host is not ours: no redirect, no hint, no routing.
 	if (!kind) return notFoundResponse(event.request, null);
 	event.locals.hostKind = kind;
-
-	// Never serve internal paths from either host.
+	const childId = kind === 'sites' ? siteIdForHost(event.url.host) : null;
+	if (childId && event.url.pathname === '/__pb/accept' && event.request.method === 'GET')
+		return acceptReader(event, childId);
 	if (event.url.pathname.startsWith('/__pb/')) return notFoundResponse(event.request, kind);
 
 	if (kind === 'sites') {
 		const hit = await resolveSite(event.url.host, event.url.pathname);
 		if (hit) {
-			if (hit.needsTrailingSlashRedirect) {
-				// Without this, every relative URL inside the HTML resolves one level up.
-				return new Response(null, {
-					status: 301,
-					headers: { location: event.url.pathname + '/' + event.url.search }
-				});
+			if (childId) {
+				if (hit.siteRef.visibility === 'private')
+					event.locals.user = await loadSiteSession(event, childId);
+				return serveSite(event, hit);
 			}
-			// Only private sites pay for a session lookup. A public asset request is the
-			// hot path of this whole application and has nothing to authorise.
+			// The reader login origin must never execute uploaded content.
+			if (hit.siteRef.disabled)
+				return notFoundResponse(event.request, kind, {
+					'cache-control': 'private, no-store',
+					'cdn-cache-control': 'no-store',
+					'cloudflare-cdn-cache-control': 'no-store',
+					vary: 'Cookie'
+				});
+			if (event.request.method !== 'GET' && event.request.method !== 'HEAD')
+				return serveSite(event, hit);
 			if (hit.siteRef.visibility === 'private') {
 				event.locals.user = await loadSession(event, kind);
+				const denial = await guardPrivate(event, hit.siteRef);
+				if (denial) return denial;
 			}
-			return serveSite(event, hit);
+			const location =
+				hit.siteRef.visibility === 'private'
+					? accessUrl(hit.siteRef, event.url.pathname + event.url.search)
+					: new URL(event.url.pathname + event.url.search, siteUrl(hit.siteRef)).href;
+			return new Response(null, {
+				status: 302,
+				headers: {
+					location,
+					'cache-control': 'private, no-store',
+					'cdn-cache-control': 'no-store',
+					'cloudflare-cdn-cache-control': 'no-store',
+					'referrer-policy': 'no-referrer',
+					vary: 'Cookie'
+				}
+			});
 		}
-		if (!SITES_HOST_ROUTES.has(event.url.pathname)) return notFoundResponse(event.request, kind);
-	} else if (event.url.pathname.startsWith(config.PAGEBOX_SITES_PREFIX + '/')) {
-		// The admin host must never answer on the site prefix: one path, one meaning.
+		if (childId || !SITES_HOST_ROUTES.has(event.url.pathname))
+			return notFoundResponse(event.request, kind);
+	} else if (
+		event.url.pathname === '/access' ||
+		event.url.pathname.startsWith(config.PAGEBOX_SITES_PREFIX + '/')
+	) {
 		return notFoundResponse(event.request, kind);
 	}
 
-	// CSRF: cookie-authenticated mutations must come from our own origin. Done here, and
-	// not by SvelteKit's built-in check, because that one compares against a URL rebuilt
-	// from proxy headers (see vite.config.ts).
-	if (!sameOriginMutation(event, kind)) {
+	if (!sameOriginMutation(event, kind))
 		return errorResponse(event.request, {
 			status: 403,
 			title: 'Cross-site request blocked',
 			detail: 'This submission came from another site, so it was not processed.',
-			note:
-				'Open the page again on this host and retry. If you got here from a bookmarked ' +
-				'form or a page kept open for a long time, reloading it is enough.',
+			note: 'Open the page again on this host and retry.',
 			brand: kind,
 			host: kind === 'admin' ? config.PAGEBOX_ADMIN_HOST : config.PAGEBOX_SITES_HOST,
 			action: { href: '/', label: 'Start again' }
 		});
-	}
-
 	event.locals.user = await loadSession(event, kind);
-
 	if (
 		kind === 'admin' &&
 		!PUBLIC_ADMIN_ROUTES.has(event.url.pathname) &&
 		!isApiPath(event.url.pathname)
 	) {
-		if (!event.locals.user) {
-			const next = event.url.pathname + event.url.search;
-			redirect(303, `/login?next=${encodeURIComponent(next)}`);
-		}
-		// A bootstrap or admin-reset password is a first-login credential, not a password:
-		// nothing else in the panel opens until it has been replaced.
-		if (event.locals.user.mustChangePassword && event.url.pathname !== '/account/password') {
+		if (!event.locals.user)
+			redirect(303, '/login?next=' + encodeURIComponent(event.url.pathname + event.url.search));
+		if (event.locals.user.mustChangePassword && event.url.pathname !== '/account/password')
 			redirect(303, '/account/password');
-		}
 	}
-
 	const response = await resolve(event);
 	response.headers.set('X-Content-Type-Options', 'nosniff');
-	response.headers.set('Referrer-Policy', 'same-origin');
-	if (kind === 'admin') {
-		// The panel holds the credentials of the whole instance; it is never framed.
-		response.headers.set('X-Frame-Options', 'DENY');
-	}
+	if (!response.headers.has('Referrer-Policy'))
+		response.headers.set('Referrer-Policy', 'same-origin');
+	response.headers.set('X-Frame-Options', 'DENY');
 	return response;
 };
 
 export const handleError: HandleServerError = ({ error, event }) => {
 	const id = crypto.randomUUID();
-	console.error(`[pagebox] error ${id} on ${event.url.host}${event.url.pathname}:`, error);
-	// Never leak internals to a request that may come from hosted content.
+	console.error(
+		'[pagebox] error ' + id + ' on ' + event.url.host + event.url.pathname + ':',
+		error
+	);
 	return { message: 'Internal error', id };
 };

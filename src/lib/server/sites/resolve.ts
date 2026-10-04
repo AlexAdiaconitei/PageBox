@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { config } from '../config';
+import { config, siteHostFor, siteIdForHost } from '../config';
 import { db } from '../db';
 import { site } from '../db/schema';
 import { cache, cacheKeys } from '../cache';
@@ -56,7 +56,8 @@ export function parseSitePath(
 
 export async function resolveSite(host: string, path: string): Promise<ResolvedSite | null> {
 	const hostname = host.toLowerCase().split(':')[0];
-	if (hostname !== config.PAGEBOX_SITES_HOST.split(':')[0]) return null;
+	const hostId = siteIdForHost(host);
+	if (hostname !== config.PAGEBOX_SITES_HOST.split(':')[0] && !hostId) return null;
 
 	const parsed = parseSitePath(path);
 	if (!parsed) return null;
@@ -65,6 +66,8 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 	// A disabled site is resolved but not served: `serveSite` answers the same 404 as a
 	// site that does not exist, so taking one down leaks nothing about what is hosted here.
 	if (!siteRef) return null;
+	if (hostId && (siteRef.id !== hostId || siteHostFor(siteRef).split(':')[0] !== hostname))
+		return null;
 
 	return {
 		siteRef,
