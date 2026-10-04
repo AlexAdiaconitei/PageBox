@@ -7,9 +7,50 @@
 
 services:
   pagebox:
-    image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:-latest}
-    pull_policy: always
-    env_file: .env
+    image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:?Set an exact published or locally built image tag}
+    pull_policy: missing
+    environment:
+      PAGEBOX_ADMIN_HOST: ${PAGEBOX_ADMIN_HOST:?Set the admin hostname}
+      PAGEBOX_SITES_HOST: ${PAGEBOX_SITES_HOST:?Set the reader hostname}
+      PAGEBOX_PUBLIC_SCHEME: ${PAGEBOX_PUBLIC_SCHEME:-https}
+      PAGEBOX_SITES_PREFIX: ${PAGEBOX_SITES_PREFIX:-/s}
+      PAGEBOX_REPLICAS: ${PAGEBOX_REPLICAS:-1}
+      DATABASE_URL: ${DATABASE_URL:?Set the external database URL}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      REDIS_URL:
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set the external storage endpoint}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Create a bucket-scoped app credential}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set the app storage secret}
+      S3_BUCKET: ${S3_BUCKET:-pagebox}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      AUTH_SECRET: ${AUTH_SECRET:?Generate a unique authentication secret}
+      BOOTSTRAP_ADMIN_EMAIL:
+      BOOTSTRAP_ADMIN_PASSWORD:
+      PAGEBOX_STORAGE_BYTES:
+      PAGEBOX_DEFAULT_QUOTA_BYTES: ${PAGEBOX_DEFAULT_QUOTA_BYTES:-5GB}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-100MB}
+      MAX_UPLOAD_TEMP_BYTES: ${MAX_UPLOAD_TEMP_BYTES:-400MB}
+      MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-4}
+      UPLOAD_BODY_TIMEOUT_SECONDS: ${UPLOAD_BODY_TIMEOUT_SECONDS:-60}
+      UPLOAD_TIMEOUT_SECONDS: ${UPLOAD_TIMEOUT_SECONDS:-600}
+      MAX_UNCOMPRESSED_BYTES: ${MAX_UNCOMPRESSED_BYTES:-500MB}
+      MAX_FILES: ${MAX_FILES:-20000}
+      MAX_ZIP_RATIO: ${MAX_ZIP_RATIO:-100}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-10}
+      LOGIN_WINDOW_SECONDS: ${LOGIN_WINDOW_SECONDS:-300}
+      API_KEY_MAX_REQUESTS: ${API_KEY_MAX_REQUESTS:-120}
+      API_KEY_WINDOW_SECONDS: ${API_KEY_WINDOW_SECONDS:-3600}
+      PAGEBOX_MIGRATE_ON_START: ${PAGEBOX_MIGRATE_ON_START:-true}
+      # The operator creates the bucket using a separate administrator credential.
+      PAGEBOX_ENSURE_BUCKET_ON_START: ${PAGEBOX_ENSURE_BUCKET_ON_START:-false}
+      # Forwarding headers are trusted only when explicitly configured.
+      HOST_HEADER:
+      PROTOCOL_HEADER:
+      ADDRESS_HEADER:
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     restart: unless-stopped
     networks:
       - dokploy-network

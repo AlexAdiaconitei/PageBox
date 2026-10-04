@@ -1,9 +1,8 @@
-# Only needed when PageBox is deployed as a Dokploy *Compose* stack, where "Add Domain"
-# does not create routers. With the Application/Dockerfile deployment this file is not used.
-#
-# Drop it in Dokploy's dynamic config directory (usually
-# /etc/dokploy/traefik/dynamic/pagebox.yml) and replace the two hostnames plus the
-# container name if you changed it.
+# For a Dokploy Compose stack, place this file in its Traefik dynamic directory.
+# Replace the hostnames and container name. Application deployments also need a router
+# covering site subdomains. These rules use Traefik v3 / Go regexp syntax.
+# Production requires a TLS entrypoint and certificates for the central hosts and
+# *.pages.example.com. Upgrade the application and routes together.
 
 http:
   routers:
@@ -12,7 +11,7 @@ http:
       entryPoints: [web]
       service: pagebox
     pagebox-sites:
-      rule: 'Host(`pages.example.com`)'
+      rule: 'Host(`pages.example.com`) || HostRegexp(`^[a-z0-9][a-z0-9-]{0,27}-[0-9a-hjkmnp-tv-z]{26}\Q.pages.example.com\E$`)'
       entryPoints: [web]
       service: pagebox
 
