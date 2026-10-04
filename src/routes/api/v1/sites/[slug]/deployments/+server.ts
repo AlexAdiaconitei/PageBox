@@ -52,6 +52,10 @@ export const POST: RequestHandler = async (event) => {
 		source: caller.kind === 'token' ? 'api' : 'panel-upload',
 		notes: event.request.headers.get('x-deployment-notes'),
 		activate,
+		authorize: async () => {
+			const current = await identifyCaller(event, event.params.slug);
+			return !('response' in current) && current.caller.siteRef.id === siteRef.id && current.caller.userId === caller.userId;
+		},
 		warnings,
 		acknowledgedAt: warnings.length > 0 ? new Date() : null
 	});

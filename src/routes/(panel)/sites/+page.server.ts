@@ -4,7 +4,8 @@ import type { Actions, PageServerLoad } from './$types';
 import { audit } from '$lib/server/audit';
 import { basePathFor, config, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
-import { deployment, site } from '$lib/server/db/schema';
+import { deployment, site, user } from '$lib/server/db/schema';
+import { panelMutation } from '$lib/server/auth/mutation';
 import { isAdmin } from '$lib/server/auth';
 import { quotaFor, usageFor } from '$lib/server/quota';
 import { isValidSlug, newId } from '$lib/server/ids';
@@ -45,9 +46,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// much room they have left, so it belongs beside the fleet figures rather than only in
 	// the refusal when a deploy is turned away.
 	const actor = locals.user!;
+	const [owner] = await db.select().from(user).where(eq(user.id, actor.id)).limit(1);
 	const own = {
 		used: await usageFor(actor.id),
-		quota: await quotaFor({ ...actor, storageQuotaBytes: null })
+		quota: owner ? await quotaFor(owner) : 0
 	};
 
 	return {
@@ -124,3 +126,7 @@ export const actions: Actions = {
 		redirect(303, `/sites/${slug}`);
 	}
 };
+
+for (const [name, action] of Object.entries(actions)) {
+	if (action) actions[name] = (event) => panelMutation(event, async () => action(event));
+}

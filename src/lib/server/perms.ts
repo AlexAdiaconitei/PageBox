@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { cache } from './cache';
 import { db } from './db';
 import { group, groupMember, site, siteGrant, type SiteRole } from './db/schema';
@@ -63,12 +63,16 @@ export async function permissionFor(
 	let permission: Permission = siteRef.visibility === 'public' ? 'viewer' : null;
 
 	if (user) {
-		const groupIds = await groupsOf(user.id);
 		const principals = [
 			and(eq(siteGrant.principalType, 'user'), eq(siteGrant.principalId, user.id)),
-			groupIds.length
-				? and(eq(siteGrant.principalType, 'group'), inArray(siteGrant.principalId, groupIds))
-				: undefined
+			and(
+				eq(siteGrant.principalType, 'group'),
+				sql`exists (
+				select 1 from ${groupMember}
+				where ${groupMember.groupId} = ${siteGrant.principalId}
+				and ${groupMember.userId} = ${user.id}
+			)`
+			)
 		].filter(Boolean);
 
 		const grants = await db

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { user } from '../db/schema';
 import type { SessionUser } from '../auth';
+import { loadSession } from '../auth/session';
 import { atLeast, permissionFor } from '../perms';
 import { lookupSiteBySlug, type SiteRef } from '../sites/resolve';
 import { authenticateToken, jsonError, tokenAllowsSite, type TokenAuth } from './auth';
@@ -110,7 +111,7 @@ export async function identifyCaller(
 		};
 	}
 
-	const user = event.locals.user;
+	const user = await loadSession(event, 'admin');
 	if (!user) return { response: jsonError(401, 'sign in or send a deploy token') };
 	if (user.mustChangePassword) {
 		return { response: jsonError(403, 'change your password before using the API') };

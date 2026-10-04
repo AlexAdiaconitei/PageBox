@@ -41,3 +41,21 @@ La guía de migración especificará los cambios de infraestructura y reconstruc
 Se registrarán aquí los commits y resultados de las comprobaciones finales.
 Las pruebas se ejecutan contra servicios locales con datos desechables. El homelab
 no se modifica durante este trabajo.
+
+## Progreso
+
+- `b2b1f55`: informe, evidencia original y plan de corrección.
+- `69b51d0`: autorización de cuentas promovidas, revocación de sesiones y tokens,
+  contraseña obligatoria en API, origen completo y permisos sin caché.
+- Concurrencia: consultas ligadas a la conexión del lock, espera sin ocupar el pool,
+  migraciones con pool de una conexión y un lock compartido para cuotas y ciclo de vida.
+  Los borrados incompletos permanecen contabilizados y el sweeper los reintenta.
+- Se añadió una FK compuesta para impedir punteros a despliegues de otro sitio o
+  inexistentes. La migración limpia los punteros inválidos existentes y vuelve a
+  comprobar el almacenamiento de los despliegues fallidos antiguos.
+- Comprobaciones parciales: tipos y build correctos; 12 pruebas de permisos/origen,
+  2 de borrado S3 y 22 de integración de seguridad, locks, cuotas y ciclo de vida.
+  La pasada completa obtuvo 90 correctas y detectó una expectativa antigua de CSRF.
+  Tras corregir esa expectativa, las 24 pruebas de panel, locks y cuotas pasan.
+- Quedan pendientes las demás fases y la pasada final completa. Estos resultados
+  parciales no certifican todavía la versión 0.2.0.

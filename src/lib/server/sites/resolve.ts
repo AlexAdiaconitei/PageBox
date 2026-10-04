@@ -86,7 +86,7 @@ export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
 		spaFallback: row.spaFallback,
 		activeDeploymentId: row.activeDeploymentId,
 		ownerUserId: row.ownerUserId,
-		disabled: row.disabledAt !== null,
+		disabled: row.disabledAt !== null || row.deletingAt !== null,
 		retentionLimit: row.retentionLimit
 	};
 	return ref;

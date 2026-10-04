@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { deployment } from '../db/schema';
-import { deletePrefix, deploymentPrefix } from '../s3';
+import { withStorageLock } from '../db/locks';
+import { deployment, site } from '../db/schema';
+import { deleteDeployment } from './lifecycle';
 import type { SiteRef } from '../sites/resolve';
 
 /**
@@ -49,7 +50,7 @@ export async function prunablePlan(
 			createdAt: deployment.createdAt
 		})
 		.from(deployment)
-		.where(and(eq(deployment.siteId, siteId), ne(deployment.status, 'uploading')))
+		.where(and(eq(deployment.siteId, siteId), eq(deployment.status, 'ready')))
 		.orderBy(desc(deployment.createdAt));
 
 	// The incoming upload occupies a slot at the top of the list before it has a row, so
@@ -64,41 +65,39 @@ export async function pruneDeployments(
 	siteRef: Pick<SiteRef, 'id' | 'activeDeploymentId'>,
 	limit: number | null
 ): Promise<PruneOutcome> {
-	const doomed = await prunablePlan(siteRef.id, limit, siteRef.activeDeploymentId);
-	if (doomed.length === 0) return { prunedIds: [], reclaimedBytes: 0, failedIds: [] };
+	return withStorageLock(async () => {
+		const [current] = await db.select().from(site).where(eq(site.id, siteRef.id)).limit(1);
+		if (!current || current.deletingAt) return { prunedIds: [], reclaimedBytes: 0, failedIds: [] };
+		const doomed = await prunablePlan(siteRef.id, limit, current.activeDeploymentId);
+		if (doomed.length === 0) return { prunedIds: [], reclaimedBytes: 0, failedIds: [] };
 
-	const removed: string[] = [];
-	const failed: string[] = [];
+		const removed: string[] = [];
+		const failed: string[] = [];
 
-	for (const row of doomed) {
-		try {
-			await deletePrefix(deploymentPrefix(siteRef.id, row.id));
-		} catch (err) {
-			// Leaving the row alive is the right failure: the objects are still referenced
-			// by something the panel lists, rather than becoming an orphan nobody can find.
-			console.error(`[pagebox] retention: could not drop objects of ${row.id}:`, err);
-			failed.push(row.id);
-			continue;
+		for (const row of doomed) {
+			try {
+				await deleteDeployment(siteRef.id, row.id);
+			} catch (err) {
+				// Leaving the row alive is the right failure: the objects are still referenced
+				// by something the panel lists, rather than becoming an orphan nobody can find.
+				console.error(`[pagebox] retention: could not drop objects of ${row.id}:`, err);
+				failed.push(row.id);
+				continue;
+			}
+			removed.push(row.id);
 		}
-		removed.push(row.id);
-	}
 
-	// `returning` rather than a blind delete: two deploys to the same site can compute the
-	// same plan, and both would then report having reclaimed the same bytes. Whoever's
-	// statement actually removed the row is the one that gets to count it.
-	const deleted =
-		removed.length > 0
-			? await db.delete(deployment).where(inArray(deployment.id, removed)).returning({
-					id: deployment.id,
-					totalBytes: deployment.totalBytes
-				})
-			: [];
+		// `returning` rather than a blind delete: two deploys to the same site can compute the
+		// same plan, and both would then report having reclaimed the same bytes. Whoever's
+		// statement actually removed the row is the one that gets to count it.
+		const deleted = doomed.filter((row) => removed.includes(row.id));
 
-	return {
-		prunedIds: deleted.map((row) => row.id),
-		reclaimedBytes: deleted.reduce((sum, row) => sum + row.totalBytes, 0),
-		failedIds: failed
-	};
+		return {
+			prunedIds: deleted.map((row) => row.id),
+			reclaimedBytes: deleted.reduce((sum, row) => sum + row.totalBytes, 0),
+			failedIds: failed
+		};
+	});
 }
 
 /** Total bytes a site occupies across every deployment it still has. */

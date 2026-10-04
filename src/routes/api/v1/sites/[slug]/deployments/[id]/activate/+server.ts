@@ -5,11 +5,12 @@ import { clientIp, identifyCaller } from '$lib/server/api/context';
 import { audit } from '$lib/server/audit';
 import { siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
+import { withStorageLock } from '$lib/server/db/locks';
 import { deployment } from '$lib/server/db/schema';
 import { activate } from '$lib/server/deploy/ingest';
 
 /** Rollback and roll-forward are the same operation: point the site at a deployment. */
-export const POST: RequestHandler = async (event) => {
+export const POST: RequestHandler = async (event) => withStorageLock(async () => {
 	const context = await identifyCaller(event, event.params.slug);
 	if ('response' in context) return context.response;
 	const { caller } = context;
@@ -44,4 +45,4 @@ export const POST: RequestHandler = async (event) => {
 		previousDeploymentId: previous,
 		url: siteUrl(siteRef.basePath, event.url.port)
 	});
-};
+});

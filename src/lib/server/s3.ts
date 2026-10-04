@@ -136,9 +136,14 @@ export async function deletePrefix(prefix: string): Promise<number> {
 		);
 		const keys = (listed.Contents ?? []).map((o) => ({ Key: o.Key! }));
 		if (keys.length) {
-			await s3.send(
+			const result = await s3.send(
 				new DeleteObjectsCommand({ Bucket: bucket(), Delete: { Objects: keys, Quiet: true } })
 			);
+			if (result.Errors?.length) {
+				throw new Error(
+					`S3 could not delete ${result.Errors.length} object(s): ${result.Errors.map((e) => e.Code ?? 'unknown').join(', ')}`
+				);
+			}
 			deleted += keys.length;
 		}
 		token = listed.IsTruncated ? listed.NextContinuationToken : undefined;

@@ -3,6 +3,7 @@ import { and, count, eq, isNull } from 'drizzle-orm';
 import { config, formatBytes } from './config';
 import { db, getSql } from './db';
 import { runMigrations } from './db/migrate';
+import { withStorageLock } from './db/locks';
 import { account, user } from './db/schema';
 import { newId } from './ids';
 import { usageByOwner } from './quota';
@@ -34,8 +35,10 @@ export async function startup(): Promise<void> {
 			log(`bucket "${config.S3_BUCKET}" ${state}`);
 		}
 
-		await bootstrapAdmin();
-		await backfillQuotas();
+		await withStorageLock(async () => {
+			await bootstrapAdmin();
+			await backfillQuotas();
+		});
 
 		// Sweeps deployments whose upload died mid-flight, now and once an hour.
 		startSweeper();

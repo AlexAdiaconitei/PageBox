@@ -1,4 +1,5 @@
 import { error, fail } from '@sveltejs/kit';
+import { panelMutation } from '$lib/server/auth/mutation';
 import { and, eq, or } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { isAdmin, isSuperadmin, type SessionUser } from '$lib/server/auth';
@@ -210,3 +211,7 @@ export const actions: Actions = {
 		return { message: 'Member removed' };
 	}
 };
+
+for (const [name, action] of Object.entries(actions)) {
+	if (action) actions[name] = (event) => panelMutation(event, async () => action(event));
+}

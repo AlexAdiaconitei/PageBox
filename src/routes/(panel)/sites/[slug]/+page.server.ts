@@ -1,9 +1,10 @@
-import { error, fail, redirect } from '@sveltejs/kit';
+import { error, fail, isHttpError, redirect } from '@sveltejs/kit';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { audit } from '$lib/server/audit';
 import { adminUrl, config, formatBytes, siteUrl } from '$lib/server/config';
 import { db } from '$lib/server/db';
+import { panelMutation } from '$lib/server/auth/mutation';
 import {
 	apikey,
 	deployment,
@@ -25,8 +26,8 @@ import {
 } from '$lib/server/deploy/retention';
 import { newId } from '$lib/server/ids';
 import { atLeast, manages, permissionFor } from '$lib/server/perms';
-import { allowanceFor, canAllocate, ownerOf, usageByOwner } from '$lib/server/quota';
-import { deletePrefix, deploymentPrefix, sitePrefix } from '$lib/server/s3';
+import { allowanceFor, canAllocate, ownerOf, quotaFor, usageByOwner } from '$lib/server/quota';
+import { deleteDeployment, deleteSite } from '$lib/server/deploy/lifecycle';
 import { invalidateSite, lookupSiteBySlug } from '$lib/server/sites/resolve';
 
 /** Which site a deploy token is scoped to, as stored by the api-key plugin. */
@@ -291,17 +292,15 @@ export const actions: Actions = {
 		// still offers to roll back to, which then serves nothing: a 404 with no explanation
 		// anywhere. Failing loudly leaves it listed and intact instead, which is recoverable.
 		try {
-			await deletePrefix(deploymentPrefix(siteRef.id, id));
+			await deleteDeployment(siteRef.id, id);
 		} catch (err) {
+			if (isHttpError(err)) return fail(err.status, { message: err.body.message });
 			console.error(`[pagebox] could not drop the objects of deployment ${id}:`, err);
 			return fail(502, {
-				message: 'Storage refused to delete this deployment. Nothing was removed — try again.'
+				message: 'Deployment deletion is incomplete and queued for retry.'
 			});
 		}
 
-		await db
-			.delete(deployment)
-			.where(and(eq(deployment.id, id), eq(deployment.siteId, siteRef.id)));
 		await audit({
 			action: 'deployment.deleted',
 			actorUserId: locals.user!.id,
@@ -339,10 +338,12 @@ export const actions: Actions = {
 		const stored = (await siteStorage([siteRef.id])).get(siteRef.id);
 		const bytes = stored?.bytes ?? 0;
 		const used = (await usageByOwner([target.id])).get(target.id)?.bytes ?? 0;
-		if (target.storageQuotaBytes !== null && used + bytes > target.storageQuotaBytes) {
+		if (siteRef.ownerUserId === target.id) return { message: `${siteRef.slug} already belongs to ${target.email}` };
+		const targetQuota = (await quotaFor(target))!;
+		if (used + bytes > targetQuota) {
 			return fail(409, {
 				message:
-					`${target.email} has ${formatBytes(Math.max(0, target.storageQuotaBytes - used))} free ` +
+					`${target.email} has ${formatBytes(Math.max(0, targetQuota - used))} free ` +
 					`and this site holds ${formatBytes(bytes)}. Raise their quota first.`
 			});
 		}
@@ -387,23 +388,20 @@ export const actions: Actions = {
 
 		const stored = (await siteStorage([siteRef.id])).get(siteRef.id);
 
+		let tokensRevoked = 0;
 		try {
-			await deletePrefix(sitePrefix(siteRef.id));
+			tokensRevoked = await deleteSite(siteRef.id);
 		} catch (err) {
+			if (isHttpError(err)) return fail(err.status, { message: err.body.message });
 			console.error(`[pagebox] could not drop the objects of site ${siteRef.slug}:`, err);
 			return fail(502, {
-				message: 'Storage refused to delete this site. Nothing was removed — try again.'
+				message: 'Site disabled. Deletion is incomplete and queued for retry.'
 			});
 		}
 
 		// Deployments, grants and the deploy tokens scoped here go with it: `deployment` and
 		// `site_grant` cascade on the FK, the keys carry their site in metadata and do not, so
 		// they are deleted by hand — directly, for the same reason `revokeToken` does.
-		const keys = await db.delete(apikey).where(eq(apikey.siteId, siteRef.id)).returning({
-			id: apikey.id
-		});
-
-		await db.delete(site).where(eq(site.id, siteRef.id));
 		await invalidateSite(siteRef.slug, siteRef.id);
 
 		// Logged before the redirect and with everything worth keeping in it: the row that
@@ -418,7 +416,7 @@ export const actions: Actions = {
 				name: siteRef.name,
 				deployments: stored?.deployments ?? 0,
 				reclaimedBytes: stored?.bytes ?? 0,
-				tokensRevoked: keys.length
+				tokensRevoked
 			}
 		});
 
@@ -641,3 +639,7 @@ export const actions: Actions = {
 		return { message: 'Token revoked' };
 	}
 };
+
+for (const [name, action] of Object.entries(actions)) {
+	if (action) actions[name] = (event) => panelMutation(event, async () => action(event));
+}

@@ -9,6 +9,7 @@ import {
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/schema';
+import { panelMutation } from '$lib/server/auth/mutation';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	return { forced: locals.user?.mustChangePassword ?? false };
@@ -84,3 +85,7 @@ export const actions: Actions = {
 		};
 	}
 };
+
+for (const [name, action] of Object.entries(actions)) {
+	if (action) actions[name] = (event) => panelMutation(event, async () => action(event));
+}

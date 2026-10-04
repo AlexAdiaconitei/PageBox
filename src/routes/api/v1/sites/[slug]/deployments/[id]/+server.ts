@@ -1,11 +1,13 @@
 import type { RequestHandler } from './$types';
+import { isHttpError } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { json, jsonError } from '$lib/server/api/auth';
 import { clientIp, identifyCaller } from '$lib/server/api/context';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
+import { withStorageLock } from '$lib/server/db/locks';
 import { deployment } from '$lib/server/db/schema';
-import { deletePrefix, deploymentPrefix } from '$lib/server/s3';
+import { deleteDeployment } from '$lib/server/deploy/lifecycle';
 
 export const GET: RequestHandler = async (event) => {
 	const context = await identifyCaller(event, event.params.slug);
@@ -30,7 +32,7 @@ export const GET: RequestHandler = async (event) => {
 };
 
 /** Deleting the live deployment would take the site down, so it is refused. */
-export const DELETE: RequestHandler = async (event) => {
+export const DELETE: RequestHandler = async (event) => withStorageLock(async () => {
 	const context = await identifyCaller(event, event.params.slug);
 	if ('response' in context) return context.response;
 	const { caller } = context;
@@ -47,12 +49,12 @@ export const DELETE: RequestHandler = async (event) => {
 	// deployment the panel still lists and still offers to roll back to, which then serves
 	// nothing. Failing loudly leaves it listed and intact, which is recoverable.
 	try {
-		await deletePrefix(deploymentPrefix(siteRef.id, row.id));
+		await deleteDeployment(siteRef.id, row.id);
 	} catch (err) {
+		if (isHttpError(err)) return jsonError(err.status, err.body.message);
 		console.error(`[pagebox] could not drop the objects of deployment ${row.id}:`, err);
-		return jsonError(502, 'storage refused to delete this deployment — nothing was removed');
+		return jsonError(502, 'deployment deletion is incomplete and queued for retry');
 	}
-	await db.delete(deployment).where(eq(deployment.id, row.id));
 
 	await audit({
 		action: 'deployment.deleted',
@@ -65,7 +67,7 @@ export const DELETE: RequestHandler = async (event) => {
 	});
 
 	return json(200, { deleted: row.id });
-};
+});
 
 function find(siteId: string, id: string) {
 	return db
