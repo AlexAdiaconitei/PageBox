@@ -1,7 +1,7 @@
 {
 	"name": "pagebox",
 	"private": true,
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"license": "BUSL-1.1",
 	"type": "module",
 	"engines": {
@@ -42,7 +42,8 @@
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/node": "^22.10.0",
 		"@types/yauzl": "^3.4.0",
-		"drizzle-kit": "^0.31.10",
+		"drizzle-kit": "^0.31.11",
+		"playwright": "1.63.0",
 		"prettier": "^3.4.2",
 		"prettier-plugin-svelte": "^3.3.3",
 		"svelte": "^5.56.1",
@@ -50,6 +51,6 @@
 		"tailwindcss": "^4.3.3",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
-		"vitest": "^4.1.10"
+		"vitest": "4.1.11"
 	}
 }

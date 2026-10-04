@@ -1,2 +1,7 @@
 allowBuilds:
   esbuild: true
+
+overrides:
+  devalue: ^5.9.3
+  cookie@0.6.0: 0.7.2
+  '@esbuild-kit/core-utils>esbuild': 0.25.12
