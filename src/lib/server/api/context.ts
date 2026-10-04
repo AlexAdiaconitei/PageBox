@@ -94,6 +94,9 @@ export async function identifyCaller(
 		// allowed. Both, every call — a key that outlives the permission it was issued under
 		// is a permission that cannot be revoked.
 		const owner = await tokenOwner(context.auth);
+		if (owner?.mustChangePassword) {
+			return { response: jsonError(403, 'change your password before using the API') };
+		}
 		const permission = owner ? await permissionFor(owner, context.siteRef) : null;
 		if (!atLeast(permission, required)) return { response: jsonError(404, 'site not found') };
 
@@ -109,6 +112,9 @@ export async function identifyCaller(
 
 	const user = event.locals.user;
 	if (!user) return { response: jsonError(401, 'sign in or send a deploy token') };
+	if (user.mustChangePassword) {
+		return { response: jsonError(403, 'change your password before using the API') };
+	}
 
 	const siteRef = await lookupSiteBySlug(slug);
 	if (!siteRef) return { response: jsonError(404, 'site not found') };

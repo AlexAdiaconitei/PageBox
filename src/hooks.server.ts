@@ -1,12 +1,7 @@
-import {
-	redirect,
-	type Handle,
-	type HandleServerError,
-	type RequestEvent,
-	type ServerInit
-} from '@sveltejs/kit';
+import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
 import { loadSession } from '$lib/server/auth/session';
-import { config, hostKind, type HostKind } from '$lib/server/config';
+import { config, hostKind } from '$lib/server/config';
+import { sameOriginMutation } from '$lib/server/auth/origin';
 import { errorResponse, notFoundResponse } from '$lib/server/errorPage';
 import { probeHealth } from '$lib/server/health';
 import { resolveSite } from '$lib/server/sites/resolve';
@@ -131,37 +126,3 @@ export const handleError: HandleServerError = ({ error, event }) => {
 	// Never leak internals to a request that may come from hosted content.
 	return { message: 'Internal error', id };
 };
-
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-
-/**
- * True when the request is safe, token-authenticated, or carries an Origin whose hostname
- * is the host it is addressing.
- *
- * Ports and scheme are deliberately not compared: behind a tunnel the browser sees
- * https://pagebox.example.com while the app sees http://…:3000, and it is the *hostname*
- * that decides which origin a cookie came from.
- */
-function sameOriginMutation(event: RequestEvent, kind: HostKind): boolean {
-	if (SAFE_METHODS.has(event.request.method)) return true;
-
-	// The deploy API authenticates with a bearer token and no cookie, so it cannot be
-	// driven by a browser holding somebody's session. CI sends no Origin header.
-	const authorization = event.request.headers.get('authorization');
-	if (authorization?.toLowerCase().startsWith('bearer ')) return true;
-
-	const origin = event.request.headers.get('origin');
-	if (!origin) return false;
-
-	let originHost: string;
-	try {
-		originHost = new URL(origin).hostname.toLowerCase();
-	} catch {
-		return false;
-	}
-
-	const expected = (kind === 'admin' ? config.PAGEBOX_ADMIN_HOST : config.PAGEBOX_SITES_HOST).split(
-		':'
-	)[0];
-	return originHost === expected;
-}

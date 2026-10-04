@@ -4,7 +4,7 @@ import type { Actions, PageServerLoad, RequestEvent } from './$types';
 import { adminAuth, isAdmin, isSuperadmin, type SessionUser } from '$lib/server/auth';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
-import { site, user } from '$lib/server/db/schema';
+import { apikey, session, site, user } from '$lib/server/db/schema';
 import { manages } from '$lib/server/perms';
 import { canAllocate, parseQuota, poolState, usageByOwner, withQuotaLock } from '$lib/server/quota';
 import { config } from '$lib/server/config';
@@ -360,7 +360,11 @@ export const actions: Actions = {
 			body: { userId: target.id, newPassword: password },
 			headers: event.request.headers
 		});
-		await db.update(user).set({ mustChangePassword: true }).where(eq(user.id, target.id));
+		await db.transaction(async (tx) => {
+			await tx.update(user).set({ mustChangePassword: true }).where(eq(user.id, target.id));
+			await tx.delete(session).where(eq(session.userId, target.id));
+			await tx.update(apikey).set({ enabled: false }).where(eq(apikey.referenceId, target.id));
+		});
 		await audit({
 			action: 'user.password_reset',
 			actorUserId: actor.id,

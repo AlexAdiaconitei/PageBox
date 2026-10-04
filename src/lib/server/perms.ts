@@ -1,5 +1,5 @@
 import { and, eq, inArray, or } from 'drizzle-orm';
-import { cache, cacheKeys, CACHE_TTL_SECONDS } from './cache';
+import { cache } from './cache';
 import { db } from './db';
 import { group, groupMember, site, siteGrant, type SiteRole } from './db/schema';
 import { isAdmin, type SessionUser } from './auth';
@@ -39,36 +39,26 @@ function highest(roles: SiteRole[]): Permission {
 	);
 }
 
-/** Group ids the user belongs to. Cached: it is read on every private asset request. */
+/** Memberships are read live so revocation also holds for concurrent requests and replicas. */
 export async function groupsOf(userId: string): Promise<string[]> {
-	const key = `groups:${userId}`;
-	const cached = await cache.get<string[]>(key);
-	if (cached) return cached;
-
 	const rows = await db
 		.select({ groupId: groupMember.groupId })
 		.from(groupMember)
 		.where(eq(groupMember.userId, userId));
-	const ids = rows.map((row) => row.groupId);
-	await cache.set(key, ids, CACHE_TTL_SECONDS);
-	return ids;
+	return rows.map((row) => row.groupId);
 }
 
 export async function invalidateUserGroups(userId: string): Promise<void> {
 	await cache.invalidatePrefix(`groups:${userId}`);
 }
 
-/** Effective permission, cached per (site, user) with the site's own invalidation key. */
+/** Effective permission from current grants; a stale cache refill must never restore access. */
 export async function permissionFor(
 	user: SessionUser | null,
 	siteRef: Pick<SiteRef, 'id' | 'visibility' | 'ownerUserId'>
 ): Promise<Permission> {
 	if (user?.role === 'superadmin') return 'owner';
 	if (user && siteRef.ownerUserId === user.id) return 'owner';
-
-	const key = cacheKeys.permission(siteRef.id, user?.id ?? null);
-	const cached = await cache.get<Permission>(key);
-	if (cached !== undefined) return cached;
 
 	let permission: Permission = siteRef.visibility === 'public' ? 'viewer' : null;
 
@@ -90,7 +80,6 @@ export async function permissionFor(
 		if (granted && (!permission || RANK[granted] > RANK[permission])) permission = granted;
 	}
 
-	await cache.set(key, permission, CACHE_TTL_SECONDS);
 	return permission;
 }
 
@@ -226,5 +215,5 @@ export function manages(
 	if (target.role === 'superadmin') return false;
 	if (target.id === actor.id) return false;
 	if (actor.role === 'superadmin') return true;
-	return actor.role === 'admin' && target.createdByUserId === actor.id;
+	return actor.role === 'admin' && target.role === 'user' && target.createdByUserId === actor.id;
 }

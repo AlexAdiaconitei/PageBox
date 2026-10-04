@@ -41,6 +41,12 @@ describe('manages', () => {
 		expect(manages(adminB, adminA)).toBe(false);
 	});
 
+	it('stops the issuer administering a user promoted to admin', () => {
+		const promoted = { ...usersA, role: 'admin' };
+		expect(manages(adminA, promoted)).toBe(false);
+		expect(manages(seat, promoted)).toBe(true);
+	});
+
 	// The seat is not a row anybody edits — not suspended, not demoted, not reset. It moves
 	// by being handed over, which is a different action with its own transaction.
 	it('makes the superadmin untouchable, including by itself', () => {

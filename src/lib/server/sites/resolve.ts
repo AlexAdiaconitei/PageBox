@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { config } from '../config';
 import { db } from '../db';
 import { site } from '../db/schema';
-import { cache, cacheKeys, CACHE_TTL_SECONDS } from '../cache';
+import { cache, cacheKeys } from '../cache';
 import { SLUG_RE } from '../ids';
 
 /**
@@ -74,16 +74,8 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 }
 
 export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
-	const key = cacheKeys.siteBySlug(slug);
-	const cached = await cache.get<SiteRef | 'missing'>(key);
-	if (cached === 'missing') return null;
-	if (cached) return cached;
-
 	const [row] = await db.select().from(site).where(eq(site.slug, slug)).limit(1);
-	if (!row) {
-		await cache.set(key, 'missing', CACHE_TTL_SECONDS);
-		return null;
-	}
+	if (!row) return null;
 
 	const ref: SiteRef = {
 		id: row.id,
@@ -97,7 +89,6 @@ export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
 		disabled: row.disabledAt !== null,
 		retentionLimit: row.retentionLimit
 	};
-	await cache.set(key, ref, CACHE_TTL_SECONDS);
 	return ref;
 }
 

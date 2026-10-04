@@ -29,6 +29,7 @@ export const GET: RequestHandler = async (event) => {
 	// This answer is site metadata — slug, base path, visibility — so it needs the same
 	// permission the deploy endpoints do, checked against the owner as they stand now.
 	const owner = await tokenOwner(auth);
+	if (owner?.mustChangePassword) return jsonError(403, 'change your password before using the API');
 	const permission = owner
 		? await permissionFor(owner, {
 				id: row.id,
