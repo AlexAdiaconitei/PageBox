@@ -15,7 +15,7 @@ export function sameOriginMutation(event: RequestEvent, kind: HostKind): boolean
 	try {
 		return (
 			new URL(event.request.headers.get('origin') ?? '').origin ===
-			`${config.PAGEBOX_PUBLIC_SCHEME}://${host}`
+			new URL(`${config.PAGEBOX_PUBLIC_SCHEME}://${host}`).origin
 		);
 	} catch {
 		return false;

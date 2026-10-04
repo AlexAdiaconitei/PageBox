@@ -10,6 +10,8 @@ import {
 	tag,
 	upload,
 	userIdFor,
+	store,
+	siteHost,
 	type Jar
 } from './helpers';
 
@@ -95,6 +97,20 @@ run('security regressions', () => {
 		).toBe(201);
 		const reader = await signIn({ email: admin.email, password: chosen }, sitesHost);
 		expect(reader.size).toBeGreaterThan(0);
+		const issue = async () => {
+			const response = await request(`/access?site=${slug}`, { jar: reader, host: sitesHost });
+			expect(response.status).toBe(302);
+			return new URL(response.headers.get('location')!);
+		};
+		const code = await issue();
+		const capability: Jar = new Map();
+		store(capability, await request(code.pathname + code.search, { host: code.host }));
+		expect(capability.size).toBeGreaterThan(0);
+		const child = (await siteHost(slug))!;
+		expect((await request(`/s/${slug}/index.html`, { host: child, jar: capability })).status).toBe(
+			200
+		);
+		const pending = await issue();
 		const issued = await post(`/sites/${slug}?/createToken`, admin.jar, {
 			name: 'reset-test',
 			expiresInDays: '0'
@@ -118,6 +134,12 @@ run('security regressions', () => {
 			401
 		);
 		expect((await request(`/s/${slug}/`, { jar: reader, host: sitesHost })).status).toBe(401);
+		expect((await request(`/s/${slug}/index.html`, { host: child, jar: capability })).status).toBe(
+			401
+		);
+		expect((await request(pending.pathname + pending.search, { host: pending.host })).status).toBe(
+			404
+		);
 		expect(
 			(await request('/api/v1/whoami', { headers: { authorization: `Bearer ${token}` } })).status
 		).toBe(401);

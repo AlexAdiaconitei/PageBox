@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { error, type RequestEvent } from '@sveltejs/kit';
 import { and, count, eq, gt, lt } from 'drizzle-orm';
-import { config, readerUrl, siteHostFor, siteUrl } from '../config';
+import { config, readerUrl, siteUrl } from '../config';
 import { db } from '../db';
 import { withLock } from '../db/locks';
 import { session, site, siteAuthorization, siteSession, user } from '../db/schema';
@@ -86,7 +86,7 @@ export async function acceptReader(event: RequestEvent, siteId: string): Promise
 	return withLock('reader-code:' + hash(code), async () =>
 		db.transaction(async (tx) => {
 			const [ref] = await tx.select().from(site).where(eq(site.id, siteId)).limit(1);
-			if (!ref || siteHostFor(ref).split(':')[0] !== event.url.hostname) error(404, 'Not found');
+			if (!ref || new URL(siteUrl(ref)).origin !== event.url.origin) error(404, 'Not found');
 			const [authorization] = await tx
 				.delete(siteAuthorization)
 				.where(

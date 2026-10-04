@@ -104,6 +104,9 @@ run('site origin isolation', () => {
 	it('rejects the wrong origin without consuming a code and rejects replay', async () => {
 		const code = await issue(a);
 		expect((await request(code.pathname + code.search, { host: hostB })).status).toBe(404);
+		expect(
+			(await request(code.pathname + code.search, { host: hostA.split(':')[0] + ':1' })).status
+		).toBe(404);
 		expect((await redeem(code)).response.status).toBe(302);
 		expect((await redeem(code)).response.status).toBe(404);
 	});
@@ -178,9 +181,24 @@ run('site origin isolation', () => {
 	it('checks live grants, account bans and both session expirations on each file', async () => {
 		const address = `isolated-reader-${tag()}@example.com`;
 		const chosen = 'isolated-reader-password';
-		expect((await actionResult(await post('/users?/create', admin, { email: address, password: chosen, role: 'user' }))).type).toBe('success');
+		expect(
+			(
+				await actionResult(
+					await post('/users?/create', admin, { email: address, password: chosen, role: 'user' })
+				)
+			).type
+		).toBe('success');
 		const [account] = await sql`select id from "user" where email = ${address}`;
-		expect((await actionResult(await post(`/sites/${a}?/addGrant`, admin, { principal: `user:${account.id}`, role: 'viewer' }))).type).toBe('success');
+		expect(
+			(
+				await actionResult(
+					await post(`/sites/${a}?/addGrant`, admin, {
+						principal: `user:${account.id}`,
+						role: 'viewer'
+					})
+				)
+			).type
+		).toBe('success');
 		const viewer = await signIn({ email: address, password: chosen }, sitesHost);
 		let cap = await redeem(await issue(a, viewer));
 		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(200);
@@ -193,7 +211,10 @@ run('site origin isolation', () => {
 		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(200);
 		const pending = await issue(a, viewer);
 		const [grant] = await sql`select id from site_grant where principal_id = ${account.id}`;
-		expect((await actionResult(await post(`/sites/${a}?/removeGrant`, admin, { grantId: grant.id }))).type).toBe('success');
+		expect(
+			(await actionResult(await post(`/sites/${a}?/removeGrant`, admin, { grantId: grant.id })))
+				.type
+		).toBe('success');
 		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(404);
 		expect((await redeem(pending)).response.status).toBe(404);
 		await post(`/sites/${a}?/addGrant`, admin, { principal: `user:${account.id}`, role: 'viewer' });
@@ -204,8 +225,16 @@ run('site origin isolation', () => {
 	it('assigns a fresh origin when a deleted slug is recreated', async () => {
 		const viewer = await signIn(undefined, sitesHost);
 		const cap = await redeem(await issue(a, viewer));
-		expect((await actionResult(await post(`/sites/${a}?/deleteSite`, admin, { confirm: a }))).type).toBe('redirect');
-		expect((await actionResult(await post('/sites?/create', admin, { slug: a, name: a, visibility: 'private' }))).type).toBe('redirect');
+		expect(
+			(await actionResult(await post(`/sites/${a}?/deleteSite`, admin, { confirm: a }))).type
+		).toBe('redirect');
+		expect(
+			(
+				await actionResult(
+					await post('/sites?/create', admin, { slug: a, name: a, visibility: 'private' })
+				)
+			).type
+		).toBe('redirect');
 		const newHost = (await siteHost(a))!;
 		expect(newHost).not.toBe(hostA);
 		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(404);
