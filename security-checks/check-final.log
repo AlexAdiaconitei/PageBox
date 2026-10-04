@@ -1,0 +1,7 @@
+$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+Loading svelte-check in workspace: c:\Users\Alex\orca\workspaces\PageBox\coffinfish
+Getting Svelte diagnostics...
+
+svelte-check found 0 errors and 0 warnings

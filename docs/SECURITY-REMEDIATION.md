@@ -1,65 +1,55 @@
-# Corrección de la evaluación de seguridad
+# Cierre de la corrección de seguridad
 
-Objetivo: corregir los quince hallazgos de `SECURITY-REVIEW.md`, comprobar las
-transiciones descritas allí y preparar PageBox 0.2.0 sin publicar ni crear un release.
+PageBox 0.2.0 está preparado localmente. No se ha publicado, subido al registro ni desplegado en el homelab. Esta revisión cierra el plan sobre el código y las pruebas locales; los requisitos de infraestructura están en [DEPLOYMENT-SECURITY.md](../DEPLOYMENT-SECURITY.md).
 
-## Grupos de trabajo
+## Hallazgos
 
-- [ ] S02–S04: impedir que el emisor administre cuentas promovidas, revocar sesiones
-  y tokens al resetear, exigir el cambio de contraseña también en la API.
-- [ ] S08, S11, S14: permisos actuales, dirección del cliente obtenida del adaptador
-  y comprobación del origen completo. Bearer solo exime los endpoints de API.
-- [ ] S05–S07, S09: usar la conexión que tiene el lock, coordinar cuotas y cambios de
-  propietario, proteger activación y borrado, conservar y reintentar borrados parciales.
-- [ ] S12, S15: descartar rutas ocultas antes de elegir raíz, acotar la lectura del ZIP
-  y decodificar rutas sin aceptar traversal ni separadores codificados.
-- [ ] S01: publicar cada sitio en su subdominio, mantener el login en el origen de
-  confianza y canjear autorizaciones de un solo uso por sesiones ligadas al sitio.
-- [ ] S10, S13: endurecer Compose y secretos, actualizar dependencias vulnerables.
-- [ ] Observaciones del informe: presupuesto temporal de subidas, redirects privados,
-  compresión parcial, revocación durante subidas y pruebas que antes pasaban sin probar.
-- [ ] Versión 0.2.0, changelog e instrucciones de migración.
-- [ ] Comprobaciones de tipos, formato, builds, pruebas unitarias e integración,
-  regresiones de los hallazgos y revisión de dependencias.
+| Hallazgo | Corrección y comprobación |
+| --- | --- |
+| S01 | Origen por ID inmutable; código de un solo uso; sesión padre y cookie ligadas al sitio. Chromium confirma el bloqueo entre sitios; HTTP cubre revocación, expiración, canje y recreación de slug. |
+| S02 | La administración depende del rol actual de la cuenta. Una promoción impide reset y suspensión por el antiguo emisor. |
+| S03 | Reset transaccional del panel y script: revoca sesiones, capacidades derivadas, códigos pendientes y API keys. Se comprueba rollback ante fallo de auditoría. |
+| S04 | Cambio obligatorio de contraseña también en la API. |
+| S05 | Consultas y transacciones usan la conexión del lock. Pruebas con pool=1 y callbacks concurrentes. |
+| S06 | Lock de almacenamiento y FK compuesta protegen el despliegue activo. Activación/borrado concurrentes comprobados. |
+| S07 | Los errores por objeto de S3 conservan el estado y los bytes para reintentar la limpieza. |
+| S08 | Permisos, grupos y sesiones leídos sin caché de autorización. Retirada de grants y revocación durante el body comprobadas. |
+| S09 | Cuotas y cambios de propietario coordinados por el lock. Promoción, transferencia, retención y límites comprobados. |
+| S10 | Secretos elegidos, puertos de backend en loopback, clave S3 restringida y proxy explícito. Compose, imagen, Traefik y MinIO comprobados. |
+| S11 | Dirección del cliente obtenida del adaptador; cabeceras reenviadas requieren configuración explícita. |
+| S12 | Rutas ocultas descartadas antes de elegir raíz; metadatos y extracción acotados. |
+| S13 | Actualizadas dependencias vulnerables. Aplicación sin avisos; excepción sin parche de braces en lint local de documentación, descrita debajo. |
+| S14 | Origen completo y autenticación Bearer exclusiva en la API. Un Bearer falso no permite usar una cookie ni exime acciones del panel. |
+| S15 | Decodificación validada de rutas; Unicode y espacios funcionan; traversal y separadores codificados se rechazan. |
 
-## Diseño del aislamiento
+## Observaciones adicionales
 
-El host configurado en `PAGEBOX_SITES_HOST` aloja únicamente el acceso de lectores.
-Cada sitio se publica en `<slug>.<PAGEBOX_SITES_HOST>`. Las rutas `/s/<slug>/`
-del host anterior redirigen al subdominio correspondiente. El login central conserva
-una cookie host-only y genera un código breve, de un solo uso, para el sitio autorizado.
-El subdominio lo canjea por una cookie host-only cuya sesión identifica ese sitio.
-Las respuestas privadas comprueban el usuario y sus permisos actuales. Ningún sitio
-recibe la cookie central ni una autorización para leer otro sitio.
+- [x] Límite de subidas entre procesos y replicas, reserva de archivos temporales, deadlines y limpieza.
+- [x] Autorización antes de redirects privados y antes de activar una subida.
+- [x] Miss de compresión por asset y Vary correcto.
+- [x] Pruebas de cookies y symlinks autenticadas, con resultados que no pueden pasar sin probar el comportamiento.
+- [x] Fixtures exclusivos, credenciales explícitas y seed limitado a datos desechables.
+- [x] Versión minor 0.2.0, changelog, documentación y guía de actualización.
+- [x] Builds, tipos, formato, pruebas y revisión de dependencias.
 
-El cambio requiere DNS wildcard, enrutamiento del proxy y TLS wildcard cuando se usa
-HTTPS. Los sitios existentes conservan su ruta base para evitar romper sus assets.
-La guía de migración especificará los cambios de infraestructura y reconstrucción.
+## Evidencia
 
-## Evidencia de cierre
+168 pruebas unitarias y 110 de integración correctas. La integración usa PostgreSQL y MinIO desechables, pool=1, un proxy HTTP local y Chromium real. Se comprobaron la imagen Docker, las reglas de Traefik, los permisos de la clave S3, recuperación y rollback, y los ejemplos de configuración. La documentación pasa lint, tipos y build estático. Los comandos y logs están en [security-checks/README.md](../security-checks/README.md).
 
-Se registrarán aquí los commits y resultados de las comprobaciones finales.
-Las pruebas se ejecutan contra servicios locales con datos desechables. El homelab
-no se modifica durante este trabajo.
+Queda [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), sin parche publicado, en braces 3.0.3 usado por lint para patrones locales del repositorio. No forma parte de los sitios exportados ni de la imagen de PageBox. La excepción se registra con ese alcance, sin ocultar el aviso del audit.
 
-## Progreso
+El despliegue debe comprobar su DNS wildcard, proxy y TLS. Las migraciones no reconstruyen archivos ya almacenados: los despliegues anteriores a ingest version 3 deben revisarse o reconstruirse. No se ha inspeccionado ni modificado el homelab.
 
-- `b2b1f55`: informe, evidencia original y plan de corrección.
-- `69b51d0`: autorización de cuentas promovidas, revocación de sesiones y tokens,
-  contraseña obligatoria en API, origen completo y permisos sin caché.
-- Concurrencia: consultas ligadas a la conexión del lock, espera sin ocupar el pool,
-  migraciones con pool de una conexión y un lock compartido para cuotas y ciclo de vida.
-  Los borrados incompletos permanecen contabilizados y el sweeper los reintenta.
-- Se añadió una FK compuesta para impedir punteros a despliegues de otro sitio o
-  inexistentes. La migración limpia los punteros inválidos existentes y vuelve a
-  comprobar el almacenamiento de los despliegues fallidos antiguos.
-- Comprobaciones parciales: tipos y build correctos; 12 pruebas de permisos/origen,
-  2 de borrado S3 y 22 de integración de seguridad, locks, cuotas y ciclo de vida.
-  La pasada completa obtuvo 90 correctas y detectó una expectativa antigua de CSRF.
-  Tras corregir esa expectativa, las 24 pruebas de panel, locks y cuotas pasan.
-- Quedan pendientes las demás fases y la pasada final completa. Estos resultados
-  parciales no certifican todavía la versión 0.2.0.
-- `542b325`: locks, cuotas, FK del despliegue activo y estados de limpieza reintentables.
-- ZIP y rutas: 34 pruebas unitarias y 31 pruebas HTTP de archivos, API y serving
-  correctas. La prueba de symlinks ejecuta ahora una subida autenticada, y la de
-  cookies exige que un login real emita cookies antes de comprobar sus atributos.
+## Commits por contexto
+
+- `b2b1f55`: informe y plan.
+- `69b51d0`: cuentas, revocación, origen y permisos.
+- `542b325`: locks, cuotas y ciclo de vida.
+- `b6c451f`: extracción ZIP y rutas.
+- `d036ed0`: aislamiento de sitios y migración de sesiones.
+- `3e4b93e`: admisión global, temporales y deadlines de subidas.
+- `b2b588e`: recuperación transaccional y fixtures.
+- `720e7e5`: configuración, proxy y verificaciones de despliegue.
+- `91c7a06`: dependencias corregidas y versión 0.2.0.
+- `5618af6`: puerto del canje y regresiones de revocación tras reset.
+- `1cdbfa2`: smoke de release con fixtures exclusivos y credenciales elegidas.

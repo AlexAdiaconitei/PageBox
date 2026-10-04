@@ -3,6 +3,25 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Unreleased
+
+Prepared locally. No release, registry upload or deployment has been performed.
+
+### Security
+
+- Give every hosted site an origin containing its immutable ID. Keep reader login on the central origin and exchange single-use codes for site-bound, host-only sessions. Check live parent sessions, bans and grants on each private file. Recreating a slug creates a fresh origin.
+- Restrict account management after promotion. Password resets revoke sessions and API keys atomically. Require password changes in the deploy API and remove stale permission caches.
+- Validate the complete mutation origin. Limit the Bearer exemption to token-authenticated API requests. Use the adapter's client address for throttling and audits. HTTPS cookies use the __Host- prefix.
+- Run protected queries on their lock connection, serialize quotas and lifecycle writes, constrain the active deployment pointer, and retain partial S3 deletions for retry without discarding their quota usage.
+- Reject hidden ZIP entries before root selection, bound metadata, and validate decoded file paths. Check private access before trailing-slash redirects and scope compression misses per asset.
+- Bound simultaneous uploads and temporary archive bytes across replicas with separate PostgreSQL control connections. Add body and operation deadlines, cancellation of S3 writes, crash-file cleanup and permission checks before activation.
+- Require chosen production secrets, bind infrastructure ports to loopback, separate storage administrator and application credentials, and make proxy-header trust explicit.
+- Make account recovery transactional and fixture seeding opt-in. Update devalue, cookie, Vitest, Drizzle tooling, Next.js and vulnerable documentation tooling dependencies. One unpatched braces advisory remains in docs lint only.
+
+### Migration and validation
+
+Wildcard DNS, proxy routes and TLS are required for the new site origins. Rebuild or review deployments created before ingest version 3. See [DEPLOYMENT-SECURITY.md](DEPLOYMENT-SECURITY.md) for the upgrade procedure and [security-checks/README.md](security-checks/README.md) for test evidence.
+
 ## [0.1.0] — 2026-08-29
 
 First release, tracked milestone by milestone (see `docs/IMPLEMENTATION-PLAN.md` §6).

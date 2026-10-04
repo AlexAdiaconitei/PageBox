@@ -1,0 +1,26 @@
+{
+	"checkedAt": "2026-10-04T17:57:19.698Z",
+	"passed": 17,
+	"cases": [
+		"seed requires a disposable database",
+		"seed flag requires explicit email",
+		"test database requires explicit password",
+		"seed rejects short passwords",
+		"seed rejects excessive passwords",
+		"seed rejects missing database URL",
+		"seed rejects non-Postgres URL",
+		"seed rejects non-HTTP storage URL",
+		"seed rejects absent storage credentials",
+		"seed rejects traversal slug",
+		"seed suffixes must fit maximum slug length",
+		"recovery requires an email",
+		"recovery requires a password",
+		"recovery rejects short passwords",
+		"recovery rejects excessive passwords",
+		"recovery rejects a flag as password",
+		"recovery rejects invalid database protocol"
+	],
+	"databaseConnections": 0,
+	"storageRequests": 0,
+	"databaseTransactionsTested": false
+}

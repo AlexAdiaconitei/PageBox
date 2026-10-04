@@ -2,6 +2,8 @@
 
 Revisión del commit `5b1b0c92de2bed9a676b4146312670ae7dd774d1`, realizada el 4 de octubre de 2026 UTC.
 
+Estado posterior: los hallazgos se corrigieron en el checkout 0.2.0, con la excepción de dependencias descrita en [el cierre](SECURITY-REMEDIATION.md). Este informe conserva la evidencia del commit original.
+
 Yo frenaría el lanzamiento público hasta corregir los siete primeros hallazgos. Hay fallos reproducidos de aislamiento, toma de cuentas, revocación de sesiones y disponibilidad. Que el homelab funcione y que las pruebas pasen no cubre estos escenarios.
 
 El riesgo inmediato es menor si solo una persona publica contenido de confianza y la instancia está limitada a una red privada. El código actual no ofrece aislamiento seguro entre autores independientes. Esta revisión no ha inspeccionado ni atacado el homelab y no permite afirmar que haya ocurrido una intrusión.

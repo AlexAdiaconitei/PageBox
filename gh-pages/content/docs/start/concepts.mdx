@@ -6,28 +6,30 @@ description: Two hostnames, sites, deployments, grants and tokens — what each 
 Six nouns cover everything PageBox does. Learning them in this order means each one only
 depends on the ones before it.
 
-## Two hostnames
+## Separate origins
 
 ```
 https://pagebox.example.com/          → the admin panel and the API
-https://pages.example.com/s/<slug>/   → every deployed site
+https://pages.example.com/access     → reader login and authorization
+https://<slug-prefix>-<site-id>.pages.example.com/s/<slug>/ → uploaded content
 ```
 
 They must be different hostnames, and the process exits at startup if they match.
 
-The reason is not tidiness. The sites host runs JavaScript that somebody else uploaded. If
+The reason is not tidiness. Each uploaded site runs JavaScript on its own origin. The central reader host never serves uploaded content. If
 the panel shared that origin, any hosted page could call the admin API with your admin
 cookie attached and act as you. So the panel's origin is the one that never hosts anyone
 else's code, and that separation is enforced rather than recommended.
 
-It follows that there are **two sessions**, not one:
+Login creates a panel session or a central reader session. A reader authorization code creates an additional site-bound session:
 
-| Cookie | Host | Lifetime | Unlocks |
-| ------ | ---- | -------- | ------- |
-| `pb_admin.session_token` | the admin host | 30 days | the panel, and the API by cookie |
-| `pb_view.session_token` | the sites host | 12 hours | reading private sites |
+| Cookie                   | Host                    | Lifetime         | Unlocks                                                              |
+| ------------------------ | ----------------------- | ---------------- | -------------------------------------------------------------------- |
+| `pb_admin.session_token` | the admin host          | 30 days          | the panel, and the API by cookie                                     |
+| `pb_view.session_token`  | central reader host     | 12 hours         | authorizing access to granted sites                                  |
+| `pb_site`                | one immutable site host | at most 12 hours | files of that site, while its parent session and grants remain valid |
 
-Both are host-only — no `Domain` attribute — and every session records which host it was
+Cookies are host-only. HTTPS names use the \_\_Host- prefix. No cookie has a `Domain` attribute, and every session records which host it was
 minted for. Present one on the other host and it counts as no session at all, and the
 mismatch lands in the audit log.
 
@@ -71,11 +73,11 @@ Two consequences worth holding on to:
 
 A grant gives a person, or a group, a role on one site.
 
-| Role | Can |
-| ---- | --- |
-| `viewer` | read the site |
-| `deployer` | read, deploy, activate and roll back |
-| `owner` | all of the above, plus grants, deploy tokens and visibility |
+| Role       | Can                                                         |
+| ---------- | ----------------------------------------------------------- |
+| `viewer`   | read the site                                               |
+| `deployer` | read, deploy, activate and roll back                        |
+| `owner`    | all of the above, plus grants, deploy tokens and visibility |
 
 Grants are per site. They are separate from the **global role** — `superadmin`, `admin` or
 `user` — which says what someone is on the instance rather than on any particular site.
@@ -107,29 +109,25 @@ into somebody else's sites.
 Putting it together, a request to `pages.example.com/s/docs/guide/` goes through:
 
 <Steps>
-<Step>
-### Host dispatch
-The sites host, so this is a site request and none of the admin API is reachable.
-</Step>
-<Step>
-### Slug lookup
-`docs` — is there such a site, is it serving, and does it have a live deployment? Any no
-answers the same 404.
-</Step>
-<Step>
-### Authorisation
-Public: allowed. Private: resolve the caller's grant, directly or through a group, and
-answer [by caller](/docs/operate/access#what-a-private-site-answers). This runs for the
-HTML **and for every asset that page then requests**.
-</Step>
-<Step>
-### Path resolution
-`guide/` → `guide/index.html`. The full order, including the SPA fallback, is in
-[how a site is served](/docs/operate/serving).
-</Step>
-<Step>
-### Response
-The object out of S3, with caching headers chosen from whether the filename is
-content-hashed, and a precompressed `.br` or `.gz` sibling if the client accepts one.
-</Step>
+  <Step>
+    ### Host dispatch The sites host, so this is a site request and none of the admin API is
+    reachable.
+  </Step>
+  <Step>
+    ### Slug lookup `docs` — is there such a site, is it serving, and does it have a live
+    deployment? Any no answers the same 404.
+  </Step>
+  <Step>
+    ### Authorisation Public: allowed. Private: resolve the caller's grant, directly or through a
+    group, and answer [by caller](/docs/operate/access#what-a-private-site-answers). This runs for
+    the HTML **and for every asset that page then requests**.
+  </Step>
+  <Step>
+    ### Path resolution `guide/` → `guide/index.html`. The full order, including the SPA fallback,
+    is in [how a site is served](/docs/operate/serving).
+  </Step>
+  <Step>
+    ### Response The object out of S3, with caching headers chosen from whether the filename is
+    content-hashed, and a precompressed `.br` or `.gz` sibling if the client accepts one.
+  </Step>
 </Steps>

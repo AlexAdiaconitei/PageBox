@@ -1,0 +1,69 @@
+{
+	"checkedAt": "2026-10-04T18:20:46.097Z",
+	"checks": [
+		{
+			"file": "docker-compose.yml",
+			"rendered": true,
+			"appStorageAdminExcluded": true,
+			"bootstrapPassed": true,
+			"implicitProxyTrust": false
+		},
+		{
+			"file": "docker-compose.yml",
+			"explicitProxyConfiguration": true
+		},
+		{
+			"file": "docker-compose.dokploy.yml",
+			"rendered": true,
+			"appStorageAdminExcluded": true,
+			"bootstrapPassed": true,
+			"implicitProxyTrust": false
+		},
+		{
+			"file": "docker-compose.dokploy.yml",
+			"explicitProxyConfiguration": true
+		},
+		{
+			"missing": "PAGEBOX_TAG",
+			"rejected": true
+		},
+		{
+			"missing": "PAGEBOX_ADMIN_HOST",
+			"rejected": true
+		},
+		{
+			"missing": "PAGEBOX_SITES_HOST",
+			"rejected": true
+		},
+		{
+			"missing": "POSTGRES_PASSWORD",
+			"rejected": true
+		},
+		{
+			"missing": "MINIO_ROOT_USER",
+			"rejected": true
+		},
+		{
+			"missing": "MINIO_ROOT_PASSWORD",
+			"rejected": true
+		},
+		{
+			"missing": "S3_ACCESS_KEY",
+			"rejected": true
+		},
+		{
+			"missing": "S3_SECRET_KEY",
+			"rejected": true
+		},
+		{
+			"missing": "AUTH_SECRET",
+			"rejected": true
+		},
+		{
+			"bootstrapOmitted": true
+		}
+	],
+	"startsContainers": false,
+	"traefikRuntimeTested": false,
+	"usesFixtureCredentials": true
+}

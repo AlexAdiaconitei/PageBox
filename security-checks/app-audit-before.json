@@ -1,0 +1,394 @@
+{
+	"advisories": {
+		"1102341": {
+			"findings": [
+				{
+					"version": "0.18.20",
+					"paths": [
+						".>@better-auth/api-key>better-auth>drizzle-kit>@esbuild-kit/esm-loader>@esbuild-kit/core-utils>esbuild",
+						".>better-auth>drizzle-kit>@esbuild-kit/esm-loader>@esbuild-kit/core-utils>esbuild",
+						".>drizzle-kit>@esbuild-kit/esm-loader>@esbuild-kit/core-utils>esbuild"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1102341,
+			"title": "esbuild enables any website to send any requests to the development server and read the response",
+			"module_name": "esbuild",
+			"vulnerable_versions": "<=0.24.2",
+			"patched_versions": ">=0.25.0",
+			"severity": "moderate",
+			"cwe": "CWE-346",
+			"github_advisory_id": "GHSA-67mh-4wv8-2f99",
+			"url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99"
+		},
+		"1103907": {
+			"findings": [
+				{
+					"version": "0.6.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>cookie",
+						".>better-auth>@sveltejs/kit>cookie",
+						".>@sveltejs/kit>cookie",
+						".>@sveltejs/adapter-node>@sveltejs/kit>cookie"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1103907,
+			"title": "cookie accepts cookie name, path, and domain with out of bounds characters",
+			"module_name": "cookie",
+			"vulnerable_versions": "<0.7.0",
+			"patched_versions": ">=0.7.0",
+			"severity": "low",
+			"cwe": "CWE-74",
+			"github_advisory_id": "GHSA-pxg6-pf52-xh8x",
+			"url": "https://github.com/advisories/GHSA-pxg6-pf52-xh8x"
+		},
+		"1193683": {
+			"findings": [
+				{
+					"version": "4.1.10",
+					"paths": [
+						".>@better-auth/api-key>better-auth>vitest",
+						".>better-auth>vitest",
+						".>vitest"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1193683,
+			"title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+			"module_name": "vitest",
+			"vulnerable_versions": ">=2.1.0 <4.1.11",
+			"patched_versions": ">=4.1.11",
+			"severity": "moderate",
+			"cwe": "CWE-22",
+			"github_advisory_id": "GHSA-82fw-gwwq-j7x9",
+			"url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9"
+		},
+		"1193684": {
+			"findings": [
+				{
+					"version": "4.1.10",
+					"paths": [
+						".>@better-auth/api-key>better-auth>vitest>@vitest/mocker",
+						".>better-auth>vitest>@vitest/mocker",
+						".>vitest>@vitest/mocker"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1193684,
+			"title": "Vitest: Path Traversal / Arbitrary File Read via @vitest/mocker Redirect Mock",
+			"module_name": "@vitest/mocker",
+			"vulnerable_versions": ">=2.1.0 <4.1.11",
+			"patched_versions": ">=4.1.11",
+			"severity": "moderate",
+			"cwe": "CWE-22",
+			"github_advisory_id": "GHSA-82fw-gwwq-j7x9",
+			"url": "https://github.com/advisories/GHSA-82fw-gwwq-j7x9"
+		},
+		"1237790": {
+			"findings": [
+				{
+					"version": "5.9.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>svelte>devalue",
+						".>@better-auth/api-key>better-auth>svelte>devalue",
+						".>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>better-auth>@sveltejs/kit>devalue",
+						".>better-auth>@sveltejs/kit>svelte>devalue",
+						".>better-auth>svelte>devalue",
+						".>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/kit>devalue",
+						".>@sveltejs/kit>svelte>devalue",
+						".>svelte-check>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>svelte>devalue",
+						".>svelte>devalue",
+						".>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@lucide/svelte>svelte>devalue",
+						".>prettier-plugin-svelte>svelte>devalue"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1237790,
+			"title": "Svelte devalue: DoS via malformed input",
+			"module_name": "devalue",
+			"vulnerable_versions": "<5.9.1",
+			"patched_versions": ">=5.9.1",
+			"severity": "moderate",
+			"cwe": "CWE-770",
+			"github_advisory_id": "GHSA-9rgm-9g3h-6x36",
+			"url": "https://github.com/advisories/GHSA-9rgm-9g3h-6x36"
+		},
+		"1240870": {
+			"findings": [
+				{
+					"version": "5.9.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>svelte>devalue",
+						".>@better-auth/api-key>better-auth>svelte>devalue",
+						".>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>better-auth>@sveltejs/kit>devalue",
+						".>better-auth>@sveltejs/kit>svelte>devalue",
+						".>better-auth>svelte>devalue",
+						".>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/kit>devalue",
+						".>@sveltejs/kit>svelte>devalue",
+						".>svelte-check>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>svelte>devalue",
+						".>svelte>devalue",
+						".>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@lucide/svelte>svelte>devalue",
+						".>prettier-plugin-svelte>svelte>devalue"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1240870,
+			"title": "devalue: `stringify`/`uneval` serialize shared memory",
+			"module_name": "devalue",
+			"vulnerable_versions": ">=5.1.0 <=5.9.2",
+			"patched_versions": ">=5.9.3",
+			"severity": "high",
+			"cwe": "CWE-200, CWE-226",
+			"github_advisory_id": "GHSA-j22f-vq7h-c4qm",
+			"url": "https://github.com/advisories/GHSA-j22f-vq7h-c4qm"
+		},
+		"1240871": {
+			"findings": [
+				{
+					"version": "5.9.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>svelte>devalue",
+						".>@better-auth/api-key>better-auth>svelte>devalue",
+						".>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>better-auth>@sveltejs/kit>devalue",
+						".>better-auth>@sveltejs/kit>svelte>devalue",
+						".>better-auth>svelte>devalue",
+						".>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/kit>devalue",
+						".>@sveltejs/kit>svelte>devalue",
+						".>svelte-check>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>svelte>devalue",
+						".>svelte>devalue",
+						".>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@lucide/svelte>svelte>devalue",
+						".>prettier-plugin-svelte>svelte>devalue"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1240871,
+			"title": "devalue: Residual sparse-array CPU amplification in uneval",
+			"module_name": "devalue",
+			"vulnerable_versions": "<=5.9.2",
+			"patched_versions": ">=5.9.3",
+			"severity": "moderate",
+			"cwe": "CWE-400, CWE-407",
+			"github_advisory_id": "GHSA-hx4r-w6wj-j8fg",
+			"url": "https://github.com/advisories/GHSA-hx4r-w6wj-j8fg"
+		},
+		"1240872": {
+			"findings": [
+				{
+					"version": "5.9.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>svelte>devalue",
+						".>@better-auth/api-key>better-auth>svelte>devalue",
+						".>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>better-auth>@sveltejs/kit>devalue",
+						".>better-auth>@sveltejs/kit>svelte>devalue",
+						".>better-auth>svelte>devalue",
+						".>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/kit>devalue",
+						".>@sveltejs/kit>svelte>devalue",
+						".>svelte-check>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>svelte>devalue",
+						".>svelte>devalue",
+						".>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@lucide/svelte>svelte>devalue",
+						".>prettier-plugin-svelte>svelte>devalue"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1240872,
+			"title": "devalue: Repeated primitive strings cause quadratic expansion in uneval",
+			"module_name": "devalue",
+			"vulnerable_versions": "<=5.9.2",
+			"patched_versions": ">=5.9.3",
+			"severity": "high",
+			"cwe": "CWE-400, CWE-409",
+			"github_advisory_id": "GHSA-mcm9-63f2-9j32",
+			"url": "https://github.com/advisories/GHSA-mcm9-63f2-9j32"
+		},
+		"1240873": {
+			"findings": [
+				{
+					"version": "5.9.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>svelte>devalue",
+						".>@better-auth/api-key>better-auth>svelte>devalue",
+						".>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>better-auth>@sveltejs/kit>devalue",
+						".>better-auth>@sveltejs/kit>svelte>devalue",
+						".>better-auth>svelte>devalue",
+						".>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/kit>devalue",
+						".>@sveltejs/kit>svelte>devalue",
+						".>svelte-check>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>svelte>devalue",
+						".>svelte>devalue",
+						".>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@lucide/svelte>svelte>devalue",
+						".>prettier-plugin-svelte>svelte>devalue"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1240873,
+			"title": "devalue: Sparse arrays emitted by uneval cause eager allocation when evaluated",
+			"module_name": "devalue",
+			"vulnerable_versions": ">=1.0.0 <=5.9.2",
+			"patched_versions": ">=5.9.3",
+			"severity": "low",
+			"cwe": "CWE-400, CWE-789",
+			"github_advisory_id": "GHSA-wf3x-273g-mvxv",
+			"url": "https://github.com/advisories/GHSA-wf3x-273g-mvxv"
+		},
+		"1240874": {
+			"findings": [
+				{
+					"version": "5.9.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>svelte>devalue",
+						".>@better-auth/api-key>better-auth>svelte>devalue",
+						".>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>better-auth>@sveltejs/kit>devalue",
+						".>better-auth>@sveltejs/kit>svelte>devalue",
+						".>better-auth>svelte>devalue",
+						".>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/kit>devalue",
+						".>@sveltejs/kit>svelte>devalue",
+						".>svelte-check>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>svelte>devalue",
+						".>svelte>devalue",
+						".>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@lucide/svelte>svelte>devalue",
+						".>prettier-plugin-svelte>svelte>devalue"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1240874,
+			"title": "devalue: stringifyAsync can cause an unhandled rejection despite a caught returned promise",
+			"module_name": "devalue",
+			"vulnerable_versions": ">=5.8.0 <=5.9.2",
+			"patched_versions": ">=5.9.3",
+			"severity": "high",
+			"cwe": "CWE-248, CWE-755",
+			"github_advisory_id": "GHSA-x5rw-q4pp-hg5g",
+			"url": "https://github.com/advisories/GHSA-x5rw-q4pp-hg5g"
+		},
+		"1240875": {
+			"findings": [
+				{
+					"version": "5.9.0",
+					"paths": [
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>devalue",
+						".>@better-auth/api-key>better-auth>@sveltejs/kit>svelte>devalue",
+						".>@better-auth/api-key>better-auth>svelte>devalue",
+						".>better-auth>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>better-auth>@sveltejs/kit>devalue",
+						".>better-auth>@sveltejs/kit>svelte>devalue",
+						".>better-auth>svelte>devalue",
+						".>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/kit>devalue",
+						".>@sveltejs/kit>svelte>devalue",
+						".>svelte-check>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>devalue",
+						".>@sveltejs/adapter-node>@sveltejs/kit>svelte>devalue",
+						".>svelte>devalue",
+						".>@sveltejs/vite-plugin-svelte>svelte>devalue",
+						".>@lucide/svelte>svelte>devalue",
+						".>prettier-plugin-svelte>svelte>devalue"
+					],
+					"dev": true,
+					"optional": false,
+					"bundled": false
+				}
+			],
+			"id": 1240875,
+			"title": "devalue: Malformed null-prototype object keys bypass __proto__ rejection via property-key coercion",
+			"module_name": "devalue",
+			"vulnerable_versions": "<=5.9.2",
+			"patched_versions": ">=5.9.3",
+			"severity": "moderate",
+			"cwe": "CWE-1321",
+			"github_advisory_id": "GHSA-4q55-j62x-fr9h",
+			"url": "https://github.com/advisories/GHSA-4q55-j62x-fr9h"
+		}
+	},
+	"metadata": {
+		"vulnerabilities": {
+			"info": 0,
+			"low": 2,
+			"moderate": 6,
+			"high": 3,
+			"critical": 0
+		},
+		"dependencies": 67,
+		"devDependencies": 273,
+		"optionalDependencies": 149,
+		"totalDependencies": 340
+	}
+}
