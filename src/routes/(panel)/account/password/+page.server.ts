@@ -54,6 +54,9 @@ export const actions: Actions = {
 		if (newPassword.length < 10) {
 			return fail(400, { message: 'Use at least 10 characters' });
 		}
+		if (newPassword === currentPassword) {
+			return fail(400, { message: 'Choose a password different from the current one' });
+		}
 
 		// The current password is a credential too, so this goes through better-auth's
 		// handler for the same throttling as sign-in.

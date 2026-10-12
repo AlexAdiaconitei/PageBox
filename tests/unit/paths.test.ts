@@ -142,6 +142,13 @@ describe('encoding negotiation', () => {
 		expect(negotiateEncoding('br;q=0, gzip')).toBe('gzip');
 	});
 
+	it('honours quality weights and exact encoding tokens', () => {
+		expect(negotiateEncoding('br;q=0.1, gzip;q=1')).toBe('gzip');
+		expect(negotiateEncoding('zebra, xgzip')).toBeNull();
+		expect(negotiateEncoding('br ; q=0 , gzip')).toBe('gzip');
+		expect(negotiateEncoding('*;q=1, br;q=0')).toBe('gzip');
+	});
+
 	it('names the sibling object', () => {
 		expect(encodedPathFor('app.js', 'br')).toBe('app.js.br');
 		expect(encodedPathFor('app.js', 'gzip')).toBe('app.js.gz');

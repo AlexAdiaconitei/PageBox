@@ -11,6 +11,7 @@ import {
 	group,
 	site,
 	siteGrant,
+	siteRoleValues,
 	user,
 	type SiteRole
 } from '$lib/server/db/schema';
@@ -522,6 +523,9 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const [principalType, principalId] = String(data.get('principal') ?? '').split(':');
 		const role = String(data.get('role') ?? 'viewer') as SiteRole;
+		if (!siteRoleValues.includes(role)) {
+			return fail(400, { message: 'Choose viewer, deployer or owner' });
+		}
 
 		if (!principalId || (principalType !== 'user' && principalType !== 'group')) {
 			return fail(400, { message: 'Pick someone to grant access to' });
@@ -581,6 +585,9 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim() || 'deploy token';
 		const days = Number(data.get('expiresInDays') ?? 0);
+		if (!Number.isInteger(days) || days < 0 || days > 365) {
+			return fail(400, { message: 'Use 0 for no expiry, or a whole number of days from 1 to 365' });
+		}
 
 		const created = await adminAuth.api.createApiKey({
 			body: {

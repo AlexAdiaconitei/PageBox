@@ -1,6 +1,6 @@
 import { siteRequest } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { brotliCompressSync } from 'node:zlib';
+import { brotliCompressSync, gzipSync } from 'node:zlib';
 import { zipSync, strToU8 } from 'fflate';
 import {
 	actionResult,
@@ -90,5 +90,23 @@ run('archive and serving path regressions', () => {
 		});
 		expect(encoded.headers.get('content-encoding')).toBe('br');
 		expect(await encoded.text()).toBe(body);
+	});
+
+	it('uses an accepted gzip sibling when brotli is unavailable', async () => {
+		const body = 'gzip-fallback-marker';
+		const zip = zipSync(
+			{
+				'index.html': strToU8('fallback'),
+				'fallback.js': strToU8(body),
+				'fallback.js.gz': gzipSync(strToU8(body))
+			},
+			{ level: 0 }
+		);
+		expect((await upload(slug, zip, { jar })).status).toBe(201);
+		const response = await siteRequest(`/s/${slug}/fallback.js`, {
+			headers: { 'accept-encoding': 'br, gzip' }
+		});
+		expect(response.headers.get('content-encoding')).toBe('gzip');
+		expect(await response.text()).toBe(body);
 	});
 });

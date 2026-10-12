@@ -54,6 +54,58 @@ run('security regressions', () => {
 		return { id, jar, email };
 	}
 
+	it('preserves HTTP cookie attributes when copying the authentication response', async () => {
+		const response = await request('/login', {
+			method: 'POST',
+			form: { email: (await create(seat, 'user', false)).email, password: temporary }
+		});
+		expect((await actionResult(response)).type).toBe('redirect');
+		const cookies = response.headers.getSetCookie();
+		expect(cookies.length).toBeGreaterThan(0);
+		for (const cookie of cookies) {
+			expect(cookie.toLowerCase()).not.toMatch(/;\s*secure(?:;|$)/);
+			expect(cookie.toLowerCase()).toContain('; httponly');
+		}
+	});
+
+	it('rejects unknown grant roles and invalid token expiry instead of storing them', async () => {
+		const slug = `validation-${tag()}`;
+		await post('/sites?/create', seat, { slug, name: slug, visibility: 'private' });
+		const target = await create(seat);
+		const grant = await actionResult(
+			await post(`/sites/${slug}?/addGrant`, seat, {
+				principal: `user:${target.id}`,
+				role: 'invalid-role'
+			})
+		);
+		expect(grant.status).toBe(400);
+		for (const days of ['-1', 'NaN', '366', '0.5']) {
+			const token = await actionResult(
+				await post(`/sites/${slug}?/createToken`, seat, {
+					name: 'invalid-expiry',
+					expiresInDays: days
+				})
+			);
+			expect(token.status, days).toBe(400);
+		}
+	}, 30_000);
+
+	it('keeps the forced password gate when the temporary password is reused', async () => {
+		const admin = await create(seat, 'admin', false);
+		const unchanged = await actionResult(
+			await post('/account/password?/changePassword', admin.jar, {
+				currentPassword: temporary,
+				newPassword: temporary,
+				confirm: temporary
+			})
+		);
+		expect(unchanged.type).toBe('failure');
+		expect(unchanged.status).toBe(400);
+		expect((await request('/sites', { jar: admin.jar })).headers.get('location')).toBe(
+			'/account/password'
+		);
+	}, 30_000);
+
 	it('refuses the issuer reset and suspension after promotion', async () => {
 		const admin = await create(seat, 'admin');
 		const target = await create(admin.jar);

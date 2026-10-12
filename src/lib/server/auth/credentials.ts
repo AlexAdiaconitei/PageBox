@@ -145,7 +145,11 @@ function applySetCookies(event: RequestEvent, response: Response): void {
 
 		const name = pair.slice(0, separator).trim();
 		const value = decodeURIComponent(pair.slice(separator + 1).trim());
-		const options: Parameters<typeof event.cookies.set>[2] = { path: '/' };
+		const options: Parameters<typeof event.cookies.set>[2] = {
+			path: '/',
+			secure: false,
+			httpOnly: false
+		};
 
 		for (const attribute of attributes) {
 			const [rawKey, rawValue] = attribute.split('=');

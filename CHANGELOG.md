@@ -9,6 +9,8 @@ Prepared locally. No release, registry upload or deployment has been performed.
 
 ### Security
 
+- Reject reusing the current password when changing it, including forced changes of temporary credentials. Preserve Secure and HttpOnly attributes when copying authentication cookies to SvelteKit responses.
+- Validate site grant roles and token expiry days before writing credentials or permissions.
 - Give every hosted site an origin containing its immutable ID. Keep reader login on the central origin and exchange single-use codes for site-bound, host-only sessions. Check live parent sessions, bans and grants on each private file. Recreating a slug creates a fresh origin.
 - Restrict account management after promotion. Password resets revoke sessions and API keys atomically. Require password changes in the deploy API and remove stale permission caches.
 - Validate the complete mutation origin. Limit the Bearer exemption to token-authenticated API requests. Use the adapter's client address for throttling and audits. HTTPS cookies use the __Host- prefix.
@@ -17,6 +19,12 @@ Prepared locally. No release, registry upload or deployment has been performed.
 - Bound simultaneous uploads and temporary archive bytes across replicas with separate PostgreSQL control connections. Add body and operation deadlines, cancellation of S3 writes, crash-file cleanup and permission checks before activation.
 - Require chosen production secrets, bind infrastructure ports to loopback, separate storage administrator and application credentials, and make proxy-header trust explicit.
 - Make account recovery transactional and fixture seeding opt-in. Update devalue, cookie, Vitest, Drizzle tooling, Next.js and vulnerable documentation tooling dependencies. One unpatched braces advisory remains in docs lint only.
+
+### Fixed
+
+- Return 416 for unsatisfiable byte ranges, honor If-Range, and preserve custom 404 responses on conditional and ranged requests.
+- Honor compression quality weights and exact encoding names, and try gzip when the preferred Brotli sibling is unavailable.
+- Replace deprecated SvelteKit CSRF configuration while retaining the hook's origin checks. Remove an unsupported select pseudo-element.
 
 ### Migration and validation
 

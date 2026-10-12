@@ -353,12 +353,7 @@ table {
 			gap: 0.5rem;
 			background-image: none;
 			padding-right: 0.5rem;
-		}
-		/* Options here are long enough to overrun a w-44 field ("deployer — read + deploy");
-		   as a flex child the label needs to be told it may shrink and clip. */
-		.select::select-fallback-button {
 			min-width: 0;
-			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
 		}

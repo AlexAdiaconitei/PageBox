@@ -173,7 +173,8 @@ touch targets on coarse pointers only — a mouse keeps the tighter console.
 
 The published image is ghcr.io/alexadiaconitei/pagebox:0.1.0. It does not contain the
 security corrections in this checkout. Version 0.2.0 must be built locally until it is
-released, and the current checkout still needs the isolation and final verification.
+released. The local isolation and verification results are recorded in
+[security-checks/README.md](security-checks/README.md).
 
 ### Standalone (Postgres + MinIO included)
 
@@ -282,7 +283,7 @@ everyone, and the deployments, grants and tokens stay where they are. Enabling i
 same build again.
 
 **Delete site** is the other end of that: it removes the site with every deployment, object,
-grant and deploy token it has, and releases the slug. It is superadmin-only and asks for the
+grant and deploy token it has, and releases the slug. It requires an admin with owner permission and asks for the
 slug to be typed back, because nothing undoes it. Reach for disable first.
 
 Every deployment is a *full* copy of the build, which is what makes rollback a pointer move

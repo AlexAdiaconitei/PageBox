@@ -1,5 +1,7 @@
 # Verificación de PageBox 0.2.0
 
+La revisión adicional del 5 de octubre está en [review-2026-10-05.md](review-2026-10-05.md), con nuevas correcciones y sus logs. Las cifras siguientes corresponden a la verificación anterior.
+
 La corrección del código está aplicada y comprobada. La versión sigue sin publicar. No se ha modificado el homelab. Los resultados completos están en [verification.json](verification.json) y los logs de esta carpeta.
 
 | Comprobación | Resultado |

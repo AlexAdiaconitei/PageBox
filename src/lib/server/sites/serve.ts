@@ -13,11 +13,12 @@ import {
 	encodedPathFor,
 	isForbiddenPath,
 	isImmutableAsset,
-	negotiateEncoding,
+	negotiateEncodings,
 	normaliseSubpath,
 	type Candidate
 } from './paths';
 import type { ResolvedSite, SiteRef } from './resolve';
+import { byteRange, matchesEtag, matchesIfRange } from './http';
 
 /**
  * Serves one file of a deployment, straight from S3.
@@ -111,6 +112,7 @@ export async function guardPrivate(
 			headers: {
 				'cache-control': 'private, no-store',
 				'cdn-cache-control': 'no-store',
+				'cloudflare-cdn-cache-control': 'no-store',
 				vary: 'Cookie'
 			}
 		});
@@ -123,6 +125,7 @@ export async function guardPrivate(
 			location: accessUrl(siteRef, next),
 			'cache-control': 'private, no-store',
 			'cdn-cache-control': 'no-store',
+			'cloudflare-cdn-cache-control': 'no-store',
 			vary: 'Cookie'
 		}
 	});
@@ -146,14 +149,14 @@ async function locate(
 	const range = event.request.headers.get('range');
 	// Range and Content-Encoding do not combine: byte offsets into a compressed sibling
 	// mean nothing to the client, so a ranged request always gets the plain object.
-	const wanted = range ? null : negotiateEncoding(event.request.headers.get('accept-encoding'));
+	const wanted = range ? [] : negotiateEncodings(event.request.headers.get('accept-encoding'));
 
 	for (const candidate of candidates) {
-		if (wanted && isCompressible(candidate.path)) {
-			const encodedKey = objectKey(siteId, deploymentId, encodedPathFor(candidate.path, wanted));
+		for (const encoding of isCompressible(candidate.path) ? wanted : []) {
+			const encodedKey = objectKey(siteId, deploymentId, encodedPathFor(candidate.path, encoding));
 			if (await encodingWorthTrying(encodedKey)) {
 				const head = await headObject(encodedKey);
-				if (head) return { candidate, key: encodedKey, encoding: wanted, head };
+				if (head) return { candidate, key: encodedKey, encoding, head };
 				// A miss only describes this asset; other files may have compressed siblings.
 				await cache.set(encodingKey(encodedKey), false, ENCODING_MISS_TTL);
 			}
@@ -189,7 +192,11 @@ async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Pro
 
 	// Keep service workers scoped inside this site's retained base path.
 
-	if (found.head.etag && matchesEtag(event.request.headers.get('if-none-match'), found.head.etag)) {
+	if (
+		found.candidate.status === 200 &&
+		found.head.etag &&
+		matchesEtag(event.request.headers.get('if-none-match'), found.head.etag)
+	) {
 		headers.delete('content-type');
 		return new Response(null, { status: 304, headers });
 	}
@@ -199,8 +206,19 @@ async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Pro
 		return new Response(null, { status: found.candidate.status, headers });
 	}
 
-	const range = event.request.headers.get('range') ?? undefined;
-	const object = await getObject(found.key, range);
+	const range =
+		found.candidate.status === 200 &&
+		matchesIfRange(event.request.headers.get('if-range'), found.head)
+			? byteRange(event.request.headers.get('range'), found.head.size)
+			: null;
+	if (range === false) {
+		headers.delete('content-encoding');
+		if (siteRef.visibility === 'public') headers.set('cache-control', 'no-store');
+		headers.set('content-range', `bytes */${found.head.size}`);
+		headers.set('content-length', '0');
+		return new Response(null, { status: 416, headers });
+	}
+	const object = await getObject(found.key, range ?? undefined);
 	// Vanished between HEAD and GET: a deployment being deleted underneath us.
 	if (!object) return notFound(event, siteRef);
 
@@ -238,14 +256,6 @@ function applyCachePolicy(headers: Headers, siteRef: SiteRef, found: Found): voi
 			? 'public, max-age=31536000, immutable'
 			: 'public, no-cache'
 	);
-}
-
-/** Weak comparison is enough: we only ever compare against our own S3 ETag. */
-function matchesEtag(ifNoneMatch: string | null, etag: string): boolean {
-	if (!ifNoneMatch) return false;
-	if (ifNoneMatch.trim() === '*') return true;
-	const normalise = (value: string) => value.trim().replace(/^W\//, '');
-	return ifNoneMatch.split(',').some((value) => normalise(value) === normalise(etag));
 }
 
 /**
