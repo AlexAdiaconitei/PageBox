@@ -1,0 +1,6 @@
+#!/bin/sh
+printf 'BODY_SIZE_LIMIT=%s\n' "${BODY_SIZE_LIMIT-<unset>}"
+printf 'HOST_HEADER=%s\n' "${HOST_HEADER-<unset>}"
+printf 'PROTOCOL_HEADER=%s\n' "${PROTOCOL_HEADER-<unset>}"
+printf 'ADDRESS_HEADER=%s\n' "${ADDRESS_HEADER-<unset>}"
+printf 'XFF_DEPTH=%s\n' "${XFF_DEPTH-<unset>}"

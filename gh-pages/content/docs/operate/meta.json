@@ -1,4 +1,4 @@
 {
   "title": "Operating",
-  "pages": ["serving", "access", "storage", "configuration"]
+  "pages": ["serving", "access", "storage", "configuration", "security"]
 }

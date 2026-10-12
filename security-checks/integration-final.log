@@ -1,0 +1,21 @@
+stepped down to admin: fixture-bootstrap@example.com
+test superadmin: e2e-admin@example.com
+demo: deployment 01M441QHYA0AA3EX0EH8EQWMQQ active (10 files)
+demo-private: deployment 01M441QJ0JEG9MH4S6C31NC64X active (10 files)
+demo-api: deployment 01M441QJ2P05MM3SHB27M2TZMM active (10 files)
+demo-panel: deployment 01M441QJ4V1MMBVD69V7Y6GXFY active (10 files)
+
+seeded 10 files
+  public : /s/demo/
+  private: /s/demo-private/
+  api     : /s/demo-api/   (deploy-API tests)
+  panel   : /s/demo-panel/ (panel-upload tests)
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+
+ RUN  v4.1.11 C:/Users/Alex/orca/workspaces/PageBox/coffinfish
+
+
+ Test Files  15 passed (15)
+      Tests  110 passed (110)
+   Start at  20:10:02
+   Duration  68.09s (transform 491ms, setup 76ms, import 2.71s, tests 62.46s, environment 3ms)

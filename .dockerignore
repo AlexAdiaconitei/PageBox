@@ -8,6 +8,7 @@ build
 *.md
 !README.md
 tests
+security-checks
 .vscode
 .claude
 .agents

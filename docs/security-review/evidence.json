@@ -1,0 +1,126 @@
+{
+	"commit": "5b1b0c92de2bed9a676b4146312670ae7dd774d1",
+	"dateUtc": "2026-10-04",
+	"environment": "Disposable localhost test instances, PostgreSQL 16, MinIO, built SvelteKit app. No homelab traffic. All credentials and content are synthetic.",
+	"results": [
+		{
+			"name": "group-revocation-cache",
+			"evidence": {
+				"membershipRows": 0,
+				"immediateStatus": 200,
+				"content": "audit-secret-content"
+			}
+		},
+		{
+			"name": "password-reset-and-forced-change",
+			"evidence": {
+				"beforeSessions": 2,
+				"afterSessions": 2,
+				"oldViewStatus": 200,
+				"panelStatus": 303,
+				"panelLocation": "/account/password",
+				"oldAdminApiUploadStatus": 201
+			}
+		},
+		{
+			"name": "same-origin-private-read",
+			"evidence": {
+				"from": "/s/audit-public/",
+				"to": "/s/audit-reset/secret.txt",
+				"status": 200,
+				"content": "audit-secret-content",
+				"note": "HTTP reproduction of the request a same-origin browser fetch makes; no browser automation used"
+			}
+		},
+		{
+			"name": "promotion-without-quota",
+			"evidence": {
+				"role": "admin",
+				"storage_quota_bytes": null,
+				"configuredDefaultQuota": 5242880,
+				"uploadStatus": 201,
+				"totalBytes": 6291477
+			}
+		},
+		{
+			"name": "hidden-directory-rebased-and-exposed",
+			"evidence": {
+				"uploadStatus": 201,
+				"root": ".git",
+				"skipped": [],
+				"getStatus": 200,
+				"content": "audit-hidden-config"
+			}
+		},
+		{
+			"name": "encoded-paths",
+			"evidence": {
+				"spaceStatus": 404,
+				"unicodeStatus": 404
+			}
+		},
+		{
+			"name": "csrf-bearer-header-bypasses-cookie-action",
+			"evidence": {
+				"noBearerStatus": 403,
+				"bearerStatus": 200,
+				"bearerBody": "{\"type\":\"success\",\"status\":200,\"data\":\"[{\\\"message\\\":1},\\\"Site disabled — it now answers 404 for everyone\\\"]\"}",
+				"disabled": true,
+				"note": "Raw HTTP with session cookie; external browser preflight feasibility is separate"
+			}
+		},
+		{
+			"name": "issuer-can-take-over-promoted-admin",
+			"evidence": {
+				"targetRole": "admin",
+				"resetStatus": 200,
+				"resetType": "success",
+				"loginAsTargetSucceeded": true
+			}
+		},
+		{
+			"name": "activation-delete-race",
+			"evidence": {
+				"activateStatus": 200,
+				"deleteStatus": 200,
+				"active_deployment_id": "01M41XZ60TAE2KCXPQ33ASPFH2",
+				"active_row_exists": false
+			}
+		},
+		{
+			"name": "forwarded-chain-uses-shared-rate-bucket",
+			"evidence": {
+				"actionStatus": 401,
+				"buckets": [
+					{
+						"key": "no-trusted-ip|/sign-in/email",
+						"count": 1
+					}
+				]
+			}
+		},
+		{
+			"name": "quota-lock-pool-exhaustion",
+			"poolMax": 2,
+			"concurrentOperations": 2,
+			"completedAfterOneSecond": 0,
+			"locks": [
+				{
+					"granted": false,
+					"count": 1
+				},
+				{
+					"granted": true,
+					"count": 1
+				}
+			]
+		},
+		{
+			"name": "s3-partial-delete-error-ignored",
+			"reportedDeleted": 1,
+			"actualDeleted": 0,
+			"simulatedError": "AccessDenied",
+			"threw": false
+		}
+	]
+}

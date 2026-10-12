@@ -1,20 +1,22 @@
 import { createHash } from 'node:crypto';
+import { error } from '@sveltejs/kit';
 import { createWriteStream } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { and, eq } from 'drizzle-orm';
 import { formatBytes, getConfig } from '../config';
 import { db } from '../db';
+import { withStorageLock } from '../db/locks';
 import { deployment, site } from '../db/schema';
 import { newId } from '../ids';
 import { deletePrefix, deploymentPrefix, headObject, objectKey } from '../s3';
-import { allowanceFor, ownerOf, withQuotaLock } from '../quota';
-import { invalidateSite, type SiteRef } from '../sites/resolve';
-import { pruneDeployments } from './retention';
+import { allowanceFor, instanceUsage, ownerOf, quotaFor, usageFor } from '../quota';
+import { invalidateSite, lookupSiteBySlug, type SiteRef } from '../sites/resolve';
+import { prunablePlan, pruneDeployments } from './retention';
 import { extractZipToS3, INGEST_VERSION, measureZip, ZipRejected } from './zip';
+import { claimUpload } from './upload-budget';
 
 /**
  * Turns an uploaded archive into an activated deployment.
@@ -55,6 +57,7 @@ export type IngestInput = {
 	source: 'api' | 'panel-upload';
 	notes?: string | null;
 	activate: boolean;
+	authorize: () => Promise<boolean>;
 	/** Preflight warnings the uploader was shown and accepted (§6.3). */
 	warnings?: string[];
 	acknowledgedAt?: Date | null;
@@ -64,56 +67,87 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 	const config = getConfig();
 	if (!input.body) return { ok: false, status: 400, message: 'empty request body' };
 
-	const dir = await mkdtemp(join(process.env.PAGEBOX_TMP_DIR ?? tmpdir(), 'pagebox-'));
-	const archivePath = join(dir, 'upload.zip');
+	const lease = await claimUpload();
+	const archivePath = join(lease.directory, 'upload.zip');
 	let deploymentId: string | null = null;
 
 	try {
-		const written = await writeArchive(input.body, archivePath, config.MAX_UPLOAD_BYTES);
+		const bodySignal = AbortSignal.any([
+			lease.signal,
+			AbortSignal.timeout(config.UPLOAD_BODY_TIMEOUT_SECONDS * 1000)
+		]);
+		const written = await writeArchive(
+			input.body,
+			archivePath,
+			config.MAX_UPLOAD_BYTES,
+			bodySignal
+		);
 		if (!written.ok) return written.error;
 
 		// An identical archive means the CI job is retrying: reuse what is already in S3
 		// instead of writing a second copy of the same bytes.
-		const existing = await findReusable(input.siteRef.id, written.checksum);
-		if (existing) {
-			if (input.activate) await activate(input.siteRef, existing.id);
-			// Nothing new was stored, so nothing has to make room — but the deployment that
-			// just became live may have been the one retention was about to drop, and after
-			// the activation it is not. Re-running the rule keeps the two consistent.
-			const pruned = await applyRetention(input.siteRef, existing.id, input.activate);
-			return {
-				ok: true,
-				deploymentId: existing.id,
-				fileCount: existing.fileCount,
-				totalBytes: existing.totalBytes,
-				reused: true,
-				skipped: [],
-				root: '',
-				pruned
-			};
-		}
-
-		// What this archive would store, measured off its own central directory before a byte
-		// of it is written. The alternative is to find out mid-extraction, having already put
-		// most of a build in the bucket to then delete it — and for the panel uploader, to
-		// have somebody watch a progress bar for a deploy that was never going to land.
 		const measured = await measureZip(archivePath);
+		lease.signal.throwIfAborted();
+		return await withStorageLock(async () => {
+			try {
+				lease.signal.throwIfAborted();
+				const current = await lookupSiteBySlug(input.siteRef.slug);
+				if (!current || current.id !== input.siteRef.id) error(404, 'Site not found');
+				const [siteRow] = await db.select().from(site).where(eq(site.id, current.id)).limit(1);
+				if (siteRow.deletingAt) error(409, 'Site deletion is in progress');
+				input.siteRef = current;
+				if (!(await input.authorize())) error(403, 'Deployment permission was revoked');
+				const existing = await findReusable(input.siteRef.id, written.checksum);
+				if (existing) {
+					if (input.activate) await activate(input.siteRef, existing.id);
+					// Nothing new was stored, so nothing has to make room — but the deployment that
+					// just became live may have been the one retention was about to drop, and after
+					// the activation it is not. Re-running the rule keeps the two consistent.
+					const pruned = await applyRetention(input.siteRef, existing.id, input.activate);
+					return {
+						ok: true,
+						deploymentId: existing.id,
+						fileCount: existing.fileCount,
+						totalBytes: existing.totalBytes,
+						reused: true,
+						skipped: [],
+						root: '',
+						pruned
+					};
+				}
 
-		// Everything from here to the last object written happens under the owner's quota
-		// lock. Checking a live SUM and then spending against it is check-then-act: two
-		// deploys by the same admin each read a figure the other is about to invalidate, and
-		// both pass. The lock is per owner, so it never makes one admin wait on another.
-		const owner = await ownerOf(input.siteRef.id);
-		const run = () => store(measured.totalBytes, written.checksum);
-		return owner ? await withQuotaLock('owner', owner.id, run) : await run();
+				// What this archive would store, measured off its own central directory before a byte
+				// of it is written. The alternative is to find out mid-extraction, having already put
+				// most of a build in the bucket to then delete it — and for the panel uploader, to
+				// have somebody watch a progress bar for a deploy that was never going to land.
+				return await store(measured.totalBytes, written.checksum);
+			} catch (err) {
+				if (deploymentId) {
+					await markFailed(input.siteRef.id, deploymentId);
+					deploymentId = null;
+				}
+				throw err;
+			}
+		});
 	} catch (err) {
 		if (deploymentId) await markFailed(input.siteRef.id, deploymentId);
+		if (lease.signal.aborted || (err as Error)?.name === 'AbortError')
+			error(408, 'Upload deadline exceeded');
 		if (err instanceof ZipRejected) {
-			return { ok: false, status: 400, message: err.message, reason: err.reason };
+			return {
+				ok: false,
+				status: err.reason === 'quota' ? 413 : 400,
+				message: err.message,
+				reason: err.reason
+			};
 		}
 		throw err;
 	} finally {
-		await rm(dir, { recursive: true, force: true }).catch(() => {});
+		try {
+			await rm(archivePath, { force: true });
+		} finally {
+			await lease.release();
+		}
 	}
 
 	/**
@@ -132,6 +166,7 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			checksum,
 			ingestVersion: INGEST_VERSION,
 			source: input.source,
+			totalBytes: measuredBytes,
 			notes: input.notes ?? null,
 			warnings: input.warnings?.length ? input.warnings : null,
 			acknowledgedAt: input.acknowledgedAt ?? null,
@@ -149,9 +184,11 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 				// The backstop: the pre-check above trusts what the archive says about itself,
 				// and this does not.
 				remainingQuota: budget.remaining
-			}
+			},
+			lease.signal
 		);
 
+		if (!(await input.authorize())) error(403, 'Deployment permission was revoked');
 		await db
 			.update(deployment)
 			.set({
@@ -162,11 +199,32 @@ export async function ingestDeployment(input: IngestInput): Promise<IngestOutcom
 			})
 			.where(eq(deployment.id, deploymentId));
 
+		// Keep the old active build protected until retention has actually freed the credited bytes.
+		const beforeActivation = await applyRetention(input.siteRef, deploymentId, false);
+		const owner = await ownerOf(input.siteRef.id);
+		const quota = owner ? await quotaFor(owner) : null;
+		if (owner && quota !== null && (await usageFor(owner.id)) > quota) {
+			throw new ZipRejected(
+				'Storage did not free enough retained bytes; the previous deployment remains active',
+				'quota'
+			);
+		}
+		if (config.PAGEBOX_STORAGE_BYTES && (await instanceUsage()) > config.PAGEBOX_STORAGE_BYTES) {
+			throw new ZipRejected(
+				'The instance storage budget is exhausted; the previous deployment remains active',
+				'quota'
+			);
+		}
+		lease.signal.throwIfAborted();
+		if (!(await input.authorize())) error(403, 'Deployment permission was revoked');
 		if (input.activate) await activate(input.siteRef, deploymentId);
-
-		// Last, and only once the new build is safely in S3: pruning before the upload
-		// would trade a site's history for one that then failed to arrive.
-		const pruned = await applyRetention(input.siteRef, deploymentId, input.activate);
+		const afterActivation = input.activate
+			? await applyRetention(input.siteRef, deploymentId, true)
+			: { ids: [], bytes: 0 };
+		const pruned = {
+			ids: [...beforeActivation.ids, ...afterActivation.ids],
+			bytes: beforeActivation.bytes + afterActivation.bytes
+		};
 
 		return {
 			ok: true,
@@ -194,6 +252,30 @@ async function quotaBudget(
 	bytes: number
 ): Promise<{ refusal: Extract<IngestOutcome, { ok: false }> | null; remaining: number | null }> {
 	const owner = await ownerOf(siteRef.id);
+	const total = getConfig().PAGEBOX_STORAGE_BYTES;
+	if (total) {
+		const used = await instanceUsage();
+		const doomed = await prunablePlan(
+			siteRef.id,
+			siteRef.retentionLimit,
+			siteRef.activeDeploymentId,
+			1
+		);
+		const freed = doomed.reduce((sum, row) => sum + row.totalBytes, 0);
+		const remaining = Math.max(0, total - used + freed);
+		if (bytes > remaining) {
+			return {
+				remaining,
+				refusal: {
+					ok: false,
+					status: 413,
+					reason: 'quota',
+					message: 'The instance storage budget cannot fit this deployment',
+					quota: { used, quota: total, needed: bytes, freedByRetention: freed }
+				}
+			};
+		}
+	}
 	if (!owner) return { refusal: null, remaining: null };
 
 	const allowance = await allowanceFor(owner, siteRef);
@@ -248,20 +330,38 @@ async function applyRetention(
 }
 
 export async function activate(siteRef: SiteRef, deploymentId: string): Promise<void> {
-	await db.update(site).set({ activeDeploymentId: deploymentId }).where(eq(site.id, siteRef.id));
-	await invalidateSite(siteRef.slug, siteRef.id);
+	return withStorageLock(async () => {
+		const [current] = await db.select().from(site).where(eq(site.id, siteRef.id)).limit(1);
+		const [target] = await db
+			.select()
+			.from(deployment)
+			.where(and(eq(deployment.id, deploymentId), eq(deployment.siteId, siteRef.id)))
+			.limit(1);
+		if (!current || !target) error(404, 'Deployment not found');
+		if (current.deletingAt || target.status !== 'ready')
+			error(409, 'Only a ready deployment on a live site can be activated');
+		await db.update(site).set({ activeDeploymentId: deploymentId }).where(eq(site.id, siteRef.id));
+		await invalidateSite(siteRef.slug, siteRef.id);
+	});
 }
 
 /** Drops the objects and marks the row, so a dead upload leaves nothing behind. */
 async function markFailed(siteId: string, deploymentId: string): Promise<void> {
-	await deletePrefix(deploymentPrefix(siteId, deploymentId)).catch((err) =>
-		console.error('[pagebox] failed to clean up a failed deployment:', err)
-	);
-	await db
-		.update(deployment)
-		.set({ status: 'failed' })
-		.where(eq(deployment.id, deploymentId))
-		.catch(() => {});
+	await withStorageLock(async () => {
+		await db
+			.update(deployment)
+			.set({ status: 'cleanup_pending' })
+			.where(eq(deployment.id, deploymentId));
+		try {
+			await deletePrefix(deploymentPrefix(siteId, deploymentId));
+			await db
+				.update(deployment)
+				.set({ status: 'failed', totalBytes: 0 })
+				.where(eq(deployment.id, deploymentId));
+		} catch (err) {
+			console.error('[pagebox] failed upload cleanup queued for retry:', err);
+		}
+	});
 }
 
 /**
@@ -305,7 +405,8 @@ type WriteResult =
 async function writeArchive(
 	body: ReadableStream<Uint8Array>,
 	path: string,
-	maxBytes: number
+	maxBytes: number,
+	signal: AbortSignal
 ): Promise<WriteResult> {
 	const hash = createHash('sha256');
 	let bytes = 0;
@@ -313,7 +414,7 @@ async function writeArchive(
 
 	try {
 		await pipeline(
-			Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]),
+			Readable.from(readBody(body, signal)),
 			async function* (source) {
 				for await (const chunk of source) {
 					const buffer = chunk as Buffer;
@@ -326,7 +427,8 @@ async function writeArchive(
 					yield buffer;
 				}
 			},
-			createWriteStream(path)
+			createWriteStream(path),
+			{ signal }
 		);
 	} catch (err) {
 		if (overflowed) {
@@ -346,4 +448,30 @@ async function writeArchive(
 		return { ok: false, error: { ok: false, status: 400, message: 'empty request body' } };
 	}
 	return { ok: true, checksum: hash.digest('hex'), bytes };
+}
+
+/** Stop reading at the deadline without destroying the HTTP socket before its error response. */
+async function* readBody(body: ReadableStream<Uint8Array>, signal: AbortSignal) {
+	const reader = body.getReader();
+	try {
+		for (;;) {
+			signal.throwIfAborted();
+			let abort: () => void = () => {};
+			try {
+				const next = await Promise.race([
+					reader.read(),
+					new Promise<never>((_resolve, reject) => {
+						abort = () => reject(signal.reason);
+						signal.addEventListener('abort', abort, { once: true });
+					})
+				]);
+				if (next.done) return;
+				yield next.value;
+			} finally {
+				signal.removeEventListener('abort', abort);
+			}
+		}
+	} finally {
+		reader.releaseLock();
+	}
 }

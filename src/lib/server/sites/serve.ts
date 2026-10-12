@@ -2,20 +2,23 @@ import { Readable } from 'node:stream';
 import type { RequestEvent } from '@sveltejs/kit';
 import { cache } from '../cache';
 import { config } from '../config';
+import { accessUrl } from '../auth/reader';
 import { errorResponse, isNavigation, notFoundResponse } from '../errorPage';
 import { atLeast, permissionFor } from '../perms';
 import { getObject, headObject, objectKey, type ObjectHead } from '../s3';
 import { contentTypeFor, isCompressible, isHtml } from './mime';
 import {
 	candidatePaths,
+	decodeSubpath,
 	encodedPathFor,
 	isForbiddenPath,
 	isImmutableAsset,
-	negotiateEncoding,
+	negotiateEncodings,
 	normaliseSubpath,
 	type Candidate
 } from './paths';
 import type { ResolvedSite, SiteRef } from './resolve';
+import { byteRange, matchesEtag, matchesIfRange } from './http';
 
 /**
  * Serves one file of a deployment, straight from S3.
@@ -53,8 +56,20 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
 	}
 
 	if (!siteRef.activeDeploymentId) return notFound(event, siteRef);
+	if (hit.needsTrailingSlashRedirect)
+		return new Response(null, {
+			status: 301,
+			headers: {
+				location: event.url.pathname + '/' + event.url.search,
+				'cache-control': 'private, no-store',
+				'cdn-cache-control': 'no-store',
+				'cloudflare-cdn-cache-control': 'no-store',
+				vary: 'Cookie'
+			}
+		});
 
-	const subpath = normaliseSubpath(hit.subpath);
+	const decoded = decodeSubpath(hit.subpath);
+	const subpath = decoded === null ? null : normaliseSubpath(decoded);
 	if (subpath === null || isForbiddenPath(subpath)) return notFound(event, siteRef);
 
 	const deploymentId = siteRef.activeDeploymentId;
@@ -73,7 +88,10 @@ export async function serveSite(event: RequestEvent, hit: ResolvedSite): Promise
  *
  * Returns a response when the request must not proceed, or null when it may.
  */
-async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Response | null> {
+export async function guardPrivate(
+	event: RequestEvent,
+	siteRef: SiteRef
+): Promise<Response | null> {
 	const permission = await permissionFor(event.locals.user, siteRef);
 	if (atLeast(permission, 'viewer')) return null;
 
@@ -94,6 +112,7 @@ async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Resp
 			headers: {
 				'cache-control': 'private, no-store',
 				'cdn-cache-control': 'no-store',
+				'cloudflare-cdn-cache-control': 'no-store',
 				vary: 'Cookie'
 			}
 		});
@@ -103,9 +122,10 @@ async function guardPrivate(event: RequestEvent, siteRef: SiteRef): Promise<Resp
 	return new Response(null, {
 		status: 302,
 		headers: {
-			location: `/login?next=${encodeURIComponent(next)}`,
+			location: accessUrl(siteRef, next),
 			'cache-control': 'private, no-store',
 			'cdn-cache-control': 'no-store',
+			'cloudflare-cdn-cache-control': 'no-store',
 			vary: 'Cookie'
 		}
 	});
@@ -129,17 +149,16 @@ async function locate(
 	const range = event.request.headers.get('range');
 	// Range and Content-Encoding do not combine: byte offsets into a compressed sibling
 	// mean nothing to the client, so a ranged request always gets the plain object.
-	const wanted = range ? null : negotiateEncoding(event.request.headers.get('accept-encoding'));
+	const wanted = range ? [] : negotiateEncodings(event.request.headers.get('accept-encoding'));
 
 	for (const candidate of candidates) {
-		if (wanted && isCompressible(candidate.path)) {
-			const encodedKey = objectKey(siteId, deploymentId, encodedPathFor(candidate.path, wanted));
-			if (await encodingWorthTrying(deploymentId, wanted)) {
+		for (const encoding of isCompressible(candidate.path) ? wanted : []) {
+			const encodedKey = objectKey(siteId, deploymentId, encodedPathFor(candidate.path, encoding));
+			if (await encodingWorthTrying(encodedKey)) {
 				const head = await headObject(encodedKey);
-				if (head) return { candidate, key: encodedKey, encoding: wanted, head };
-				// Most deployments ship no precompressed files. Remember that for this
-				// deployment so the miss costs one round-trip, not one per asset.
-				await cache.set(encodingKey(deploymentId, wanted), false, ENCODING_MISS_TTL);
+				if (head) return { candidate, key: encodedKey, encoding, head };
+				// A miss only describes this asset; other files may have compressed siblings.
+				await cache.set(encodingKey(encodedKey), false, ENCODING_MISS_TTL);
 			}
 		}
 
@@ -150,11 +169,11 @@ async function locate(
 	return null;
 }
 
-async function encodingWorthTrying(deploymentId: string, encoding: 'br' | 'gzip') {
-	return (await cache.get<boolean>(encodingKey(deploymentId, encoding))) !== false;
+async function encodingWorthTrying(key: string) {
+	return (await cache.get<boolean>(encodingKey(key))) !== false;
 }
 
-const encodingKey = (deploymentId: string, encoding: string) => `enc:${deploymentId}:${encoding}`;
+const encodingKey = (key: string) => `enc:${key}`;
 
 async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Promise<Response> {
 	const headers = new Headers({
@@ -164,16 +183,20 @@ async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Pro
 	});
 	if (found.head.etag) headers.set('etag', found.head.etag);
 	if (found.head.lastModified) headers.set('last-modified', found.head.lastModified.toUTCString());
+	if (isCompressible(found.candidate.path)) headers.set('vary', 'Accept-Encoding');
 	if (found.encoding) {
 		headers.set('content-encoding', found.encoding);
 		headers.set('vary', 'Accept-Encoding');
 	}
 	applyCachePolicy(headers, siteRef, found);
 
-	// Never emit Service-Worker-Allowed: the default scope rule is the only barrier
-	// between two sites sharing this origin, and that header would remove it.
+	// Keep service workers scoped inside this site's retained base path.
 
-	if (found.head.etag && matchesEtag(event.request.headers.get('if-none-match'), found.head.etag)) {
+	if (
+		found.candidate.status === 200 &&
+		found.head.etag &&
+		matchesEtag(event.request.headers.get('if-none-match'), found.head.etag)
+	) {
 		headers.delete('content-type');
 		return new Response(null, { status: 304, headers });
 	}
@@ -183,8 +206,19 @@ async function respond(event: RequestEvent, siteRef: SiteRef, found: Found): Pro
 		return new Response(null, { status: found.candidate.status, headers });
 	}
 
-	const range = event.request.headers.get('range') ?? undefined;
-	const object = await getObject(found.key, range);
+	const range =
+		found.candidate.status === 200 &&
+		matchesIfRange(event.request.headers.get('if-range'), found.head)
+			? byteRange(event.request.headers.get('range'), found.head.size)
+			: null;
+	if (range === false) {
+		headers.delete('content-encoding');
+		if (siteRef.visibility === 'public') headers.set('cache-control', 'no-store');
+		headers.set('content-range', `bytes */${found.head.size}`);
+		headers.set('content-length', '0');
+		return new Response(null, { status: 416, headers });
+	}
+	const object = await getObject(found.key, range ?? undefined);
 	// Vanished between HEAD and GET: a deployment being deleted underneath us.
 	if (!object) return notFound(event, siteRef);
 
@@ -222,14 +256,6 @@ function applyCachePolicy(headers: Headers, siteRef: SiteRef, found: Found): voi
 			? 'public, max-age=31536000, immutable'
 			: 'public, no-cache'
 	);
-}
-
-/** Weak comparison is enough: we only ever compare against our own S3 ETag. */
-function matchesEtag(ifNoneMatch: string | null, etag: string): boolean {
-	if (!ifNoneMatch) return false;
-	if (ifNoneMatch.trim() === '*') return true;
-	const normalise = (value: string) => value.trim().replace(/^W\//, '');
-	return ifNoneMatch.split(',').some((value) => normalise(value) === normalise(etag));
 }
 
 /**

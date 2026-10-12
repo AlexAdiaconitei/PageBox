@@ -54,7 +54,15 @@ const hostname = z
 	.string()
 	.min(1)
 	.transform((v) => v.trim().toLowerCase())
-	.refine((v) => !v.includes('/'), 'must be a bare hostname, without scheme or path');
+	.refine((v) => {
+		const [host, port, extra] = v.split(':');
+		return (
+			!extra &&
+			host.length <= 253 &&
+			host.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) &&
+			(port === undefined || (/^[1-9][0-9]{0,4}$/.test(port) && Number(port) <= 65535))
+		);
+	}, 'must be a DNS hostname with an optional valid port');
 
 const schema = z.object({
 	NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -85,7 +93,7 @@ const schema = z.object({
 	// --- auth ----------------------------------------------------------------
 	AUTH_SECRET: z.string().min(32, 'must be at least 32 characters'),
 	BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
-	BOOTSTRAP_ADMIN_PASSWORD: z.string().min(8).optional(),
+	BOOTSTRAP_ADMIN_PASSWORD: z.string().min(10).max(200).optional(),
 
 	// --- limits --------------------------------------------------------------
 	//
@@ -97,6 +105,10 @@ const schema = z.object({
 	//
 	// Every *_BYTES setting takes a unit — `100MB`, `1.5GB` — or a plain number of bytes.
 	MAX_UPLOAD_BYTES: bytes(100 * 1024 * 1024),
+	MAX_UPLOAD_TEMP_BYTES: bytes(400 * 1024 * 1024),
+	MAX_CONCURRENT_UPLOADS: z.coerce.number().int().min(1).max(32).default(4),
+	UPLOAD_BODY_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),
+	UPLOAD_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(600),
 	MAX_UNCOMPRESSED_BYTES: bytes(500 * 1024 * 1024),
 	MAX_FILES: z.coerce.number().int().positive().default(20_000),
 	MAX_ZIP_RATIO: z.coerce.number().int().positive().default(100),
@@ -120,7 +132,7 @@ const schema = z.object({
 
 	// --- credential throttling ------------------------------------------------
 	//
-	// Counted per IP and per account, and only failures count. Raise the attempt count
+	// Counted per IP and endpoint, including successful requests. Raise the attempt count
 	// for a team behind one NAT, where every colleague shares an address.
 	LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
 	LOGIN_WINDOW_SECONDS: z.coerce.number().int().positive().default(300),
@@ -133,11 +145,6 @@ const schema = z.object({
 	// --- startup tasks -------------------------------------------------------
 	PAGEBOX_MIGRATE_ON_START: z.stringbool().default(true),
 	PAGEBOX_ENSURE_BUCKET_ON_START: z.stringbool().default(true)
-
-	// Per-site subdomains (§12) are a v2 shape, and the two variables that used to sit here
-	// for them were read by nothing. A configuration key that does not affect behaviour is
-	// worse than an absent one: it reads as a switch. `site.hostname` stays, because
-	// /whoami does report it.
 });
 
 export type Config = z.infer<typeof schema> & {
@@ -163,24 +170,6 @@ const PLACEHOLDERS = [
 	'admin',
 	'xxx'
 ];
-
-/**
- * True when this configuration describes an instance somebody else could reach.
- *
- * `NODE_ENV` alone is the wrong test: the Docker image sets it to production, and the
- * compose stack people run on their laptop uses that image. A `*.localhost` hostname
- * resolves to the loopback address and nowhere else, so an instance served under one is
- * not addressable no matter what mode it runs in.
- */
-function isReachable(c: z.infer<typeof schema>): boolean {
-	if (c.NODE_ENV !== 'production') return false;
-	const local = (host: string) =>
-		host === 'localhost' ||
-		host.endsWith('.localhost') ||
-		host.endsWith('.local') ||
-		host.endsWith('.test');
-	return !(local(c.PAGEBOX_ADMIN_HOST.split(':')[0]) && local(c.PAGEBOX_SITES_HOST.split(':')[0]));
-}
 
 export function isPlaceholder(value: string | undefined): boolean {
 	if (!value) return false;
@@ -216,20 +205,40 @@ export function parseConfig(env: Record<string, string | undefined>): {
 
 	// The host split is the boundary that stops hosted static content from calling the
 	// admin API with the admin cookie attached. Same host = no boundary at all.
-	if (c.PAGEBOX_ADMIN_HOST === c.PAGEBOX_SITES_HOST) {
+	const adminHost = c.PAGEBOX_ADMIN_HOST.split(':')[0];
+	const sitesHost = c.PAGEBOX_SITES_HOST.split(':')[0];
+	if (adminHost === sitesHost) {
 		errors.push(
 			'PAGEBOX_ADMIN_HOST and PAGEBOX_SITES_HOST must be different hostnames ' +
 				`(both are "${c.PAGEBOX_ADMIN_HOST}")`
 		);
 	}
+	if (adminHost.endsWith('.' + sitesHost))
+		errors.push('PAGEBOX_ADMIN_HOST must be outside the reader subdomain namespace');
+	if (sitesHost.length > 197) errors.push('PAGEBOX_SITES_HOST is too long for per-site hostnames');
+	try {
+		const database = new URL(c.DATABASE_URL);
+		if (!['postgres:', 'postgresql:'].includes(database.protocol)) throw new Error();
+		if (
+			c.NODE_ENV === 'production' &&
+			(!database.password || isPlaceholder(decodeURIComponent(database.password)))
+		)
+			errors.push('DATABASE_URL requires a chosen database password in production');
+	} catch {
+		errors.push('DATABASE_URL must be a valid PostgreSQL URL');
+	}
+	if (!['http:', 'https:'].includes(new URL(c.S3_ENDPOINT).protocol))
+		errors.push('S3_ENDPOINT must use HTTP or HTTPS');
 	// Grant caching is per-process. With more than one process, a revoked grant would
 	// stay live in the other replicas until its TTL expires.
 	if (c.PAGEBOX_REPLICAS > 1 && !c.REDIS_URL) {
-		errors.push('PAGEBOX_REPLICAS > 1 requires REDIS_URL (shared grant cache)');
+		errors.push('PAGEBOX_REPLICAS > 1 requires REDIS_URL (shared metadata cache)');
 	}
 	if (c.MAX_UPLOAD_BYTES > c.MAX_UNCOMPRESSED_BYTES) {
 		errors.push('MAX_UPLOAD_BYTES cannot exceed MAX_UNCOMPRESSED_BYTES');
 	}
+	if (c.MAX_UPLOAD_TEMP_BYTES < c.MAX_UPLOAD_BYTES)
+		errors.push('MAX_UPLOAD_TEMP_BYTES must fit at least one MAX_UPLOAD_BYTES archive');
 	// A default nobody could ever be given is a misconfiguration worth catching at boot
 	// rather than at the first attempt to seat an admin.
 	if (c.PAGEBOX_STORAGE_BYTES && c.PAGEBOX_DEFAULT_QUOTA_BYTES > c.PAGEBOX_STORAGE_BYTES) {
@@ -250,7 +259,12 @@ export function parseConfig(env: Record<string, string | undefined>): {
 	// process refuses to carry them once it is addressable under a real hostname. Never
 	// echoed back: an error message is a log line, and a log line is not a place for a
 	// secret, placeholder or not.
-	if (isReachable(c)) {
+	if (c.NODE_ENV === 'production') {
+		if (
+			isPlaceholder(c.S3_SECRET_KEY) ||
+			['pagebox', 'minioadmin'].includes(c.S3_ACCESS_KEY.toLowerCase())
+		)
+			errors.push('S3 credentials must be chosen values, not infrastructure examples');
 		if (isPlaceholder(c.BOOTSTRAP_ADMIN_PASSWORD)) {
 			errors.push(
 				'BOOTSTRAP_ADMIN_PASSWORD is one of the example values — it is the first ' +
@@ -295,6 +309,7 @@ export function hostKind(host: string): HostKind | null {
 	const h = host.toLowerCase().split(':')[0];
 	if (h === config.PAGEBOX_ADMIN_HOST.split(':')[0]) return 'admin';
 	if (h === config.PAGEBOX_SITES_HOST.split(':')[0]) return 'sites';
+	if (siteIdForHost(host)) return 'sites';
 	return null;
 }
 
@@ -306,17 +321,34 @@ export function hostKind(host: string): HostKind | null {
  * that does not sit on 80/443. It is a port number, not a hostname: it cannot redirect a
  * link somewhere else.
  */
-export function siteUrl(basePath: string, port?: string | null): string {
-	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_SITES_HOST}${suffix(port)}${basePath}`;
+export function siteHostFor(site: { slug: string; id: string }): string {
+	// IDs prevent a newly created site inheriting an old site's cookies or service worker.
+	return `${site.slug.slice(0, 28)}-${site.id.toLowerCase()}.${config.PAGEBOX_SITES_HOST}`;
 }
 
-export function adminUrl(path = '/', port?: string | null): string {
-	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_ADMIN_HOST}${suffix(port)}${path}`;
+export function siteIdForHost(host: string): string | null {
+	const hostname = host.toLowerCase().split(':')[0];
+	const suffix = `.${config.PAGEBOX_SITES_HOST.split(':')[0]}`;
+	if (!hostname.endsWith(suffix)) return null;
+	const label = hostname.slice(0, -suffix.length);
+	return (
+		/^[a-z0-9][a-z0-9-]{0,27}-([0-9a-hjkmnp-tv-z]{26})$/.exec(label)?.[1].toUpperCase() ?? null
+	);
 }
 
-function suffix(port?: string | null): string {
-	if (!port || config.PAGEBOX_SITES_HOST.includes(':')) return '';
-	return port === '80' || port === '443' ? '' : `:${port}`;
+export function siteUrl(
+	site: { slug: string; id: string; basePath: string },
+	_port?: string | null
+): string {
+	return `${config.PAGEBOX_PUBLIC_SCHEME}://${siteHostFor(site)}${site.basePath}`;
+}
+
+export function readerUrl(path: string): string {
+	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_SITES_HOST}${path}`;
+}
+
+export function adminUrl(path = '/', _port?: string | null): string {
+	return `${config.PAGEBOX_PUBLIC_SCHEME}://${config.PAGEBOX_ADMIN_HOST}${path}`;
 }
 
 export function basePathFor(slug: string): string {

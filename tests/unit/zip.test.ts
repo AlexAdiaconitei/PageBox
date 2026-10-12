@@ -55,3 +55,21 @@ describe('isSymlinkEntry', () => {
 		expect(isSymlinkEntry(0)).toBe(false); // zips written on Windows
 	});
 });
+
+describe('hidden and malformed ZIP paths', () => {
+	it('skips hidden entries before root selection can strip their directory', () => {
+		for (const path of [
+			'.env',
+			'.git/config',
+			'out/.env',
+			'out/.git/HEAD',
+			'out/.well-known/key'
+		]) {
+			expect(safeEntryPath(path), path).toBeNull();
+		}
+	});
+	it('rejects control characters and overly long names', () => {
+		expect(() => safeEntryPath('bad\0name')).toThrow(ZipRejected);
+		expect(() => safeEntryPath('a'.repeat(4097))).toThrow(ZipRejected);
+	});
+});

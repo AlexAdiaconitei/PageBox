@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	candidatePaths,
+	decodeSubpath,
 	encodedPathFor,
 	isForbiddenPath,
 	isImmutableAsset,
@@ -81,6 +82,26 @@ describe('candidatePaths', () => {
 	});
 });
 
+describe('decodeSubpath', () => {
+	it('decodes spaces and Unicode once', () => {
+		expect(decodeSubpath('hello%20world.txt')).toBe('hello world.txt');
+		expect(decodeSubpath('caf%C3%A9.txt')).toBe('café.txt');
+	});
+	it('refuses separators, traversal, nested escapes and malformed encoding', () => {
+		for (const path of [
+			'a%2fb',
+			'a%5cb',
+			'%2e%2e/file',
+			'%252e%252e/file',
+			'%00',
+			'%zz',
+			'%c0%ae'
+		]) {
+			expect(decodeSubpath(path), path).toBeNull();
+		}
+	});
+});
+
 describe('normaliseSubpath', () => {
 	it('collapses redundant segments', () => {
 		expect(normaliseSubpath('a//b/./c')).toBe('a/b/c');
@@ -140,6 +161,13 @@ describe('encoding negotiation', () => {
 
 	it('honours an explicit q=0', () => {
 		expect(negotiateEncoding('br;q=0, gzip')).toBe('gzip');
+	});
+
+	it('honours quality weights and exact encoding tokens', () => {
+		expect(negotiateEncoding('br;q=0.1, gzip;q=1')).toBe('gzip');
+		expect(negotiateEncoding('zebra, xgzip')).toBeNull();
+		expect(negotiateEncoding('br ; q=0 , gzip')).toBe('gzip');
+		expect(negotiateEncoding('*;q=1, br;q=0')).toBe('gzip');
 	});
 
 	it('names the sibling object', () => {

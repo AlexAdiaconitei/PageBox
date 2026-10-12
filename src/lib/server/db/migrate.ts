@@ -1,5 +1,6 @@
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import { getSql, db } from './index';
+import { getSql } from './index';
+import { databaseOnReserved } from './locks';
 
 /** Arbitrary but stable key, so concurrent replicas serialise instead of racing. */
 const LOCK_KEY = 0x9a6eb0c1;
@@ -49,7 +50,7 @@ export async function runMigrations(
 		}
 
 		try {
-			await migrate(db, { migrationsFolder: folder });
+			await migrate(databaseOnReserved(reserved), { migrationsFolder: folder });
 		} finally {
 			await reserved`SELECT pg_advisory_unlock(${LOCK_KEY})`;
 		}

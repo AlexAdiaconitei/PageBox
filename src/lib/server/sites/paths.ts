@@ -16,6 +16,23 @@ import { extensionOf } from './mime';
 
 export type Candidate = { path: string; status: 200 | 404 };
 
+/** Decode once per segment, before validation. Encoded separators and nested escapes are refused. */
+export function decodeSubpath(path: string): string | null {
+	try {
+		const parts = path.split('/').map((segment) => decodeURIComponent(segment));
+		if (
+			parts.some(
+				(segment) =>
+					segment === '.' || segment === '..' || /[/\\\x00-\x1f\x7f]|%[0-9a-f]{2}/i.test(segment)
+			)
+		)
+			return null;
+		return parts.join('/');
+	} catch {
+		return null;
+	}
+}
+
 /** Paths a request may never reach, whatever the deployment contains. */
 export function isForbiddenPath(subpath: string): boolean {
 	if (subpath.startsWith('__pb/') || subpath === '__pb') return true;
@@ -101,11 +118,27 @@ export function encodedPathFor(path: string, encoding: 'br' | 'gzip'): string {
 
 /** Best encoding the client accepts, in our order of preference. */
 export function negotiateEncoding(acceptEncoding: string | null): 'br' | 'gzip' | null {
-	if (!acceptEncoding) return null;
-	const accepted = acceptEncoding.toLowerCase();
-	// Ignore explicit q=0 rejections; anything subtler than that is not worth the code.
-	const rejects = (token: string) => new RegExp(`${token}\\s*;\\s*q=0(\\.0+)?(,|$)`).test(accepted);
-	if (accepted.includes('br') && !rejects('br')) return 'br';
-	if (accepted.includes('gzip') && !rejects('gzip')) return 'gzip';
-	return null;
+	return negotiateEncodings(acceptEncoding)[0] ?? null;
+}
+
+/** Try each accepted sibling in quality order before falling back to the plain file. */
+export function negotiateEncodings(acceptEncoding: string | null): ('br' | 'gzip')[] {
+	if (!acceptEncoding) return [];
+	const qualities = new Map<string, number>();
+	for (const part of acceptEncoding.toLowerCase().split(',')) {
+		const [token, ...parameters] = part.trim().split(';');
+		const qualityParameter = parameters.find((parameter) => /^\s*q\s*=/.test(parameter));
+		const value = qualityParameter?.split('=')[1]?.trim();
+		const quality =
+			value === undefined
+				? 1
+				: /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(value)
+					? Number(value)
+					: 0;
+		qualities.set(token.trim(), quality);
+	}
+	const qualityFor = (token: string) => qualities.get(token) ?? qualities.get('*') ?? 0;
+	return (['br', 'gzip'] as const)
+		.filter((token) => qualityFor(token) > 0)
+		.sort((a, b) => qualityFor(b) - qualityFor(a));
 }

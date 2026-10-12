@@ -1,0 +1,9 @@
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+
+ RUN  v4.1.11 C:/Users/Alex/orca/workspaces/PageBox/coffinfish
+
+
+ Test Files  16 passed (16)
+      Tests  168 passed (168)
+   Start at  20:06:40
+   Duration  16.28s (transform 3.24s, setup 81ms, import 12.95s, tests 217ms, environment 3ms)

@@ -11,3 +11,4 @@ tests/fixtures/real-site/dist
 # The docs site is its own project with its own conventions (spaces, not tabs).
 # It is formatted from inside gh-pages/, not by the app's Prettier config.
 gh-pages
+security-checks/cache

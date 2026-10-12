@@ -40,25 +40,15 @@ async function call(
 	// endpoints and answers 403 MISSING_OR_NULL_ORIGIN without it — which, mapped through a
 	// credential form, reads as "wrong password" and sends people hunting for the wrong bug.
 	// hooks.server.ts has already checked that this Origin is ours.
-	for (const name of [
-		'cookie',
-		'user-agent',
-		'origin',
-		'referer',
-		'x-forwarded-for',
-		'cf-connecting-ip'
-	]) {
+	for (const name of ['cookie', 'user-agent', 'origin', 'referer']) {
 		const value = event.request.headers.get(name);
 		if (value) headers.set(name, value);
 	}
 
-	// better-auth will not trust a socket address when it has been told to read a header,
-	// and everyone without that header then shares a single throttling bucket — one
-	// attacker locks out the whole instance. Fill it in when the proxy did not.
-	if (!headers.has('x-forwarded-for')) {
-		const address = callerAddress(event);
-		if (address) headers.set('x-forwarded-for', address);
-	}
+	// Only this in-process header reaches Better Auth. Raw proxy chains are not client IPs.
+	const address = callerAddress(event);
+	if (!address) throw new Error('Cannot determine client IP; check ADDRESS_HEADER and XFF_DEPTH');
+	headers.set('x-pagebox-client-ip', address);
 
 	const response = await auth.handler(
 		new Request(`${config.PAGEBOX_PUBLIC_SCHEME}://${host}/__pb/auth${path}`, {
@@ -155,7 +145,11 @@ function applySetCookies(event: RequestEvent, response: Response): void {
 
 		const name = pair.slice(0, separator).trim();
 		const value = decodeURIComponent(pair.slice(separator + 1).trim());
-		const options: Parameters<typeof event.cookies.set>[2] = { path: '/' };
+		const options: Parameters<typeof event.cookies.set>[2] = {
+			path: '/',
+			secure: false,
+			httpOnly: false
+		};
 
 		for (const attribute of attributes) {
 			const [rawKey, rawValue] = attribute.split('=');

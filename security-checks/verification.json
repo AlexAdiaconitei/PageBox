@@ -1,0 +1,53 @@
+{
+	"checkedAt": "2026-10-04T18:20:49.278Z",
+	"version": "0.2.0",
+	"published": false,
+	"unitTests": {
+		"passed": 168,
+		"failed": 0
+	},
+	"integrationTests": {
+		"passed": 110,
+		"failed": 0,
+		"databasePoolMax": 1,
+		"chromium": true
+	},
+	"types": "passed",
+	"format": "passed",
+	"appBuild": "passed",
+	"docsBuild": "passed",
+	"docsTypes": "passed",
+	"docsLint": "passed",
+	"dockerBuild": "passed",
+	"dockerSmoke": "passed",
+	"traefikRouter": "passed",
+	"restrictedStoragePolicy": "passed",
+	"scriptGuards": 17,
+	"entrypointChecks": 6,
+	"composeChecks": 14,
+	"appDependencyAdvisories": 0,
+	"docsDependencyException": {
+		"advisory": "GHSA-vfj7-8cjw-p6xm",
+		"package": "braces",
+		"severity": "high",
+		"patchedRelease": null,
+		"exposure": "local ESLint repository patterns; absent from exported docs and app image"
+	},
+	"homelabModified": false,
+	"publicDnsAndTlsTested": false,
+	"commands": [
+		"pnpm check",
+		"pnpm format:check",
+		"pnpm vitest run tests/unit",
+		"node scripts/test-stack.mjs",
+		"pnpm build",
+		"pnpm audit --json",
+		"pnpm -C gh-pages lint",
+		"pnpm -C gh-pages build",
+		"pnpm -C gh-pages types:check",
+		"docker build -t ghcr.io/alexadiaconitei/pagebox:0.2.0 .",
+		"node scripts/smoke-image.mjs ghcr.io/alexadiaconitei/pagebox:0.2.0",
+		"node scripts/check-router.mjs",
+		"node scripts/check-storage-policy.mjs"
+	]
+}

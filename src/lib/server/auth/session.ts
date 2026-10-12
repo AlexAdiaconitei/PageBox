@@ -34,7 +34,13 @@ export async function loadSession(
 			targetType: 'session',
 			targetId: result.session.id,
 			meta: { sessionScope: scope, host: kind },
-			ip: event.request.headers.get('x-forwarded-for')
+			ip: (() => {
+				try {
+					return event.getClientAddress();
+				} catch {
+					return null;
+				}
+			})()
 		});
 		return null;
 	}
@@ -42,6 +48,7 @@ export async function loadSession(
 	const user = result.user;
 	// A banned user keeps a valid cookie until it expires; the ban has to bite here.
 	if (user.banned) return null;
+	event.locals.sessionId = result.session.id;
 
 	return {
 		id: user.id,

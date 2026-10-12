@@ -1,0 +1,42 @@
+$ next build
+▲ Next.js 16.3.6 (Turbopack)
+✓ Running next.config.mjs took 238ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 10.5s
+  Running TypeScript ...
+  Finished TypeScript in 3.6s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/94) ...
+  Generating static pages using 11 workers (23/94)
+  Generating static pages using 11 workers (46/94)
+  Generating static pages using 11 workers (70/94)
+✓ Generating static pages using 11 workers (94/94) in 1947ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /api/search
+├   /docs/[[...slug]]
+│ ├ ● /docs
+│ ├ ● /docs/deploy/api
+│ ├ ● /docs/deploy/base-paths
+│ └ ● [+26 more paths]
+├ ○ /llms-full.txt
+├   /llms.mdx/docs/[[...slug]]
+│ ├ ● /llms.mdx/docs/content.md
+│ ├ ● /llms.mdx/docs/deploy/api/content.md
+│ ├ ● /llms.mdx/docs/deploy/base-paths/content.md
+│ └ ● [+26 more paths]
+├ ○ /llms.txt
+├   /og/docs/[...slug]
+│ ├ ● /og/docs/image.png
+│ ├ ● /og/docs/deploy/api/image.png
+│ ├ ● /og/docs/deploy/base-paths/image.png
+│ └ ● [+26 more paths]
+└ ○ /opengraph-image
+
+
+○  (Static)  prerendered as static content
+●  (SSG)     prerendered as static HTML (uses generateStaticParams)

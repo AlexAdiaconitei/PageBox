@@ -4,7 +4,8 @@ import type { Actions, PageServerLoad, RequestEvent } from './$types';
 import { adminAuth, isAdmin, isSuperadmin, type SessionUser } from '$lib/server/auth';
 import { audit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
-import { site, user } from '$lib/server/db/schema';
+import { panelMutation } from '$lib/server/auth/mutation';
+import { apikey, session, site, user } from '$lib/server/db/schema';
 import { manages } from '$lib/server/perms';
 import { canAllocate, parseQuota, poolState, usageByOwner, withQuotaLock } from '$lib/server/quota';
 import { config } from '$lib/server/config';
@@ -219,9 +220,19 @@ export const actions: Actions = {
 		// (`set-role`) that no PageBox role should hold.
 		// Demoting drops the quota with the tier: `user` has no allocation, and leaving a
 		// figure behind would keep the pool showing space nobody can use.
+		const allocation =
+			role === 'admin' ? (target.storageQuotaBytes ?? config.PAGEBOX_DEFAULT_QUOTA_BYTES) : null;
+		if (role === 'admin') {
+			const room = await canAllocate(target.id, allocation!);
+			if (!room.ok) return fail(409, { message: room.message });
+		}
 		await db
 			.update(user)
-			.set({ role, storageQuotaBytes: role === 'admin' ? target.storageQuotaBytes : null })
+			.set({
+				role,
+				storageQuotaBytes: allocation,
+				createdByUserId: role === 'admin' ? actor.id : target.createdByUserId
+			})
 			.where(eq(user.id, target.id));
 		await audit({
 			action: 'user.role_changed',
@@ -317,11 +328,32 @@ export const actions: Actions = {
 		}
 		if (target.banned) return fail(400, { message: 'That account is suspended' });
 
+		const formerUsed = (await usageByOwner([actor.id])).get(actor.id)?.bytes ?? 0;
+		const formerQuota = Math.max(config.PAGEBOX_DEFAULT_QUOTA_BYTES, formerUsed);
+		const pool = await poolState();
+		const targetUsed = (await usageByOwner([target.id])).get(target.id)?.bytes ?? 0;
+		const allocatedAfter =
+			pool.allocated -
+			(target.storageQuotaBytes ?? config.PAGEBOX_DEFAULT_QUOTA_BYTES) +
+			formerQuota;
+		const orphanedBytes = pool.orphaned.reduce((sum, row) => sum + row.bytes, 0);
+		if (pool.total !== null && allocatedAfter + targetUsed + orphanedBytes > pool.total) {
+			return fail(409, {
+				message:
+					'The pool cannot fund the former superadmin and the new seat. Free storage or lower other quotas first.'
+			});
+		}
 		await db.transaction(async (tx) => {
 			// Down first: the index permits one superadmin row, so vacating before filling is
 			// the only order that never collides.
-			await tx.update(user).set({ role: 'admin' }).where(eq(user.id, actor.id));
-			await tx.update(user).set({ role: 'superadmin' }).where(eq(user.id, target.id));
+			await tx
+				.update(user)
+				.set({ role: 'admin', storageQuotaBytes: formerQuota, createdByUserId: target.id })
+				.where(eq(user.id, actor.id));
+			await tx
+				.update(user)
+				.set({ role: 'superadmin', storageQuotaBytes: null, createdByUserId: null })
+				.where(eq(user.id, target.id));
 		});
 
 		await audit({
@@ -356,11 +388,15 @@ export const actions: Actions = {
 		const password = String(data.get('password') ?? '');
 		if (password.length < 10) return fail(400, { message: 'Use at least 10 characters' });
 
-		await adminAuth.api.setUserPassword({
-			body: { userId: target.id, newPassword: password },
-			headers: event.request.headers
+		await db.transaction(async (tx) => {
+			await adminAuth.api.setUserPassword({
+				body: { userId: target.id, newPassword: password },
+				headers: event.request.headers
+			});
+			await tx.update(user).set({ mustChangePassword: true }).where(eq(user.id, target.id));
+			await tx.delete(session).where(eq(session.userId, target.id));
+			await tx.update(apikey).set({ enabled: false }).where(eq(apikey.referenceId, target.id));
 		});
-		await db.update(user).set({ mustChangePassword: true }).where(eq(user.id, target.id));
 		await audit({
 			action: 'user.password_reset',
 			actorUserId: actor.id,
@@ -370,3 +406,7 @@ export const actions: Actions = {
 		return { message: 'Password replaced — they must change it at next sign-in' };
 	}
 };
+
+for (const [name, action] of Object.entries(actions)) {
+	if (action) actions[name] = (event) => panelMutation(event, async () => action(event));
+}

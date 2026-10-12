@@ -81,7 +81,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
       - name: Smoke-test the image that is about to be published
+        # Uses only Node builtins and isolated local Docker fixtures.
         run: bash scripts/smoke-image.sh pagebox:smoke
 
       - name: Push

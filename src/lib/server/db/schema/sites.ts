@@ -1,11 +1,17 @@
 import * as t from 'drizzle-orm/pg-core';
 import { pgTable } from 'drizzle-orm/pg-core';
-import { user } from './auth';
+import { session, user } from './auth';
 
 /** Domain tables (docs/PLAN-static-hosting.md §4). Ids are ULIDs unless noted. */
 
 export const visibilityValues = ['public', 'private'] as const;
-export const deploymentStatusValues = ['uploading', 'ready', 'failed'] as const;
+export const deploymentStatusValues = [
+	'uploading',
+	'ready',
+	'failed',
+	'deleting',
+	'cleanup_pending'
+] as const;
 export const deploymentSourceValues = ['api', 'panel-upload'] as const;
 export const principalTypeValues = ['user', 'group'] as const;
 export const siteRoleValues = ['viewer', 'deployer', 'owner'] as const;
@@ -83,6 +89,7 @@ export const site = pgTable(
 		 * the only way to take it down was to delete the deployment that made it work.
 		 */
 		disabledAt: t.timestamp('disabled_at', { withTimezone: true }),
+		deletingAt: t.timestamp('deleting_at', { withTimezone: true }),
 		/** Shown to nobody but the panel — why it was taken down, for whoever finds it later. */
 		disabledReason: t.text('disabled_reason'),
 
@@ -100,7 +107,14 @@ export const site = pgTable(
 	(table) => [
 		t.uniqueIndex('site_slug_key').on(table.slug),
 		t.uniqueIndex('site_hostname_key').on(table.hostname),
-		t.index('site_owner_idx').on(table.ownerUserId)
+		t.index('site_owner_idx').on(table.ownerUserId),
+		t
+			.foreignKey({
+				name: 'site_active_deployment_fk',
+				columns: [table.activeDeploymentId, table.id],
+				foreignColumns: [deployment.id, deployment.siteId]
+			})
+			.onDelete('restrict')
 	]
 );
 
@@ -111,7 +125,7 @@ export const deployment = pgTable(
 		siteId: t
 			.text('site_id')
 			.notNull()
-			.references(() => site.id, { onDelete: 'cascade' }),
+			.references((): t.AnyPgColumn => site.id, { onDelete: 'cascade' }),
 		status: t.text('status').notNull().default('uploading').$type<DeploymentStatus>(),
 		fileCount: t.integer('file_count').notNull().default(0),
 		totalBytes: t.bigint('total_bytes', { mode: 'number' }).notNull().default(0),
@@ -141,6 +155,7 @@ export const deployment = pgTable(
 		readyAt: t.timestamp('ready_at', { withTimezone: true })
 	},
 	(table) => [
+		t.uniqueIndex('deployment_id_site_key').on(table.id, table.siteId),
 		t.index('deployment_site_created_idx').on(table.siteId, table.createdAt),
 		t.index('deployment_status_idx').on(table.status)
 	]
@@ -162,6 +177,49 @@ export const siteGrant = pgTable(
 	(table) => [
 		t.uniqueIndex('site_grant_unique').on(table.siteId, table.principalType, table.principalId),
 		t.index('site_grant_principal_idx').on(table.principalType, table.principalId)
+	]
+);
+
+export const siteSession = pgTable(
+	'site_session',
+	{
+		id: t.text('id').primaryKey(),
+		tokenHash: t.text('token_hash').notNull(),
+		siteId: t
+			.text('site_id')
+			.notNull()
+			.references(() => site.id, { onDelete: 'cascade' }),
+		sessionId: t
+			.text('session_id')
+			.notNull()
+			.references(() => session.id, { onDelete: 'cascade' }),
+		expiresAt: t.timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	(table) => [
+		t.uniqueIndex('site_session_token_key').on(table.tokenHash),
+		t.uniqueIndex('site_session_parent_site_key').on(table.sessionId, table.siteId),
+		t.index('site_session_expires_idx').on(table.expiresAt)
+	]
+);
+
+export const siteAuthorization = pgTable(
+	'site_authorization',
+	{
+		codeHash: t.text('code_hash').primaryKey(),
+		siteId: t
+			.text('site_id')
+			.notNull()
+			.references(() => site.id, { onDelete: 'cascade' }),
+		sessionId: t
+			.text('session_id')
+			.notNull()
+			.references(() => session.id, { onDelete: 'cascade' }),
+		nextPath: t.text('next_path').notNull(),
+		expiresAt: t.timestamp('expires_at', { withTimezone: true }).notNull()
+	},
+	(table) => [
+		t.index('site_authorization_parent_idx').on(table.sessionId),
+		t.index('site_authorization_expires_idx').on(table.expiresAt)
 	]
 );
 

@@ -1,7 +1,9 @@
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, lt, or } from 'drizzle-orm';
 import { db } from '../db';
-import { deployment } from '../db/schema';
+import { withStorageLock } from '../db/locks';
+import { deployment, site, siteAuthorization, siteSession } from '../db/schema';
 import { deletePrefix, deploymentPrefix } from '../s3';
+import { deleteDeployment, deleteSite } from './lifecycle';
 
 /**
  * An upload that dies mid-flight leaves a row in `uploading` and orphan objects in S3.
@@ -11,20 +13,65 @@ const STALE_AFTER_MS = 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 export async function sweepStaleUploads(): Promise<number> {
-	const cutoff = new Date(Date.now() - STALE_AFTER_MS);
-	const stale = await db
-		.select({ id: deployment.id, siteId: deployment.siteId })
-		.from(deployment)
-		.where(and(eq(deployment.status, 'uploading'), lt(deployment.createdAt, cutoff)))
-		.limit(100);
+	return withStorageLock(async () => {
+		const now = new Date();
+		await db.delete(siteAuthorization).where(lt(siteAuthorization.expiresAt, now));
+		await db.delete(siteSession).where(lt(siteSession.expiresAt, now));
+		const cutoff = new Date(Date.now() - STALE_AFTER_MS);
+		const stale = await db
+			.select({ id: deployment.id, siteId: deployment.siteId })
+			.from(deployment)
+			.where(
+				or(
+					and(eq(deployment.status, 'uploading'), lt(deployment.createdAt, cutoff)),
+					eq(deployment.status, 'cleanup_pending'),
+					eq(deployment.status, 'deleting')
+				)
+			)
+			.limit(100);
 
-	for (const row of stale) {
-		await deletePrefix(deploymentPrefix(row.siteId, row.id)).catch((err) =>
-			console.error(`[pagebox] sweep: could not drop objects of ${row.id}:`, err)
-		);
-		await db.update(deployment).set({ status: 'failed' }).where(eq(deployment.id, row.id));
-	}
-	return stale.length;
+		let completed = 0;
+		for (const row of stale) {
+			try {
+				const [current] = await db
+					.select()
+					.from(deployment)
+					.where(eq(deployment.id, row.id))
+					.limit(1);
+				if (!current) continue;
+				if (current.status === 'deleting') {
+					await deleteDeployment(row.siteId, row.id);
+				} else {
+					await db
+						.update(deployment)
+						.set({ status: 'cleanup_pending' })
+						.where(eq(deployment.id, row.id));
+					await deletePrefix(deploymentPrefix(row.siteId, row.id));
+					await db
+						.update(deployment)
+						.set({ status: 'failed', totalBytes: 0 })
+						.where(eq(deployment.id, row.id));
+				}
+				completed++;
+			} catch (err) {
+				console.error(`[pagebox] sweep: cleanup of ${row.id} remains pending:`, err);
+			}
+		}
+		const pendingSites = await db
+			.select({ id: site.id })
+			.from(site)
+			.where(lt(site.deletingAt, new Date()))
+			.limit(100);
+		for (const row of pendingSites) {
+			try {
+				await deleteSite(row.id);
+				completed++;
+			} catch (err) {
+				console.error(`[pagebox] sweep: deletion of site ${row.id} remains pending:`, err);
+			}
+		}
+		return completed;
+	});
 }
 
 export function startSweeper(): void {

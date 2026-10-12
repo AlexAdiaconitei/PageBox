@@ -8,13 +8,12 @@ empty directory with `docker-compose.yml` and a `.env` in it runs. Point it at y
 Postgres and S3 when you want to keep what is on it.
 
 ```yaml
-image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:-latest}
+image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:?Set an exact image tag}
 ```
 
-`PAGEBOX_TAG` in your `.env` pins the version — `0.1.1`, or `0.1` to follow the patches of
-one minor. Pin it on anything you care about: `latest` moves on the next release, and
-`pull_policy: always` means a restart is enough to pick that up. To run the checkout instead
-of a release, replace that line with `build: { context: . }`.
+Set an exact PAGEBOX_TAG. Version 0.2.0 is unreleased: build its image locally from the
+checkout and use the same tag. Compose uses pull_policy=missing. Supply all blank secrets,
+provision a separate bucket-scoped app key, and read [the upgrade procedure](/docs/operate/security).
 
 ## The four profiles
 
@@ -24,11 +23,11 @@ docker compose --profile cache up -d     # + valkey
 docker compose --profile proxy up -d     # + traefik, routing both hostnames on :80
 ```
 
-| Profile | Adds | Needed when |
-| ------- | ---- | ----------- |
-| *(none)* | app, Postgres, MinIO | always |
-| `cache` | Valkey | more than one replica — the app refuses to start otherwise |
-| `proxy` | Traefik | you want `http://pagebox.localhost/` to work directly |
+| Profile  | Adds                 | Needed when                                                |
+| -------- | -------------------- | ---------------------------------------------------------- |
+| _(none)_ | app, Postgres, MinIO | always                                                     |
+| `cache`  | Valkey               | more than one replica — the app refuses to start otherwise |
+| `proxy`  | Traefik              | you want `http://pagebox.localhost/` to work directly      |
 
 Without the proxy profile the app is on `http://localhost:3000` and you address the two
 hosts with a header:
@@ -46,19 +45,18 @@ browser.
 Neither Compose nor Dokploy has a release phase, so the container does it itself, in order:
 
 <Steps>
-<Step>
-### Applies pending migrations
-Under a Postgres advisory lock, so several replicas starting at once cannot race.
-</Step>
-<Step>
-### Creates the S3 bucket if it is missing
-MinIO and Garage alike. If the key is not allowed to create buckets, create it first.
-</Step>
-<Step>
-### Creates the first superadmin
-Only when the instance has no users at all, from `BOOTSTRAP_ADMIN_EMAIL` and
-`BOOTSTRAP_ADMIN_PASSWORD`, flagged `must_change_password`.
-</Step>
+  <Step>
+    ### Applies pending migrations Under a Postgres advisory lock, so several replicas starting at
+    once cannot race.
+  </Step>
+  <Step>
+    ### Checks storage Provision the bucket with an administrator credential before starting the
+    app. Compose defaults PAGEBOX_ENSURE_BUCKET_ON_START=false so the app can use a restricted key.
+  </Step>
+  <Step>
+    ### Creates the first superadmin Only when the instance has no users at all, from
+    `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`, flagged `must_change_password`.
+  </Step>
 </Steps>
 
 Any failure exits the process rather than serving half-configured traffic. Both the
@@ -66,9 +64,9 @@ migration and bucket steps can be switched off with `PAGEBOX_MIGRATE_ON_START` a
 `PAGEBOX_ENSURE_BUCKET_ON_START` if you would rather run them yourself.
 
 <Callout type="info" title="Once anyone exists, the bootstrap variables stop doing anything">
-A restart must not reopen a closed account. That also means a forgotten superadmin password
-has no route back through the interface — recovery is
-[`scripts/set-password.mjs`](/docs/operate/access#recovery) with access to the deployment.
+  A restart must not reopen a closed account. That also means a forgotten superadmin password has no
+  route back through the interface — recovery is
+  [`scripts/set-password.mjs`](/docs/operate/access#recovery) with access to the deployment.
 </Callout>
 
 ## Pointing it at real infrastructure

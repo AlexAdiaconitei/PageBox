@@ -7,11 +7,29 @@ const base = {
 	DATABASE_URL: 'postgres://u:p@localhost:5432/db',
 	S3_ENDPOINT: 'http://localhost:9000',
 	S3_ACCESS_KEY: 'key',
-	S3_SECRET_KEY: 'secret',
+	S3_SECRET_KEY: 'fixture-storage-value-47',
 	AUTH_SECRET: 'a'.repeat(32)
 };
 
 describe('config', () => {
+	it.each([
+		'*.example.com',
+		'example.com:0',
+		'example.com:65536',
+		'host/path',
+		'https://host',
+		'-host.example'
+	])('rejects invalid canonical hostname %s', (host) => {
+		expect(parseConfig({ ...base, PAGEBOX_SITES_HOST: host }).config).toBeUndefined();
+	});
+	it('rejects an admin hostname in the reader namespace and an oversized temporary archive', () => {
+		expect(
+			parseConfig({ ...base, PAGEBOX_ADMIN_HOST: 'admin.pages.example.com' }).config
+		).toBeUndefined();
+		expect(parseConfig({ ...base, MAX_UPLOAD_TEMP_BYTES: '50MB' }).errors.join(' ')).toContain(
+			'MAX_UPLOAD_TEMP_BYTES'
+		);
+	});
 	it('accepts a minimal valid environment', () => {
 		const { config, errors } = parseConfig(base);
 		expect(errors).toEqual([]);
@@ -211,7 +229,7 @@ describe('config', () => {
 
 		// A laptop running the production image is not a deployment: *.localhost resolves to
 		// the loopback address and nowhere else, so the example values stay usable there.
-		it('leaves a loopback instance alone', () => {
+		it('rejects placeholders even with loopback hostnames', () => {
 			const { errors } = parseConfig({
 				...deployed,
 				PAGEBOX_ADMIN_HOST: 'pagebox.localhost',
@@ -219,7 +237,8 @@ describe('config', () => {
 				BOOTSTRAP_ADMIN_PASSWORD: 'change-me-now',
 				AUTH_SECRET: 'change-me-change-me-change-me-change-me'
 			});
-			expect(errors).toEqual([]);
+			expect(errors.join(' ')).toMatch(/AUTH_SECRET/);
+			expect(errors.join(' ')).toMatch(/BOOTSTRAP_ADMIN_PASSWORD/);
 		});
 
 		// One real hostname is enough to be reachable — the pair has to be local, not either.

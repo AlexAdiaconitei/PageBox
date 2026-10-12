@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 /**
@@ -83,10 +84,10 @@ async function signIn(email: string, password: string, host: string): Promise<Ja
 }
 
 const asset = (path: string, jar?: Jar) =>
-	request(path, { jar, host: sitesHost, headers: { 'sec-fetch-dest': 'style' } });
+	siteRequest(path, { jar, host: sitesHost, headers: { 'sec-fetch-dest': 'style' } });
 
 const navigation = (path: string, jar?: Jar) =>
-	request(path, { jar, host: sitesHost, headers: { 'sec-fetch-dest': 'document' } });
+	siteRequest(path, { jar, host: sitesHost, headers: { 'sec-fetch-dest': 'document' } });
 
 run('private sites', () => {
 	let admin: Jar;
@@ -146,7 +147,9 @@ run('private sites', () => {
 	it('sends an anonymous navigation to the login page', async () => {
 		const res = await navigation(`/s/${slug}/`);
 		expect(res.status).toBe(302);
-		expect(res.headers.get('location')).toBe(`/login?next=%2Fs%2F${slug}%2F`);
+		expect(res.headers.get('location')).toBe(
+			`http://${sitesHost}/access?site=${slug}&next=%2Fs%2F${slug}%2F`
+		);
 		expect(res.headers.get('cache-control')).toBe('private, no-store');
 	});
 

@@ -10,19 +10,55 @@
 services:
   app:
     # The published image, so this file works in a directory that holds nothing but this
-    # file and a .env. Override the tag with PAGEBOX_TAG=0.1.1 to pin, or swap the two
+    # file and a .env. Set PAGEBOX_TAG to an exact image tag, or swap the two
     # lines below for `build: { context: . }` to run the checkout instead of the release.
-    image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:-latest}
-    pull_policy: always
-    env_file: .env
+    image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:?Set an exact published or locally built image tag}
+    pull_policy: missing
+    # Pass only app settings. MinIO root credentials stay out of this container.
     environment:
-      DATABASE_URL: postgres://pagebox:${POSTGRES_PASSWORD:-pagebox}@postgres:5432/pagebox
+      PAGEBOX_ADMIN_HOST: ${PAGEBOX_ADMIN_HOST:?Set the admin hostname}
+      PAGEBOX_SITES_HOST: ${PAGEBOX_SITES_HOST:?Set the reader hostname}
+      PAGEBOX_PUBLIC_SCHEME: ${PAGEBOX_PUBLIC_SCHEME:-https}
+      PAGEBOX_SITES_PREFIX: ${PAGEBOX_SITES_PREFIX:-/s}
+      PAGEBOX_REPLICAS: ${PAGEBOX_REPLICAS:-1}
+      DATABASE_URL: postgres://pagebox:${POSTGRES_PASSWORD:?Choose a database password}@postgres:5432/pagebox
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      REDIS_URL:
       S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-pagebox}
-      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-pageboxpagebox}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Create a bucket-scoped app credential}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set the app storage secret}
+      S3_BUCKET: ${S3_BUCKET:-pagebox}
       S3_FORCE_PATH_STYLE: 'true'
+      AUTH_SECRET: ${AUTH_SECRET:?Generate a unique authentication secret}
+      BOOTSTRAP_ADMIN_EMAIL:
+      BOOTSTRAP_ADMIN_PASSWORD:
+      PAGEBOX_STORAGE_BYTES:
+      PAGEBOX_DEFAULT_QUOTA_BYTES: ${PAGEBOX_DEFAULT_QUOTA_BYTES:-5GB}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-100MB}
+      MAX_UPLOAD_TEMP_BYTES: ${MAX_UPLOAD_TEMP_BYTES:-400MB}
+      MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-4}
+      UPLOAD_BODY_TIMEOUT_SECONDS: ${UPLOAD_BODY_TIMEOUT_SECONDS:-60}
+      UPLOAD_TIMEOUT_SECONDS: ${UPLOAD_TIMEOUT_SECONDS:-600}
+      MAX_UNCOMPRESSED_BYTES: ${MAX_UNCOMPRESSED_BYTES:-500MB}
+      MAX_FILES: ${MAX_FILES:-20000}
+      MAX_ZIP_RATIO: ${MAX_ZIP_RATIO:-100}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-10}
+      LOGIN_WINDOW_SECONDS: ${LOGIN_WINDOW_SECONDS:-300}
+      API_KEY_MAX_REQUESTS: ${API_KEY_MAX_REQUESTS:-120}
+      API_KEY_WINDOW_SECONDS: ${API_KEY_WINDOW_SECONDS:-3600}
+      PAGEBOX_MIGRATE_ON_START: ${PAGEBOX_MIGRATE_ON_START:-true}
+      # The operator creates the bucket using a separate administrator credential.
+      PAGEBOX_ENSURE_BUCKET_ON_START: ${PAGEBOX_ENSURE_BUCKET_ON_START:-false}
+      # Forwarding headers are trusted only when explicitly configured.
+      HOST_HEADER:
+      PROTOCOL_HEADER:
+      ADDRESS_HEADER:
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     ports:
-      - '${PAGEBOX_PORT:-3000}:3000'
+      - '127.0.0.1:${PAGEBOX_PORT:-3000}:3000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,7 +70,7 @@ services:
       - 'traefik.enable=true'
       - 'traefik.http.routers.pagebox-admin.rule=Host(`${PAGEBOX_ADMIN_HOST}`)'
       - 'traefik.http.routers.pagebox-admin.entrypoints=web'
-      - 'traefik.http.routers.pagebox-sites.rule=Host(`${PAGEBOX_SITES_HOST}`)'
+      - 'traefik.http.routers.pagebox-sites.rule=Host(`${PAGEBOX_SITES_HOST}`) || HostRegexp(`^[a-z0-9][a-z0-9-]{0,27}-[0-9a-hjkmnp-tv-z]{26}\Q.${PAGEBOX_SITES_HOST}\E$`)'
       - 'traefik.http.routers.pagebox-sites.entrypoints=web'
       - 'traefik.http.services.pagebox.loadbalancer.server.port=3000'
 
@@ -42,13 +78,13 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: pagebox
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pagebox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Choose a database password}
       POSTGRES_DB: pagebox
     volumes:
       - pgdata:/var/lib/postgresql/data
     # Published so `pnpm dev` and the seed script can reach it from the host.
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U pagebox -d pagebox']
       interval: 5s
@@ -60,13 +96,13 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-pagebox}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-pageboxpagebox}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Choose the storage administrator name}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Choose the storage administrator password}
     volumes:
       - miniodata:/data
     ports:
-      - '${MINIO_PORT:-9000}:9000'
-      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+      - '127.0.0.1:${MINIO_PORT:-9000}:9000'
+      - '127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001'
     healthcheck:
       test: ['CMD-SHELL', 'mc ready local || exit 1']
       interval: 5s
@@ -94,6 +130,7 @@ services:
       - '--providers.docker=true'
       - '--providers.docker.exposedbydefault=false'
       - '--entrypoints.web.address=:80'
+      - '--entrypoints.web.forwardedheaders.insecure=false'
       # Traefik streams request bodies without a size limit unless a `buffering`
       # middleware says otherwise, so the upload cap lives in the app (MAX_UPLOAD_BYTES).
     ports:

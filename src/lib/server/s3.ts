@@ -22,6 +22,7 @@ export const s3 = lazy(() => {
 		endpoint: config.S3_ENDPOINT,
 		region: config.S3_REGION,
 		forcePathStyle: config.S3_FORCE_PATH_STYLE,
+		requestHandler: { connectionTimeout: 10000, requestTimeout: 60000 },
 		credentials: {
 			accessKeyId: config.S3_ACCESS_KEY,
 			secretAccessKey: config.S3_SECRET_KEY
@@ -113,7 +114,7 @@ export async function headObject(key: string): Promise<ObjectHead | null> {
 export async function putObject(
 	key: string,
 	body: Buffer | Uint8Array | Readable,
-	opts: { contentType?: string; contentLength?: number } = {}
+	opts: { contentType?: string; contentLength?: number; signal?: AbortSignal } = {}
 ): Promise<void> {
 	await s3.send(
 		new PutObjectCommand({
@@ -122,7 +123,8 @@ export async function putObject(
 			Body: body,
 			ContentType: opts.contentType,
 			ContentLength: opts.contentLength
-		})
+		}),
+		{ abortSignal: opts.signal }
 	);
 }
 
@@ -136,9 +138,14 @@ export async function deletePrefix(prefix: string): Promise<number> {
 		);
 		const keys = (listed.Contents ?? []).map((o) => ({ Key: o.Key! }));
 		if (keys.length) {
-			await s3.send(
+			const result = await s3.send(
 				new DeleteObjectsCommand({ Bucket: bucket(), Delete: { Objects: keys, Quiet: true } })
 			);
+			if (result.Errors?.length) {
+				throw new Error(
+					`S3 could not delete ${result.Errors.length} object(s): ${result.Errors.map((e) => e.Code ?? 'unknown').join(', ')}`
+				);
+			}
 			deleted += keys.length;
 		}
 		token = listed.IsTruncated ? listed.NextContinuationToken : undefined;

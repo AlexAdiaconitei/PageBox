@@ -1,0 +1,21 @@
+stepped down to admin: fixture-bootstrap@example.com
+test superadmin: e2e-admin@example.com
+demo: deployment 01M44GVZFHQC71ZFEQJEWGB1R7 active (10 files)
+demo-private: deployment 01M44GVZJ5D9D44VGAHYBP447Y active (10 files)
+demo-api: deployment 01M44GVZMATWK10CMEYQSJX18Y active (10 files)
+demo-panel: deployment 01M44GVZPHN7T58K2JVP59KAGC active (10 files)
+
+seeded 10 files
+  public : /s/demo/
+  private: /s/demo-private/
+  api     : /s/demo-api/   (deploy-API tests)
+  panel   : /s/demo-panel/ (panel-upload tests)
+
+ RUN  v4.1.11 C:/Users/Alex/orca/workspaces/PageBox/coffinfish
+
+
+ Test Files  15 passed (15)
+      Tests  117 passed (117)
+   Start at  00:34:36
+   Duration  61.17s (transform 411ms, setup 71ms, import 2.01s, tests 56.25s, environment 4ms)
+

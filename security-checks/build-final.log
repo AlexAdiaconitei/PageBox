@@ -1,0 +1,196 @@
+$ vite build
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+vite v8.2.1 building ssr environment for production...
+[2K
+Found 1 warning while optimizing generated CSS:
+
+│       padding-right: 0.5rem;
+│     }
+│     .select::select-fallback-button {
+┆             ^-- 'select-fallback-button' is not recognized as a valid pseudo-element. Did you mean ':select-fallback-button' (pseudo-class) or is this a typo?
+┆
+│       min-width: 0;
+│       overflow: hidden;
+
+transforming...✓ 820 modules transformed.
+[lightningcss minify] 'select-fallback-button' is not recognized as a valid pseudo-element. Did you mean ':select-fallback-button' (pseudo-class) or is this a typo?
+1  |  /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
+2  |  ...s:center;gap:.5rem;padding-right:.5rem;display:flex}.select::select-fallback-button{text-overflow:ellipsis;white-s...
+   |                                                                 ^
+rendering chunks...
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+vite v8.2.1 building client environment for production...
+[2K
+Found 1 warning while optimizing generated CSS:
+
+│       padding-right: 0.5rem;
+│     }
+│     .select::select-fallback-button {
+┆             ^-- 'select-fallback-button' is not recognized as a valid pseudo-element. Did you mean ':select-fallback-button' (pseudo-class) or is this a typo?
+┆
+│       min-width: 0;
+│       overflow: hidden;
+
+transforming...✓ 246 modules transformed.
+[lightningcss minify] 'select-fallback-button' is not recognized as a valid pseudo-element. Did you mean ':select-fallback-button' (pseudo-class) or is this a typo?
+1  |  /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
+2  |  ...s:center;gap:.5rem;padding-right:.5rem;display:flex}.select::select-fallback-button{text-overflow:ellipsis;white-s...
+   |                                                                 ^
+rendering chunks...
+computing gzip size...
+.svelte-kit/output/client/_app/version.json                        0.02 kB │ gzip:  0.04 kB
+.svelte-kit/output/client/.vite/manifest.json                      7.66 kB │ gzip:  1.05 kB
+.svelte-kit/output/client/_app/immutable/assets/0.SIErqvJJ.css    45.59 kB │ gzip:  9.58 kB
+.svelte-kit/output/client/_app/immutable/chunks/xihTtKlq.js        0.06 kB │ gzip:  0.08 kB
+.svelte-kit/output/client/_app/immutable/entry/start.h8YGssv6.js   0.08 kB │ gzip:  0.09 kB
+.svelte-kit/output/client/_app/immutable/chunks/Ctqb7q4B.js        0.29 kB │ gzip:  0.24 kB
+.svelte-kit/output/client/_app/immutable/chunks/D4GMiceG.js        0.33 kB │ gzip:  0.18 kB
+.svelte-kit/output/client/_app/immutable/nodes/0.DK8oXWPU.js       0.75 kB │ gzip:  0.38 kB
+.svelte-kit/output/client/_app/immutable/chunks/BY3kHHsp.js        0.81 kB │ gzip:  0.38 kB
+.svelte-kit/output/client/_app/immutable/chunks/D_SO1zlq.js        0.84 kB │ gzip:  0.42 kB
+.svelte-kit/output/client/_app/immutable/chunks/Tn5KvVlS.js        0.93 kB │ gzip:  0.52 kB
+.svelte-kit/output/client/_app/immutable/nodes/4.BT2yzhVO.js       1.16 kB │ gzip:  0.73 kB
+.svelte-kit/output/client/_app/immutable/chunks/Bt9lXggT.js        1.26 kB │ gzip:  0.71 kB
+.svelte-kit/output/client/_app/immutable/chunks/Bjy-W4x2.js        1.36 kB │ gzip:  0.65 kB
+.svelte-kit/output/client/_app/immutable/chunks/Bl0Eu_z1.js        1.39 kB │ gzip:  0.80 kB
+.svelte-kit/output/client/_app/immutable/chunks/DH_bPEhd.js        1.73 kB │ gzip:  0.88 kB
+.svelte-kit/output/client/_app/immutable/nodes/11.3zmbb34L.js      2.00 kB │ gzip:  1.16 kB
+.svelte-kit/output/client/_app/immutable/nodes/1.BKYUB463.js       2.18 kB │ gzip:  1.14 kB
+.svelte-kit/output/client/_app/immutable/nodes/3.CxtrlNHE.js       2.20 kB │ gzip:  1.20 kB
+.svelte-kit/output/client/_app/immutable/nodes/6.C3XnYVSR.js       2.94 kB │ gzip:  1.52 kB
+.svelte-kit/output/client/_app/immutable/nodes/5.CSlV6_Te.js       3.55 kB │ gzip:  1.62 kB
+.svelte-kit/output/client/_app/immutable/chunks/DDB2EjgX.js        4.52 kB │ gzip:  2.15 kB
+.svelte-kit/output/client/_app/immutable/nodes/7.J1Lmed4x.js       4.89 kB │ gzip:  2.07 kB
+.svelte-kit/output/client/_app/immutable/entry/app.B_x4mUpU.js     6.02 kB │ gzip:  2.33 kB
+.svelte-kit/output/client/_app/immutable/nodes/2.B8NYnc-q.js       6.78 kB │ gzip:  2.86 kB
+.svelte-kit/output/client/_app/immutable/nodes/8.CFjsKRuV.js       8.64 kB │ gzip:  3.34 kB
+.svelte-kit/output/client/_app/immutable/nodes/10.B6DC_Kad.js     13.94 kB │ gzip:  5.16 kB
+.svelte-kit/output/client/_app/immutable/chunks/D2fxTPbI.js       34.10 kB │ gzip: 12.81 kB
+.svelte-kit/output/client/_app/immutable/nodes/9.EIJPSAqj.js      49.52 kB │ gzip: 18.28 kB
+.svelte-kit/output/client/_app/immutable/chunks/Crht5Xyv.js       52.50 kB │ gzip: 19.92 kB
+
+✓ built in 688ms
+`config.kit.csrf.checkOrigin` has been deprecated in favour of `csrf.trustedOrigins`. It will be removed in a future version
+computing gzip size...
+.svelte-kit/output/server/.vite/manifest.json                                                             22.75 kB │ gzip:   2.63 kB
+.svelte-kit/output/server/_app/immutable/assets/_layout.Dgf8V0ey.css                                      45.03 kB │ gzip:   9.53 kB
+.svelte-kit/output/server/chunks/kysely-adapter.js                                                         0.12 kB │ gzip:   0.09 kB
+.svelte-kit/output/server/chunks/paths.js                                                                  0.12 kB │ gzip:   0.09 kB
+.svelte-kit/output/server/remote-entry.js                                                                  0.16 kB │ gzip:   0.12 kB
+.svelte-kit/output/server/env.js                                                                           0.22 kB │ gzip:   0.14 kB
+.svelte-kit/output/server/chunks/core.js                                                                   0.25 kB │ gzip:   0.18 kB
+.svelte-kit/output/server/chunks/env.js                                                                    0.28 kB │ gzip:   0.17 kB
+.svelte-kit/output/server/entries/endpoints/access/_server.ts.js                                           0.39 kB │ gzip:   0.25 kB
+.svelte-kit/output/server/internal.js                                                                      0.40 kB │ gzip:   0.19 kB
+.svelte-kit/output/server/entries/pages/_page.server.ts.js                                                 0.42 kB │ gzip:   0.29 kB
+.svelte-kit/output/server/chunks/plus.js                                                                   0.47 kB │ gzip:   0.30 kB
+.svelte-kit/output/server/chunks/rolldown-runtime.js                                                       0.49 kB │ gzip:   0.31 kB
+.svelte-kit/output/server/chunks/health.js                                                                 0.50 kB │ gzip:   0.32 kB
+.svelte-kit/output/server/chunks/audit.js                                                                  0.59 kB │ gzip:   0.32 kB
+.svelte-kit/output/server/entries/endpoints/logout/_server.ts.js                                           0.61 kB │ gzip:   0.36 kB
+.svelte-kit/output/server/entries/pages/(panel)/_layout.server.ts.js                                       0.61 kB │ gzip:   0.35 kB
+.svelte-kit/output/server/chunks/mutation.js                                                               0.67 kB │ gzip:   0.40 kB
+.svelte-kit/output/server/entries/endpoints/healthz/_server.ts.js                                          0.81 kB │ gzip:   0.50 kB
+.svelte-kit/output/server/entries/pages/_layout.svelte.js                                                  0.82 kB │ gzip:   0.39 kB
+.svelte-kit/output/server/chunks/internal.js                                                               1.03 kB │ gzip:   0.44 kB
+.svelte-kit/output/server/chunks/kysely-migration-tables-B2-rTeXm.js                                       1.05 kB │ gzip:   0.58 kB
+.svelte-kit/output/server/chunks/shield-half.js                                                            1.22 kB │ gzip:   0.45 kB
+.svelte-kit/output/server/entries/pages/_page.svelte.js                                                    1.27 kB │ gzip:   0.66 kB
+.svelte-kit/output/server/chunks/destinations.js                                                           1.39 kB │ gzip:   0.52 kB
+.svelte-kit/output/server/chunks/session.js                                                                1.43 kB │ gzip:   0.70 kB
+.svelte-kit/output/server/chunks/power-off.js                                                              1.50 kB │ gzip:   0.51 kB
+.svelte-kit/output/server/entries/endpoints/api/v1/sites/_slug_/deployments/_id_/activate/_server.ts.js    1.76 kB │ gzip:   0.73 kB
+.svelte-kit/output/server/entries/endpoints/api/v1/whoami/_server.ts.js                                    1.76 kB │ gzip:   0.82 kB
+.svelte-kit/output/server/chunks/lifecycle.js                                                              1.78 kB │ gzip:   0.68 kB
+.svelte-kit/output/server/chunks/PageboxMark.js                                                            1.86 kB │ gzip:   1.01 kB
+.svelte-kit/output/server/chunks/sqlite-adapter.js                                                         2.21 kB │ gzip:   0.83 kB
+.svelte-kit/output/server/entries/pages/login/_page.svelte.js                                              2.43 kB │ gzip:   1.13 kB
+.svelte-kit/output/server/entries/endpoints/api/v1/sites/_slug_/deployments/_id_/_server.ts.js             2.59 kB │ gzip:   1.00 kB
+.svelte-kit/output/server/chunks/mime.js                                                                   2.61 kB │ gzip:   1.08 kB
+.svelte-kit/output/server/chunks/locks.js                                                                  2.63 kB │ gzip:   1.18 kB
+.svelte-kit/output/server/chunks/state.js                                                                  2.63 kB │ gzip:   1.11 kB
+.svelte-kit/output/server/chunks/resolve.js                                                                2.77 kB │ gzip:   1.23 kB
+.svelte-kit/output/server/entries/pages/(panel)/account/password/_page.server.ts.js                        2.89 kB │ gzip:   1.17 kB
+.svelte-kit/output/server/entries/pages/login/_page.server.ts.js                                           2.90 kB │ gzip:   1.33 kB
+.svelte-kit/output/server/chunks/client.js                                                                 2.92 kB │ gzip:   1.15 kB
+.svelte-kit/output/server/entries/pages/(panel)/audit/_page.server.ts.js                                   3.02 kB │ gzip:   1.25 kB
+.svelte-kit/output/server/chunks/PasswordInput.js                                                          3.06 kB │ gzip:   1.28 kB
+.svelte-kit/output/server/chunks/Icon.js                                                                   3.18 kB │ gzip:   1.16 kB
+.svelte-kit/output/server/chunks/exports.js                                                                3.32 kB │ gzip:   1.17 kB
+.svelte-kit/output/server/chunks/paths2.js                                                                 3.41 kB │ gzip:   1.53 kB
+.svelte-kit/output/server/entries/pages/(panel)/audit/_page.svelte.js                                      3.44 kB │ gzip:   1.44 kB
+.svelte-kit/output/server/entries/pages/(panel)/sites/_page.server.ts.js                                   3.62 kB │ gzip:   1.44 kB
+.svelte-kit/output/server/entries/pages/(panel)/_error.svelte.js                                           3.78 kB │ gzip:   1.59 kB
+.svelte-kit/output/server/chunks/format.js                                                                 3.78 kB │ gzip:   1.90 kB
+.svelte-kit/output/server/entries/pages/_error.svelte.js                                                   3.79 kB │ gzip:   1.57 kB
+.svelte-kit/output/server/chunks/d1-sqlite-dialect-CDCl_qH4.js                                             4.00 kB │ gzip:   1.49 kB
+.svelte-kit/output/server/chunks/Combobox.js                                                               4.08 kB │ gzip:   1.67 kB
+.svelte-kit/output/server/chunks/credentials.js                                                            4.12 kB │ gzip:   1.89 kB
+.svelte-kit/output/server/chunks/s3.js                                                                     4.22 kB │ gzip:   1.74 kB
+.svelte-kit/output/server/chunks/index-server.js                                                           4.36 kB │ gzip:   1.57 kB
+.svelte-kit/output/server/chunks/bun-sqlite-dialect-DTyyejk1.js                                            4.66 kB │ gzip:   1.66 kB
+.svelte-kit/output/server/chunks/node-sqlite-dialect.js                                                    4.66 kB │ gzip:   1.65 kB
+.svelte-kit/output/server/entries/pages/(panel)/account/password/_page.svelte.js                           4.90 kB │ gzip:   1.70 kB
+.svelte-kit/output/server/chunks/reader.js                                                                 5.55 kB │ gzip:   1.91 kB
+.svelte-kit/output/server/chunks/preflight.js                                                              5.74 kB │ gzip:   1.96 kB
+.svelte-kit/output/server/entries/pages/(panel)/groups/_page.svelte.js                                     5.98 kB │ gzip:   1.92 kB
+.svelte-kit/output/server/chunks/context.js                                                                6.00 kB │ gzip:   2.28 kB
+.svelte-kit/output/server/chunks/routing.js                                                                6.02 kB │ gzip:   2.15 kB
+.svelte-kit/output/server/entries/pages/(panel)/groups/_page.server.ts.js                                  7.18 kB │ gzip:   2.28 kB
+.svelte-kit/output/server/chunks/perms.js                                                                  8.80 kB │ gzip:   3.48 kB
+.svelte-kit/output/server/entries/endpoints/api/v1/sites/_slug_/deployments/_server.ts.js                  9.24 kB │ gzip:   3.22 kB
+.svelte-kit/output/server/entries/pages/(panel)/_layout.svelte.js                                          9.87 kB │ gzip:   3.10 kB
+.svelte-kit/output/server/entries/pages/(panel)/sites/_page.svelte.js                                     10.31 kB │ gzip:   3.06 kB
+.svelte-kit/output/server/chunks/config.js                                                                11.03 kB │ gzip:   4.24 kB
+.svelte-kit/output/server/chunks/quota.js                                                                 12.95 kB │ gzip:   4.56 kB
+.svelte-kit/output/server/entries/pages/(panel)/users/_page.server.ts.js                                  13.71 kB │ gzip:   4.08 kB
+.svelte-kit/output/server/entries/pages/(panel)/users/_page.svelte.js                                     13.82 kB │ gzip:   3.87 kB
+.svelte-kit/output/server/chunks/dist2.js                                                                 14.63 kB │ gzip:   4.12 kB
+.svelte-kit/output/server/chunks/db.js                                                                    17.39 kB │ gzip:   5.12 kB
+.svelte-kit/output/server/entries/pages/(panel)/sites/_slug_/_page.server.ts.js                           19.25 kB │ gzip:   4.99 kB
+.svelte-kit/output/server/chunks/uneval.js                                                                19.38 kB │ gzip:   5.35 kB
+.svelte-kit/output/server/chunks/internal2.js                                                             22.31 kB │ gzip:   6.65 kB
+.svelte-kit/output/server/chunks/ingest.js                                                                24.66 kB │ gzip:   7.91 kB
+.svelte-kit/output/server/chunks/shared.js                                                                30.46 kB │ gzip:   8.20 kB
+.svelte-kit/output/server/entries/hooks.server.js                                                         32.67 kB │ gzip:  11.51 kB
+.svelte-kit/output/server/entries/pages/(panel)/sites/_slug_/_page.svelte.js                              33.29 kB │ gzip:   7.88 kB
+.svelte-kit/output/server/chunks/utils.js                                                                 37.15 kB │ gzip:  10.80 kB
+.svelte-kit/output/server/chunks/default-query-compiler.js                                                45.34 kB │ gzip:   7.94 kB
+.svelte-kit/output/server/chunks/remote.js                                                                55.03 kB │ gzip:  12.09 kB
+.svelte-kit/output/server/chunks/factory.js                                                               78.84 kB │ gzip:  17.82 kB
+.svelte-kit/output/server/chunks/server.js                                                               132.89 kB │ gzip:  34.47 kB
+.svelte-kit/output/server/index.js                                                                       135.86 kB │ gzip:  34.69 kB
+.svelte-kit/output/server/chunks/dist.js                                                                 207.62 kB │ gzip:  35.21 kB
+.svelte-kit/output/server/chunks/compiled-query.js                                                       239.64 kB │ gzip:  39.32 kB
+.svelte-kit/output/server/chunks/auth.js                                                                 760.18 kB │ gzip: 172.51 kB
+
+✓ built in 6.10s
+Run npm run preview to preview your production build locally.
+
+> Using @sveltejs/adapter-node
+.svelte-kit/output/server/chunks/auth.js (4034:0): A comment
+
+"/**
+* Wraps a cipher: validates args, ensures encrypt() can only be called once.
+* Used internally by the exported cipher constructors.
+* Output-buffer support is inferred from the wrapped `encrypt` / `decrypt`
+* arity (`fn.length === 2`), so wrapped output-capable methods must use a normal
+* second parameter, not a default/rest parameter. AAD support is explicit in
+* `params.withAAD`; optional AAD starts after the nonce slot when one is present.
+* @__NO_SIDE_EFFECTS__
+* @param params - Static cipher metadata. See {@link CipherParams}.
+* @param constructor - Cipher constructor.
+* @returns Wrapped constructor with validation.
+*/"
+
+in ".svelte-kit/output/server/chunks/auth.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+  ✔ done
+[PLUGIN_TIMINGS] Your build spent 100% of 6.1s inside plugin hooks (9.0s).
+Measured inside the callback, so queue time is excluded and time the callback itself awaited is not:
+  - vite-plugin-sveltekit-compile writeBundle (86%, 5.2s, 1 call)
+  - vite-plugin-sveltekit-compile closeBundle (50%, 3.1s, 1 call)
+Those rows are 100% of the build; the rest of the 100% is below.
+Not measurable — 1 hook whose calls overlap, so elapsed time covers work other calls were doing. Profile with `node --cpu-prof`:
+  - vite-plugin-sveltekit-guard resolveId (3074 calls)
+See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.

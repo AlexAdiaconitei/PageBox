@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { signInWithPassword } from '$lib/server/auth/credentials';
 import { audit } from '$lib/server/audit';
 import { config } from '$lib/server/config';
+import { safeLoginDestination } from '$lib/server/auth/destinations';
 import type { HostKind } from '$lib/server/config';
 
 /**
@@ -81,14 +82,5 @@ function clientIp(event: { getClientAddress: () => string }): string | null {
  * rely on the route whitelist in hooks.server.ts to 404 it. Rely on the check instead.
  */
 function safeNext(value: string | null, hostKind: HostKind): string {
-	const fallback = '/';
-	// `//evil.com` is a protocol-relative URL, not a path; `/\evil.com` is treated as one
-	// by some browsers. Both have to go before anything else looks at the string.
-	if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) {
-		return fallback;
-	}
-	if (hostKind === 'sites') {
-		return value.startsWith(config.PAGEBOX_SITES_PREFIX + '/') ? value : fallback;
-	}
-	return value;
+	return safeLoginDestination(value, hostKind, config.PAGEBOX_SITES_PREFIX);
 }

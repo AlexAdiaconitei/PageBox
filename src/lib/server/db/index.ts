@@ -1,4 +1,5 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import postgres from 'postgres';
 import type { Sql } from 'postgres';
 import { getConfig } from '../config';
@@ -24,7 +25,25 @@ export function getSql(): Sql {
 	return pool;
 }
 
-export const db = lazy(() => drizzle(getSql(), { schema }));
+const defaultDb = lazy(() => drizzle(getSql(), { schema }));
+const connectionContext = new AsyncLocalStorage<Db>();
+
+// All queries inside a lock must use its connection, including queries made by adapters.
+export const db: Db = new Proxy({} as Db, {
+	get(_target, property) {
+		const current = connectionContext.getStore() ?? defaultDb;
+		const value = Reflect.get(current, property, current);
+		return typeof value === 'function' ? value.bind(current) : value;
+	}
+});
+
+export function currentConnection(): Db | undefined {
+	return connectionContext.getStore();
+}
+
+export function onConnection<T>(connection: Db, fn: () => Promise<T>): Promise<T> {
+	return connectionContext.run(connection, fn);
+}
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 export { schema };

@@ -15,6 +15,7 @@ declare global {
 			hostKind: HostKind;
 			/** Session user for *this host*; a session from the other host is not accepted. */
 			user: SessionUser | null;
+			sessionId: string | null;
 		}
 		// interface PageData {}
 		// interface PageState {}

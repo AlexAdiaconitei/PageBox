@@ -63,10 +63,11 @@ export default defineConfig({
 			// into a confusing 403 — and `trustedOrigins` cannot help, since our hostnames
 			// are runtime configuration. hooks.server.ts enforces same-origin itself
 			// against PAGEBOX_ADMIN_HOST / PAGEBOX_SITES_HOST instead.
-			csrf: { checkOrigin: false }
+			csrf: { trustedOrigins: ['*'] }
 		})
 	],
 	test: {
+		fileParallelism: false,
 		include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
 		setupFiles: ['tests/setup-env.ts']
 	}

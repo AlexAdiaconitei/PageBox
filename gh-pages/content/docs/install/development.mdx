@@ -28,44 +28,32 @@ refuses to serve, which looks like a configuration bug and is not one.
 
 ## Scripts
 
-| Command | Does |
-| ------- | ---- |
-| `pnpm dev` | the app, with both env files loaded |
-| `pnpm check` | `svelte-check` over the project |
-| `pnpm test` | the unit tests, offline |
+| Command            | Does                                         |
+| ------------------ | -------------------------------------------- |
+| `pnpm dev`         | the app, with both env files loaded          |
+| `pnpm check`       | `svelte-check` over the project              |
+| `pnpm test`        | the unit tests, offline                      |
 | `pnpm db:generate` | writes a new migration after a schema change |
-| `pnpm db:migrate` | applies pending migrations |
-| `pnpm db:studio` | Drizzle Studio against the dev database |
+| `pnpm db:migrate`  | applies pending migrations                   |
+| `pnpm db:studio`   | Drizzle Studio against the dev database      |
 
 ## The integration suite
 
-`pnpm test` runs offline. The integration suite needs a running stack and skips itself
-without one:
+Use Docker and install Chromium, then run the isolated stack:
 
 ```bash
-node scripts/seed-demo.mjs     # seeds /s/demo/, a private twin, and an account for the suite
-
-PAGEBOX_E2E_BASE=http://127.0.0.1:3000 \
-PAGEBOX_E2E_EMAIL=e2e-admin@example.com \
-PAGEBOX_E2E_PASSWORD=e2e-admin-password \
-pnpm test
+pnpm exec playwright install chromium
+pnpm build
+node scripts/test-stack.mjs
 ```
 
-The suite issues its own deploy token through the panel, the same way a person would, rather
-than reaching into the database.
+The runner creates its own PostgreSQL, MinIO, proxy and temporary directory, chooses test
+credentials and removes the fixtures on exit. It never uses the development database or
+homelab. It runs HTTP, concurrency and real-browser tests with a database pool of one.
 
-Two more entry points:
-
-- `scripts/seed-demo.mjs --dir path/to/dist` publishes a real build instead of the generated
-  one.
-- `scripts/verify-real-build.mjs` takes a token directly, builds
-  `tests/fixtures/real-site` with Vite against whatever base path `whoami` returns, deploys
-  it, and fails if any reference in the served HTML does not resolve.
-
-```bash
-PAGEBOX_E2E_BASE=http://127.0.0.1:3000 PAGEBOX_E2E_TOKEN=pbx_… \
-  node scripts/verify-real-build.mjs
-```
+Use scripts/seed-demo.mjs only with disposable data and explicit PAGEBOX_E2E_EMAIL and
+PAGEBOX_E2E_PASSWORD. It takes the superadmin seat and resets its fixture account. The
+standalone test runner supplies those variables itself.
 
 ## Built on
 

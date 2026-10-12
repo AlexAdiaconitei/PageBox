@@ -1,0 +1,1 @@
+Storage policy passed: site read/write/list/delete permitted; other bucket, other prefix and bucket creation denied.

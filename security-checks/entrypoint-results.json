@@ -1,0 +1,14 @@
+{
+	"checkedAt": "2026-10-04T17:57:20.538Z",
+	"passed": 6,
+	"cases": [
+		"socket address and real Host by default",
+		"explicit trusted proxy",
+		"empty headers do not enable proxy trust",
+		"size units preserve the body limit",
+		"explicit body limit remains supported",
+		"invalid upload size reaches app validation without guessing a limit"
+	],
+	"applicationStarted": false,
+	"nodeReplacedByFixture": true
+}

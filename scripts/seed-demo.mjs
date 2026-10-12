@@ -5,15 +5,23 @@
  * under a fresh deployment id, and activates it. Enough to exercise every rule in
  * docs/PLAN-static-hosting.md §5 against a real S3 backend.
  *
- *   node scripts/seed-demo.mjs [--slug demo] [--dir path/to/dist]
+ *   node scripts/seed-demo.mjs --disposable [--slug demo] [--dir path/to/dist]
+ *
+ * Requires explicit PAGEBOX_E2E_EMAIL and PAGEBOX_E2E_PASSWORD. This script takes the
+ * superadmin seat and must only run against disposable databases.
  *
  * Reads .env, with DATABASE_URL / S3_ENDPOINT overridable from the environment (the
  * compose values point at container hostnames; from the host use localhost ports).
  */
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, lstatSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
-import { S3Client, PutObjectCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
+import {
+	S3Client,
+	PutObjectCommand,
+	CreateBucketCommand,
+	HeadBucketCommand
+} from '@aws-sdk/client-s3';
 import { hashPassword } from 'better-auth/crypto';
 import postgres from 'postgres';
 import { ulid } from 'ulidx';
@@ -25,11 +33,30 @@ const argOf = (name, fallback) => {
 };
 
 const env = { ...readEnvFile('.env'), ...process.env };
-const DATABASE_URL = env.DATABASE_URL_HOST ?? env.DATABASE_URL.replace('@postgres:', '@127.0.0.1:');
-const S3_ENDPOINT = env.S3_ENDPOINT_HOST ?? env.S3_ENDPOINT.replace('//minio:', '//127.0.0.1:');
+if (!args.includes('--disposable') && env.PAGEBOX_DB_TESTS !== '1') {
+	fail(
+		'Refusing to seed: use --disposable or PAGEBOX_DB_TESTS=1 for a disposable database. This takes the superadmin seat.'
+	);
+}
+const email = (env.PAGEBOX_E2E_EMAIL ?? '').trim().toLowerCase();
+const password = env.PAGEBOX_E2E_PASSWORD;
+if (!email || !password) fail('Explicit PAGEBOX_E2E_EMAIL and PAGEBOX_E2E_PASSWORD are required.');
+if (password.length < 10 || password.length > 200)
+	fail('PAGEBOX_E2E_PASSWORD must contain between 10 and 200 characters.');
+const DATABASE_URL =
+	env.DATABASE_URL_HOST ?? env.DATABASE_URL?.replace('@postgres:', '@127.0.0.1:');
+const S3_ENDPOINT = env.S3_ENDPOINT_HOST ?? env.S3_ENDPOINT?.replace('//minio:', '//127.0.0.1:');
+validateUrl('DATABASE_URL', DATABASE_URL, ['postgres:', 'postgresql:']);
+validateUrl('S3_ENDPOINT', S3_ENDPOINT, ['http:', 'https:']);
+if (!env.S3_ACCESS_KEY || !env.S3_SECRET_KEY) fail('S3_ACCESS_KEY and S3_SECRET_KEY are required.');
 
 const slug = argOf('slug', 'demo');
 const dir = argOf('dir', null);
+for (const candidate of [slug, slug + '-private', slug + '-api', slug + '-panel']) {
+	if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(candidate))
+		fail('The slug and fixture suffixes must fit the site slug rules.');
+}
+const files = dir ? readBuild(dir) : demoBuild();
 
 const s3 = new S3Client({
 	endpoint: S3_ENDPOINT,
@@ -40,18 +67,19 @@ const s3 = new S3Client({
 const bucket = env.S3_BUCKET ?? 'pagebox';
 const sql = postgres(DATABASE_URL, { max: 2, onnotice: () => {} });
 
-const files = dir ? readBuild(dir) : demoBuild();
-
-await ensureBucket();
-await seedTestSuperadmin();
-await seed(slug, 'public', files);
-await seed(`${slug}-private`, 'private', files);
-// Separate target for the deploy-API tests, which replace the active deployment and
-// would otherwise pull the ground out from under the serving tests.
-await seed(`${slug}-api`, 'public', files);
-// And one for the panel-upload suite, which also replaces the active deployment.
-await seed(`${slug}-panel`, 'public', files);
-await sql.end();
+try {
+	await ensureBucket();
+	await seedTestSuperadmin();
+	await seed(slug, 'public', files);
+	await seed(`${slug}-private`, 'private', files);
+	// Separate target for the deploy-API tests, which replace the active deployment and
+	// would otherwise pull the ground out from under the serving tests.
+	await seed(`${slug}-api`, 'public', files);
+	// And one for the panel-upload suite, which also replaces the active deployment.
+	await seed(`${slug}-panel`, 'public', files);
+} finally {
+	await sql.end();
+}
 
 console.log(`\nseeded ${files.length} files`);
 console.log(`  public : ${env.PAGEBOX_SITES_PREFIX ?? '/s'}/${slug}/`);
@@ -71,21 +99,29 @@ async function seed(siteSlug, visibility, entries) {
 	const deploymentId = ulid();
 	const total = entries.reduce((sum, e) => sum + e.body.length, 0);
 	await sql`
-		insert into deployment (id, site_id, status, file_count, total_bytes, source, notes, ready_at)
-		values (${deploymentId}, ${site.id}, 'ready', ${entries.length}, ${total}, 'api', 'seed-demo', now())
+		insert into deployment (id, site_id, status, file_count, total_bytes, source, notes)
+		values (${deploymentId}, ${site.id}, 'uploading', ${entries.length}, ${total}, 'api', 'seed-demo')
 	`;
 
-	for (const entry of entries) {
-		await s3.send(
-			new PutObjectCommand({
-				Bucket: bucket,
-				Key: `sites/${site.id}/${deploymentId}/${entry.path}`,
-				Body: entry.body
-			})
-		);
-	}
+	try {
+		for (const entry of entries) {
+			await s3.send(
+				new PutObjectCommand({
+					Bucket: bucket,
+					Key: `sites/${site.id}/${deploymentId}/${entry.path}`,
+					Body: entry.body
+				})
+			);
+		}
 
-	await sql`update site set active_deployment_id = ${deploymentId} where id = ${site.id}`;
+		await sql.begin(async (tx) => {
+			await tx`update deployment set status = 'ready', ready_at = now() where id = ${deploymentId}`;
+			await tx`update site set active_deployment_id = ${deploymentId} where id = ${site.id}`;
+		});
+	} catch (error) {
+		await sql`update deployment set status = 'cleanup_pending' where id = ${deploymentId}`;
+		throw error;
+	}
 	console.log(`${siteSlug}: deployment ${deploymentId} active (${entries.length} files)`);
 }
 
@@ -100,51 +136,55 @@ async function seed(siteSlug, visibility, entries) {
  * it rather than quiet, because it is somebody's account.
  */
 async function seedTestSuperadmin() {
-	const email = env.PAGEBOX_E2E_EMAIL ?? 'e2e-admin@example.com';
-	const password = env.PAGEBOX_E2E_PASSWORD ?? 'e2e-admin-password';
 	const hash = await hashPassword(password);
 
-	const [existing] = await sql`select id from "user" where email = ${email}`;
-	const id = existing?.id ?? ulid();
+	const stepped = await sql.begin(async (tx) => {
+		const [existing] = await tx`select id from "user" where email = ${email}`;
+		const id = existing?.id ?? ulid();
 
-	// Vacate before filling: the index permits one superadmin row, so the other order
-	// collides with whoever holds it.
-	const stepped = await sql`
-		update "user" set role = 'admin'
+		// Vacate before filling: the index permits one superadmin row, so the other order
+		// collides with whoever holds it.
+		const demoted = await tx`
+		update "user" set role = 'admin', updated_at = now()
 		where role = 'superadmin' and email <> ${email}
 		returning email
 	`;
-	for (const row of stepped) console.log(`stepped down to admin: ${row.email}`);
 
-	if (existing) {
-		await sql`update "user" set role = 'superadmin', banned = false, must_change_password = false where id = ${id}`;
-	} else {
-		await sql`
+		if (existing) {
+			await tx`update "user" set role = 'superadmin', banned = false, must_change_password = false where id = ${id}`;
+		} else {
+			await tx`
 			insert into "user" (id, email, name, email_verified, role, must_change_password)
 			values (${id}, ${email}, 'E2E admin', true, 'superadmin', false)
 		`;
-	}
+		}
 
-	const [account] = await sql`
+		const [account] = await tx`
 		select id from account where user_id = ${id} and provider_id = 'credential'
 	`;
-	if (account) {
-		await sql`update account set password = ${hash} where id = ${account.id}`;
-	} else {
-		await sql`
+		if (account) {
+			await tx`update account set password = ${hash} where id = ${account.id}`;
+		} else {
+			await tx`
 			insert into account (id, account_id, provider_id, user_id, password)
 			values (${ulid()}, ${id}, 'credential', ${id}, ${hash})
 		`;
-	}
+		}
 
+		await tx`delete from session where user_id = ${id}`;
+		await tx`update apikey set enabled = false, updated_at = now() where reference_id = ${id}`;
+		return demoted;
+	});
+	for (const row of stepped) console.log(`stepped down to admin: ${row.email}`);
 	console.log(`test superadmin: ${email}`);
 }
 
 async function ensureBucket() {
 	try {
+		await s3.send(new HeadBucketCommand({ Bucket: bucket }));
+	} catch (error) {
+		if (error.$metadata?.httpStatusCode !== 404) throw error;
 		await s3.send(new CreateBucketCommand({ Bucket: bucket }));
-	} catch {
-		/* already there */
 	}
 }
 
@@ -176,12 +216,20 @@ function demoBuild() {
 
 function readBuild(root) {
 	if (!existsSync(root)) throw new Error(`no such directory: ${root}`);
+	const rootStat = lstatSync(root);
+	if (rootStat.isSymbolicLink() || !rootStat.isDirectory())
+		throw new Error('Build root must be a directory, not a symbolic link');
 	const out = [];
 	const walk = (current) => {
 		for (const name of readdirSync(current)) {
+			if (name.startsWith('.') || ['__MACOSX', 'Thumbs.db'].includes(name)) continue;
 			const full = join(current, name);
-			if (statSync(full).isDirectory()) walk(full);
-			else out.push({ path: relative(root, full).split(sep).join('/'), body: readFileSync(full) });
+			const info = lstatSync(full);
+			if (info.isSymbolicLink())
+				throw new Error('Symbolic links are not allowed in build fixtures');
+			if (info.isDirectory()) walk(full);
+			else if (info.isFile())
+				out.push({ path: relative(root, full).split(sep).join('/'), body: readFileSync(full) });
 		}
 	};
 	walk(root);
@@ -196,4 +244,17 @@ function readEnvFile(path) {
 		if (match) out[match[1]] = match[2];
 	}
 	return out;
+}
+
+function fail(message) {
+	console.error(message);
+	process.exit(1);
+}
+
+function validateUrl(name, value, protocols) {
+	try {
+		if (!value || !protocols.includes(new URL(value).protocol)) throw new Error();
+	} catch {
+		fail(name + ' must be a valid URL using ' + protocols.join(' or '));
+	}
 }

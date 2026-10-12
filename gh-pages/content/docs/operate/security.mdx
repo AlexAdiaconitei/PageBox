@@ -1,0 +1,31 @@
+---
+title: Security upgrade
+description: Deploying the unreleased 0.2.0 checkout and migrating site origins.
+---
+
+Version 0.2.0 is prepared locally and has not been published. Build its image from the
+checkout. Do not substitute a 0.1 image while using the new configuration.
+
+The panel and central reader login have separate trusted origins. Uploaded content uses
+`<slug-prefix>-<immutable-site-id>.<PAGEBOX_SITES_HOST>`, with the existing `/s/<slug>/`
+base path. Configure wildcard DNS, a proxy route and wildcard TLS for these site hosts.
+Canonical hosts must include the public port when it is not the protocol default.
+
+Before upgrading, back up the database and bucket and stop writes. Deploy the proxy
+changes and app together. Migrations run at startup. Existing deployments are not
+re-extracted: rebuild or review content ingested before version 3 of the extraction rules,
+which could previously retain hidden paths. Keep affected sites disabled until reviewed.
+
+Use chosen credentials even for a local production-mode instance. Give PageBox its own
+bucket-scoped storage key, keep storage administrator credentials outside the app, and
+leave PAGEBOX_ENSURE_BUCKET_ON_START=false after provisioning the bucket. Keep database,
+storage and direct app ports behind the trusted proxy.
+
+Uploads have a global admission limit backed by PostgreSQL. MAX_CONCURRENT_UPLOADS defaults
+to 4, MAX_UPLOAD_TEMP_BYTES to 400MB, UPLOAD_BODY_TIMEOUT_SECONDS to 60 and
+UPLOAD_TIMEOUT_SECONDS to 600. All replicas must share the same limits and database.
+Stop replicas and clear interrupted archives before lowering the temporary limits.
+
+After deployment, test private login, grant removal, logout and password reset in a browser.
+The full upgrade instructions and local test evidence are in DEPLOYMENT-SECURITY.md and
+security-checks/README.md in the repository.

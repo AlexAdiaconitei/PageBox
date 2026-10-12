@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
-import { config } from '../config';
+import { config, siteHostFor, siteIdForHost } from '../config';
 import { db } from '../db';
 import { site } from '../db/schema';
-import { cache, cacheKeys, CACHE_TTL_SECONDS } from '../cache';
+import { cache, cacheKeys } from '../cache';
 import { SLUG_RE } from '../ids';
 
 /**
@@ -56,7 +56,8 @@ export function parseSitePath(
 
 export async function resolveSite(host: string, path: string): Promise<ResolvedSite | null> {
 	const hostname = host.toLowerCase().split(':')[0];
-	if (hostname !== config.PAGEBOX_SITES_HOST.split(':')[0]) return null;
+	const hostId = siteIdForHost(host);
+	if (hostname !== config.PAGEBOX_SITES_HOST.split(':')[0] && !hostId) return null;
 
 	const parsed = parseSitePath(path);
 	if (!parsed) return null;
@@ -65,6 +66,8 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 	// A disabled site is resolved but not served: `serveSite` answers the same 404 as a
 	// site that does not exist, so taking one down leaks nothing about what is hosted here.
 	if (!siteRef) return null;
+	if (hostId && (siteRef.id !== hostId || siteHostFor(siteRef).split(':')[0] !== hostname))
+		return null;
 
 	return {
 		siteRef,
@@ -74,16 +77,8 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 }
 
 export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
-	const key = cacheKeys.siteBySlug(slug);
-	const cached = await cache.get<SiteRef | 'missing'>(key);
-	if (cached === 'missing') return null;
-	if (cached) return cached;
-
 	const [row] = await db.select().from(site).where(eq(site.slug, slug)).limit(1);
-	if (!row) {
-		await cache.set(key, 'missing', CACHE_TTL_SECONDS);
-		return null;
-	}
+	if (!row) return null;
 
 	const ref: SiteRef = {
 		id: row.id,
@@ -94,10 +89,9 @@ export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
 		spaFallback: row.spaFallback,
 		activeDeploymentId: row.activeDeploymentId,
 		ownerUserId: row.ownerUserId,
-		disabled: row.disabledAt !== null,
+		disabled: row.disabledAt !== null || row.deletingAt !== null,
 		retentionLimit: row.retentionLimit
 	};
-	await cache.set(key, ref, CACHE_TTL_SECONDS);
 	return ref;
 }
 

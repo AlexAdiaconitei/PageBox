@@ -1,3 +1,5 @@
+> Development checkout: 0.2.0 is unreleased. Read the upgrade procedure before deploying. See [the remediation evidence](security-checks/README.md) and [deployment configuration changes](DEPLOYMENT-SECURITY.md) before using this checkout.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/media/banner-dark.png" />
@@ -30,11 +32,12 @@ serves it. Every deployment is kept whole, so **rollback is moving a pointer**.
 
 ---
 
-## Two hostnames, always
+## Separate origins
 
 ```
 https://pagebox.example.com/          → admin panel + API
-https://pages.example.com/s/<slug>/   → the deployed sites
+https://pages.example.com/access     → reader login and authorization
+https://<slug-prefix>-<site-id>.pages.example.com/s/<slug>/ → uploaded content
 ```
 
 They must be different hostnames. If `PAGEBOX_ADMIN_HOST == PAGEBOX_SITES_HOST` the process
@@ -168,22 +171,23 @@ touch targets on coarse pointers only — a mouse keeps the tighter console.
 
 ## Run it
 
-The image is published, so nothing here builds anything:
-
-```
-ghcr.io/alexadiaconitei/pagebox:0.1.1
-```
+The latest published image is ghcr.io/alexadiaconitei/pagebox:0.1.1. It does not contain the
+security corrections in this checkout. Version 0.2.0 must be built locally until it is
+released. The local isolation and verification results are recorded in
+[security-checks/README.md](security-checks/README.md).
 
 ### Standalone (Postgres + MinIO included)
 
-Two files in an empty directory — no clone needed, though cloning also gets you the example
-builds in [`examples/`](examples/README.md):
+For testing the local checkout, use the files from this repository:
 
 ```bash
-curl -O  https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/docker-compose.yml
-curl -o .env https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/.env.example
-# set AUTH_SECRET, the bootstrap admin credentials, and PAGEBOX_TAG=0.1.1 to pin the image
-docker compose up -d          # app + postgres + minio
+cp env.secure.example .env
+docker build -t ghcr.io/alexadiaconitei/pagebox:0.2.0 .
+# choose all credentials and an exact image tag; see DEPLOYMENT-SECURITY.md
+# create the bucket and its dedicated app credential before starting PageBox
+docker compose up -d postgres minio
+# provision the bucket and restricted S3 user, then:
+docker compose up -d app
 docker compose --profile cache up -d   # + valkey (needed for >1 replica)
 docker compose --profile proxy up -d   # + traefik routing both hostnames on :80
 ```
@@ -245,27 +249,25 @@ Drop one on a site and every serving rule above has something to chew on.
 
 ### The integration suite
 
-`pnpm test` runs the unit tests offline. The integration suite needs a running stack and
-skips itself without one:
+The integration suite runs against disposable PostgreSQL and MinIO services and a real
+local proxy. It includes Chromium tests and uses a database pool of one:
 
 ```bash
-node scripts/seed-demo.mjs     # seeds /s/demo/, a private twin, and an account for the suite
-PAGEBOX_E2E_BASE=http://127.0.0.1:3000 \
-PAGEBOX_E2E_EMAIL=e2e-admin@example.com PAGEBOX_E2E_PASSWORD=e2e-admin-password \
-pnpm test
+pnpm exec playwright install chromium
+pnpm build
+node scripts/test-stack.mjs
 ```
 
-The suite issues its own deploy token through the panel, the same way a person would.
-`scripts/seed-demo.mjs --dir path/to/dist` publishes a real build instead of the generated
-one, and `scripts/verify-real-build.mjs` takes a token directly.
-
+The runner chooses fixture credentials and removes its containers and temporary directory
+on exit. It does not use the development database or homelab. Run seed-demo.mjs separately
+only against disposable data with --disposable and explicit test credentials.
 ## Startup behaviour
 
 The container does everything it needs on boot, because neither Dokploy nor
 `docker compose` has a release phase:
 
 1. applies pending migrations, under a Postgres advisory lock;
-2. creates the S3 bucket if it is missing (MinIO and Garage alike);
+2. checks storage, or creates the S3 bucket when PAGEBOX_ENSURE_BUCKET_ON_START=true;
 3. creates the first superadmin when the instance has no users, flagged
    `must_change_password`.
 
@@ -281,7 +283,7 @@ everyone, and the deployments, grants and tokens stay where they are. Enabling i
 same build again.
 
 **Delete site** is the other end of that: it removes the site with every deployment, object,
-grant and deploy token it has, and releases the slug. It is superadmin-only and asks for the
+grant and deploy token it has, and releases the slug. It requires an admin with owner permission and asks for the
 slug to be typed back, because nothing undoes it. Reach for disable first.
 
 Every deployment is a *full* copy of the build, which is what makes rollback a pointer move

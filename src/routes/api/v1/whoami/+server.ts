@@ -29,6 +29,7 @@ export const GET: RequestHandler = async (event) => {
 	// This answer is site metadata — slug, base path, visibility — so it needs the same
 	// permission the deploy endpoints do, checked against the owner as they stand now.
 	const owner = await tokenOwner(auth);
+	if (owner?.mustChangePassword) return jsonError(403, 'change your password before using the API');
 	const permission = owner
 		? await permissionFor(owner, {
 				id: row.id,
@@ -43,12 +44,12 @@ export const GET: RequestHandler = async (event) => {
 		siteId: row.id,
 		slug: row.slug,
 		basePath: row.basePath,
-		siteUrl: siteUrl(row.basePath, event.url.port),
+		siteUrl: siteUrl(row),
 		visibility: row.visibility,
 		// A build is worth making either way, but a pipeline that deploys to a site nobody
 		// is serving should be able to say so out loud.
 		serving: row.disabledAt === null,
-		mode: row.hostname ? 'subdomain' : 'path',
+		mode: 'subdomain',
 		maxUploadBytes: config.MAX_UPLOAD_BYTES
 	});
 };

@@ -42,12 +42,19 @@ else
 	export BODY_SIZE_LIMIT
 fi
 
-# PageBox serves two hostnames from one process, so the request URL must come from the
-# proxy headers. Setting ORIGIN instead would collapse both hosts into one and silently
-# disable the host split.
-export HOST_HEADER="${HOST_HEADER:-x-forwarded-host}"
-export PROTOCOL_HEADER="${PROTOCOL_HEADER:-x-forwarded-proto}"
-export ADDRESS_HEADER="${ADDRESS_HEADER:-x-forwarded-for}"
+# Use the actual Host and socket address by default. Forwarded headers require an
+# explicit choice and a network path restricted to a proxy that replaces them.
+export HOST_HEADER="${HOST_HEADER:-host}"
+if [ -n "${PROTOCOL_HEADER:-}" ]; then
+	export PROTOCOL_HEADER
+else
+	unset PROTOCOL_HEADER
+fi
+if [ -n "${ADDRESS_HEADER:-}" ]; then
+	export ADDRESS_HEADER
+else
+	unset ADDRESS_HEADER
+fi
 export XFF_DEPTH="${XFF_DEPTH:-1}"
 
 # Migrations, bucket creation and the bootstrap superadmin run inside the app process

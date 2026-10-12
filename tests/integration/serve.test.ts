@@ -1,3 +1,4 @@
+import { siteRequest } from './helpers';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -25,11 +26,16 @@ const run = base ? describe : describe.skip;
 const hostHeader = process.env.PAGEBOX_E2E_HOST_HEADER ?? 'x-forwarded-host';
 
 const get = (path: string, init: RequestInit = {}, host = sitesHost) =>
-	fetch(`${base}${path}`, {
-		...init,
-		redirect: 'manual',
-		headers: { [hostHeader]: host, ...(init.headers ?? {}) }
-	});
+	host === sitesHost && path.startsWith('/s/')
+		? siteRequest(path, {
+				method: init.method,
+				headers: Object.fromEntries(new Headers(init.headers).entries())
+			})
+		: fetch(`${base}${path}`, {
+				...init,
+				redirect: 'manual',
+				headers: { [hostHeader]: host, ...(init.headers ?? {}) }
+			});
 
 run('serving a deployment', () => {
 	it('serves the site root', async () => {
@@ -93,6 +99,40 @@ run('serving a deployment', () => {
 		expect((await res.text()).length).toBe(15);
 	});
 
+	it('answers unsatisfiable ranges with 416 and the object size', async () => {
+		const head = await get(`/s/${slug}/style.css`, {
+			method: 'HEAD',
+			headers: { 'accept-encoding': 'identity' }
+		});
+		const size = Number(head.headers.get('content-length'));
+		const res = await get(`/s/${slug}/style.css`, { headers: { range: `bytes=${size}-` } });
+		expect(res.status).toBe(416);
+		expect(res.headers.get('content-range')).toBe(`bytes */${size}`);
+		expect(res.headers.get('cache-control')).toBe('no-store');
+	});
+
+	it('ignores a range when If-Range does not match the current object', async () => {
+		const res = await get(`/s/${slug}/style.css`, {
+			headers: { range: 'bytes=0-3', 'if-range': '"previous-deployment"' }
+		});
+		expect(res.status).toBe(200);
+		expect(res.headers.get('content-range')).toBeNull();
+		expect((await res.text()).length).toBeGreaterThan(4);
+	});
+
+	it('keeps a custom 404 status on conditional and ranged requests', async () => {
+		const missing = `/s/${slug}/still-missing`;
+		const first = await get(missing);
+		const conditional = await get(missing, {
+			headers: { 'if-none-match': first.headers.get('etag')! }
+		});
+		expect(conditional.status).toBe(404);
+		expect(await conditional.text()).toContain('custom 404');
+		const ranged = await get(missing, { headers: { range: 'bytes=0-3' } });
+		expect(ranged.status).toBe(404);
+		expect(await ranged.text()).toContain('custom 404');
+	});
+
 	it('serves precompressed siblings when accepted, but never with a range', async () => {
 		const br = await get(`/s/${slug}/style.css`, { headers: { 'accept-encoding': 'br' } });
 		expect(br.headers.get('content-encoding')).toBe('br');
@@ -121,6 +161,7 @@ run('serving a deployment', () => {
 			expect(res.headers.get('content-type') ?? '', path).not.toContain('text/css');
 			expect(res.headers.get('cache-control'), path).toBe('private, no-store');
 			expect(res.headers.get('cdn-cache-control'), path).toBe('no-store');
+			expect(res.headers.get('cloudflare-cdn-cache-control'), path).toBe('no-store');
 		}
 	});
 
