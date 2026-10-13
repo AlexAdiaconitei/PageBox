@@ -23,7 +23,7 @@ export type CredentialResult = {
 	body: unknown;
 };
 
-async function call(
+export async function callAuthEndpoint(
 	event: RequestEvent,
 	kind: HostKind,
 	path: string,
@@ -100,7 +100,7 @@ export const signInWithPassword = (
 	event: RequestEvent,
 	kind: HostKind,
 	credentials: { email: string; password: string }
-) => call(event, kind, '/sign-in/email', credentials);
+) => callAuthEndpoint(event, kind, '/sign-in/email', credentials);
 
 /**
  * Ends every session of this account, the caller's included.
@@ -112,13 +112,13 @@ export const signInWithPassword = (
  * and its cookies come back the same way.
  */
 export const revokeAllSessions = (event: RequestEvent) =>
-	call(event, 'admin', '/revoke-sessions', {});
+	callAuthEndpoint(event, 'admin', '/revoke-sessions', {});
 
 export const changeOwnPassword = (
 	event: RequestEvent,
 	credentials: { currentPassword: string; newPassword: string }
 ) =>
-	call(event, 'admin', '/change-password', {
+	callAuthEndpoint(event, 'admin', '/change-password', {
 		...credentials,
 		revokeOtherSessions: true
 	});

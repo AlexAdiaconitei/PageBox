@@ -3,12 +3,13 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { apiKey } from '@better-auth/api-key';
 import { admin } from 'better-auth/plugins/admin';
+import { twoFactor as twoFactorPlugin } from 'better-auth/plugins/two-factor';
 import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getConfig, type HostKind } from '../config';
 import { db } from '../db';
-import { account, apikey, rateLimit, session, user, verification } from '../db/schema';
+import { account, apikey, rateLimit, session, twoFactor, user, verification } from '../db/schema';
 import { newId, TOKEN_PREFIX } from '../ids';
 import { lazy } from '../lazy';
 
@@ -78,7 +79,7 @@ function createAuth(kind: HostKind) {
 
 		database: drizzleAdapter(db, {
 			provider: 'pg',
-			schema: { user, session, account, verification, apikey, rateLimit }
+			schema: { user, session, account, verification, apikey, rateLimit, twoFactor }
 		}),
 
 		// Scheme and port come from the public configuration, never forwarded request data.
@@ -98,7 +99,8 @@ function createAuth(kind: HostKind) {
 			expiresIn: kind === 'admin' ? 30 * DAY : 12 * 60 * 60,
 			updateAge: kind === 'admin' ? DAY : 60 * 60,
 			additionalFields: {
-				scope: { type: 'string', required: false, defaultValue: scope, input: false }
+				scope: { type: 'string', required: false, defaultValue: scope, input: false },
+				twoFactorVerified: { type: 'boolean', required: false, defaultValue: false, input: false }
 			}
 		},
 
@@ -143,7 +145,18 @@ function createAuth(kind: HostKind) {
 		databaseHooks: {
 			session: {
 				create: {
-					before: async (data) => ({ data: { ...data, scope } })
+					before: async (data, ctx) => ({
+						data: {
+							...data,
+							scope,
+							twoFactorVerified:
+								data.twoFactorVerified === true ||
+								(ctx?.path === '/change-password' &&
+									ctx.context.session?.session.twoFactorVerified === true) ||
+								ctx?.path === '/two-factor/verify-totp' ||
+								ctx?.path === '/two-factor/verify-backup-code'
+						}
+					})
 				}
 			}
 		},
@@ -173,6 +186,7 @@ function createAuth(kind: HostKind) {
 		plugins:
 			kind === 'admin'
 				? [
+						twoFactorPlugin({ issuer: 'PageBox' }),
 						admin({ ac, roles, adminRoles: ['superadmin', 'admin'], defaultRole: 'user' }),
 						// Deploy tokens. The plugin owns generation, hashing, expiry,
 						// enable/disable and per-key throttling; PageBox only records which
@@ -193,7 +207,7 @@ function createAuth(kind: HostKind) {
 						}),
 						sveltekitCookies(getRequestEvent)
 					]
-				: [sveltekitCookies(getRequestEvent)]
+				: [twoFactorPlugin({ issuer: 'PageBox' }), sveltekitCookies(getRequestEvent)]
 	});
 }
 
@@ -223,6 +237,7 @@ export type SessionUser = {
 	role: string;
 	banned: boolean;
 	mustChangePassword: boolean;
+	twoFactorEnabled: boolean;
 };
 
 /**

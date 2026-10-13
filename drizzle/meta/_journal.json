@@ -71,6 +71,13 @@
       "when": 1791078770970,
       "tag": "0009_site_reader_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791933115317,
+      "tag": "0010_two_factor",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import { lookupSiteBySlug, type SiteRef } from '../sites/resolve';
 import type { SessionUser } from './index';
 import { safeReaderDestination } from './destinations';
 import { loadSession } from './session';
+import { isTwoFactorRequired, twoFactorGate } from './two-factor';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const freshSecret = () => randomBytes(32).toString('base64url');
@@ -112,6 +113,14 @@ export async function acceptReader(event: RequestEvent, siteId: string): Promise
 				)
 				.limit(1);
 			if (!parent) error(404, 'Not found');
+			if (
+				twoFactorGate(
+					parent.user.twoFactorEnabled,
+					parent.session.twoFactorVerified,
+					await isTwoFactorRequired()
+				)
+			)
+				error(404, 'Not found');
 			const resolved = await lookupSiteBySlug(ref.slug);
 			if (
 				!resolved ||
@@ -160,7 +169,7 @@ export async function loadSiteSession(
 	const token = event.cookies.get(readerCookieName());
 	if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
 	const [row] = await db
-		.select({ user })
+		.select({ user, twoFactorVerified: session.twoFactorVerified })
 		.from(siteSession)
 		.innerJoin(session, eq(session.id, siteSession.sessionId))
 		.innerJoin(user, eq(user.id, session.userId))
@@ -175,5 +184,10 @@ export async function loadSiteSession(
 			)
 		)
 		.limit(1);
-	return row?.user ?? null;
+	if (
+		!row ||
+		twoFactorGate(row.user.twoFactorEnabled, row.twoFactorVerified, await isTwoFactorRequired())
+	)
+		return null;
+	return row.user;
 }

@@ -17,6 +17,7 @@ export const user = pgTable(
 		name: t.text('name').notNull().default(''),
 		email: t.text('email').notNull(),
 		emailVerified: t.boolean('email_verified').notNull().default(false),
+		twoFactorEnabled: t.boolean('two_factor_enabled').notNull().default(false),
 		image: t.text('image'),
 
 		// admin plugin. 'superadmin' | 'admin' | 'user' — see docs/access.md.
@@ -93,6 +94,7 @@ export const session = pgTable(
 		// the admin host (or the reverse) is rejected, so a stolen cookie value cannot be
 		// replanted across the host boundary.
 		scope: t.text('scope').notNull().default('admin'), // 'admin' | 'view'
+		twoFactorVerified: t.boolean('two_factor_verified').notNull().default(false),
 
 		expiresAt: t.timestamp('expires_at', { withTimezone: true }).notNull(),
 		ipAddress: t.text('ip_address'),
@@ -209,3 +211,29 @@ export const rateLimit = pgTable('rate_limit', {
 	count: t.integer('count').notNull().default(0),
 	lastRequest: t.bigint('last_request', { mode: 'number' })
 });
+
+export const twoFactor = pgTable(
+	'two_factor',
+	{
+		id: t.text('id').primaryKey(),
+		userId: t
+			.text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		secret: t.text('secret').notNull(),
+		backupCodes: t.text('backup_codes').notNull(),
+		verified: t.boolean('verified').notNull().default(true),
+		failedVerificationCount: t.integer('failed_verification_count').notNull().default(0),
+		lockedUntil: t.timestamp('locked_until', { withTimezone: true })
+	},
+	(table) => [t.uniqueIndex('two_factor_user_idx').on(table.userId)]
+);
+
+export const securityPolicy = pgTable(
+	'security_policy',
+	{
+		id: t.text('id').primaryKey(),
+		requireTwoFactor: t.boolean('require_two_factor').notNull().default(false)
+	},
+	(table) => [t.check('security_policy_singleton', sql`${table.id} = 'instance'`)]
+);

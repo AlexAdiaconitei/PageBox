@@ -19,6 +19,7 @@
 	</p>
 	<div class="mt-2 flex items-center gap-3">
 		{#if data.signedIn}
+			<a class="btn btn-ghost" href="/two-factor/setup">Manage authenticator</a>
 			<form method="POST" action="/logout">
 				<button class="btn btn-ghost" type="submit">Sign out</button>
 			</form>

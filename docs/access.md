@@ -1,7 +1,45 @@
 # Accounts, roles and grants
 
 Everything in this document lives on the admin host (`PAGEBOX_ADMIN_HOST`). The site host
-only ever offers sign-in, sign-out and the sites themselves.
+also offers sign-in, sign-out and authenticator settings for readers.
+
+## Authenticator and two-factor policy
+
+Every account can enable an authenticator under **Account → Manage authenticator** on the
+panel, or **Manage authenticator** on the reader landing page. Setup asks for the current
+password, displays a locally generated QR code and a manual setup key, and provides ten
+recovery codes to save. A valid six-digit TOTP code is required to activate it. Each recovery
+code works once; replacing the recovery codes invalidates the previous set.
+
+The superadmin can select **Required for all users** under **Security**. They must first
+enable and verify their own authenticator. This policy is stored in PostgreSQL and applies
+to the panel and private site access, including existing sessions. Accounts without an
+authenticator must enroll. Sessions that have not verified a second factor must verify it.
+Users cannot disable 2FA while the policy is required. Switching back to **Optional** keeps
+each account's authenticator enabled until its owner disables it with their password.
+
+Panel users with an issued or reset password must replace it before enrollment. Enabling
+or disabling an authenticator ends the account's other sessions on both hosts. Password
+changes preserve second-factor verification in the replacement session. Each password
+sign-in asks for an authenticator or recovery code; devices are not remembered.
+
+The implementation uses Better Auth's official
+[two-factor plugin](https://better-auth.com/docs/plugins/2fa), with the API supported by
+[the installed 1.6 version](https://better-auth.com/docs/1.6/plugins/2fa). The plugin owns
+TOTP verification, encrypted secrets and recovery codes, challenge cookies, account lockout
+and throttling. PageBox calls its handler in-process from SvelteKit form actions, preserving
+the existing host-only cookie boundary without exposing the full Better Auth HTTP API.
+The policy and a server-owned `session.two_factor_verified` field control access. Sensitive
+setup responses use `Cache-Control: private, no-store`; secrets are never sent to a QR service.
+
+The additive migration `0010_two_factor.sql` runs at startup when migrations are enabled.
+Otherwise run `pnpm db:migrate` before starting this version. The default policy is optional;
+existing sessions receive no second-factor verification flag during the migration.
+
+Deploy API keys remain machine credentials for CI and use their existing scoped permissions
+and rate limits. Cookie-authenticated API calls must satisfy the same 2FA policy as the panel.
+Security policy changes, authenticator activation/disabling, recovery-code replacement and
+second-factor sign-in results are recorded in the audit log without secrets or codes.
 
 ## First sign-in
 

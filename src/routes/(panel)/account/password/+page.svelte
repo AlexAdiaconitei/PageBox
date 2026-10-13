@@ -37,6 +37,16 @@
 	</p>
 </header>
 
+<section class="section">
+	<h2 class="mb-3 text-[1.05rem] font-semibold">Two-factor authentication</h2>
+	<p class="text-muted mb-3 text-[0.85rem]">
+		{data.user.twoFactorEnabled
+			? 'Your authenticator is enabled.'
+			: 'Add an authenticator app to protect your account.'}
+	</p>
+	<a class="btn btn-ghost" href="/two-factor/setup">Manage authenticator</a>
+</section>
+
 {#if data.forced}
 	<!-- The reason every other screen bounced back here. Said once, at the top, rather than
 	     as a caveat beside the submit button. -->

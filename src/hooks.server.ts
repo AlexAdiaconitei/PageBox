@@ -1,5 +1,6 @@
 import { redirect, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
 import { loadSession } from '$lib/server/auth/session';
+import { isTwoFactorRequired, twoFactorGate } from '$lib/server/auth/two-factor';
 import { acceptReader, accessUrl, loadSiteSession } from '$lib/server/auth/reader';
 import { config, hostKind, siteIdForHost, siteUrl } from '$lib/server/config';
 import { sameOriginMutation } from '$lib/server/auth/origin';
@@ -12,14 +13,23 @@ import { startup } from '$lib/server/startup';
 export const init: ServerInit = async () => {
 	await startup();
 };
-const SITES_HOST_ROUTES = new Set(['/', '/login', '/logout', '/healthz', '/access']);
-const PUBLIC_ADMIN_ROUTES = new Set(['/login', '/logout', '/healthz']);
+const SITES_HOST_ROUTES = new Set([
+	'/',
+	'/login',
+	'/logout',
+	'/healthz',
+	'/access',
+	'/two-factor',
+	'/two-factor/setup'
+]);
+const PUBLIC_ADMIN_ROUTES = new Set(['/login', '/logout', '/healthz', '/two-factor']);
 const isApiPath = (pathname: string) => pathname === '/api' || pathname.startsWith('/api/');
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const kind = hostKind(event.url.host);
 	event.locals.user = null;
 	event.locals.sessionId = null;
+	event.locals.twoFactorVerified = false;
 	if (!kind && event.url.pathname === '/healthz') {
 		const health = await probeHealth();
 		return new Response(JSON.stringify({ status: health.ok ? 'ok' : 'degraded' }), {
@@ -92,7 +102,34 @@ export const handle: Handle = async ({ event, resolve }) => {
 			host: kind === 'admin' ? config.PAGEBOX_ADMIN_HOST : config.PAGEBOX_SITES_HOST,
 			action: { href: '/', label: 'Start again' }
 		});
-	event.locals.user = await loadSession(event, kind);
+	event.locals.user = await loadSession(event, kind, { allowIncompleteTwoFactor: true });
+	if (event.locals.user && !['/login', '/logout', '/healthz'].includes(event.url.pathname)) {
+		const gate = twoFactorGate(
+			event.locals.user.twoFactorEnabled,
+			event.locals.twoFactorVerified,
+			await isTwoFactorRequired()
+		);
+		const hasBearer = /^Bearer /i.test(event.request.headers.get('authorization') ?? '');
+		if (gate && isApiPath(event.url.pathname) && !hasBearer) {
+			return new Response(JSON.stringify({ error: 'two-factor authentication required' }), {
+				status: 403,
+				headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
+			});
+		}
+		const gatePath = gate === 'verify' ? '/two-factor' : '/two-factor/setup';
+		const changingPassword = kind === 'admin' && event.url.pathname === '/account/password';
+		if (
+			gate &&
+			!isApiPath(event.url.pathname) &&
+			event.url.pathname !== gatePath &&
+			!(gate === 'setup' && changingPassword)
+		) {
+			redirect(
+				303,
+				gatePath + '?next=' + encodeURIComponent(event.url.pathname + event.url.search)
+			);
+		}
+	}
 	if (
 		kind === 'admin' &&
 		!PUBLIC_ADMIN_ROUTES.has(event.url.pathname) &&
@@ -100,10 +137,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 	) {
 		if (!event.locals.user)
 			redirect(303, '/login?next=' + encodeURIComponent(event.url.pathname + event.url.search));
-		if (event.locals.user.mustChangePassword && event.url.pathname !== '/account/password')
+		if (
+			event.locals.user.mustChangePassword &&
+			event.url.pathname !== '/account/password' &&
+			event.url.pathname !== '/two-factor'
+		)
 			redirect(303, '/account/password');
 	}
 	const response = await resolve(event);
+	if (event.url.pathname.startsWith('/two-factor') || event.url.pathname === '/security') {
+		response.headers.set('Cache-Control', 'private, no-store');
+		response.headers.set('Referrer-Policy', 'same-origin');
+	}
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	if (!response.headers.has('Referrer-Policy'))
 		response.headers.set('Referrer-Policy', 'same-origin');

@@ -50,7 +50,8 @@ export async function tokenOwner(auth: TokenAuth): Promise<SessionUser | null> {
 		name: row.name,
 		role: row.role ?? 'user',
 		banned: Boolean(row.banned),
-		mustChangePassword: Boolean(row.mustChangePassword)
+		mustChangePassword: Boolean(row.mustChangePassword),
+		twoFactorEnabled: row.twoFactorEnabled
 	};
 }
 

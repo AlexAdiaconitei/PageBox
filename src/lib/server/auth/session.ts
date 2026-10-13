@@ -2,6 +2,7 @@ import type { RequestEvent } from '@sveltejs/kit';
 import type { HostKind } from '../config';
 import { audit } from '../audit';
 import { authFor, scopeFor, type SessionUser } from './index';
+import { isTwoFactorRequired, twoFactorGate } from './two-factor';
 
 /**
  * Reads the session for the host the request arrived on, and refuses anything that does
@@ -13,7 +14,8 @@ import { authFor, scopeFor, type SessionUser } from './index';
  */
 export async function loadSession(
 	event: RequestEvent,
-	kind: HostKind
+	kind: HostKind,
+	options: { allowIncompleteTwoFactor?: boolean } = {}
 ): Promise<SessionUser | null> {
 	// The two instances carry different user shapes on purpose — only the admin one runs
 	// the admin plugin — so this is the boundary that flattens them into one type.
@@ -21,7 +23,7 @@ export async function loadSession(
 		headers: event.request.headers
 	})) as {
 		user?: Partial<SessionUser> & { id: string; email: string; name: string };
-		session?: { id: string; scope?: string };
+		session?: { id: string; scope?: string; twoFactorVerified?: boolean };
 	} | null;
 
 	if (!result?.user || !result.session) return null;
@@ -49,6 +51,16 @@ export async function loadSession(
 	// A banned user keeps a valid cookie until it expires; the ban has to bite here.
 	if (user.banned) return null;
 	event.locals.sessionId = result.session.id;
+	event.locals.twoFactorVerified = result.session.twoFactorVerified === true;
+	if (
+		!options.allowIncompleteTwoFactor &&
+		twoFactorGate(
+			Boolean(user.twoFactorEnabled),
+			event.locals.twoFactorVerified,
+			await isTwoFactorRequired()
+		)
+	)
+		return null;
 
 	return {
 		id: user.id,
@@ -56,6 +68,7 @@ export async function loadSession(
 		name: user.name,
 		role: user.role ?? 'user',
 		banned: Boolean(user.banned),
-		mustChangePassword: Boolean(user.mustChangePassword)
+		mustChangePassword: Boolean(user.mustChangePassword),
+		twoFactorEnabled: Boolean(user.twoFactorEnabled)
 	};
 }

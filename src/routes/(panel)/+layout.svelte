@@ -6,6 +6,7 @@
 	import ScrollText from '@lucide/svelte/icons/scroll-text';
 	import LogOut from '@lucide/svelte/icons/log-out';
 	import UserRound from '@lucide/svelte/icons/user-round';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import PageboxMark from '$lib/components/PageboxMark.svelte';
 	import { REPO_URL, VERSION } from '$lib/meta';
 
@@ -21,7 +22,10 @@
 			// Users is for the tiers that issue accounts. An admin sees only the accounts it
 			// issued there, which is the boundary itself rather than a filter on the page.
 			...(data.canAdminister ? [{ href: '/users', label: 'Users', icon: UsersRound }] : []),
-			...(data.canSeeOps ? [{ href: '/audit', label: 'Activity', icon: ScrollText }] : [])
+			...(data.canSeeOps ? [{ href: '/audit', label: 'Activity', icon: ScrollText }] : []),
+			...(data.canManageSecurity
+				? [{ href: '/security', label: 'Security', icon: ShieldCheck }]
+				: [])
 		].map((item) => ({
 			...item,
 			current: page.url.pathname === item.href || page.url.pathname.startsWith(item.href + '/')

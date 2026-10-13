@@ -54,6 +54,10 @@ export const actions: Actions = {
 			});
 		}
 
+		if ((result.body as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
+			redirect(303, '/two-factor?next=' + encodeURIComponent(next));
+		}
+
 		await audit({
 			action: 'login.succeeded',
 			meta: { email, host: event.locals.hostKind },

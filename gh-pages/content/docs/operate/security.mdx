@@ -1,10 +1,29 @@
 ---
-title: Security upgrade
-description: Upgrading from 0.1 to 0.2.0 and migrating site origins.
+title: Security and upgrades
+description: Configure mandatory authenticator 2FA and upgrade to PageBox 0.3.0.
 ---
 
-Version 0.2.0 is published as `ghcr.io/alexadiaconitei/pagebox:0.2.0`. Do not substitute a
-0.1 image while using the new configuration.
+Version 0.3.0 adds authenticator-based two-factor authentication. Its release image tag is
+`ghcr.io/alexadiaconitei/pagebox:0.3.0`.
+
+## Upgrade from 0.2.0
+
+Back up PostgreSQL and the bucket, select PAGEBOX_TAG=0.3.0, restart the app and check
+/healthz and the migration log. Migration 0010 adds the authenticator table, account/session
+flags and the instance policy. It runs at startup when migrations are enabled; otherwise run
+`pnpm db:migrate` before starting the new version. No DNS, proxy or TLS changes are needed.
+
+The initial 2FA policy is optional. Set up and verify the superadmin's authenticator under
+**Account → Manage authenticator**, save the recovery codes, then select **Required for all
+users** under **Security** if needed. Existing sessions must satisfy the policy. Test sign-in
+on both hosts and private-site access. See [authenticator setup](/docs/operate/access).
+
+Deploy API keys keep their existing CI permissions. Password resets preserve authenticators.
+Version 0.2 does not enforce mandatory 2FA, so rolling back to it removes that protection.
+
+## Upgrade from 0.1.x
+
+Do not substitute a 0.1 image while using the new configuration.
 
 The panel and central reader login have separate trusted origins. Uploaded content uses
 `<slug-prefix>-<immutable-site-id>.<PAGEBOX_SITES_HOST>`, with the existing `/s/<slug>/`

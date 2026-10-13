@@ -11,7 +11,7 @@ Postgres and S3 when you want to keep what is on it.
 image: ghcr.io/alexadiaconitei/pagebox:${PAGEBOX_TAG:?Set an exact image tag}
 ```
 
-Set an exact PAGEBOX_TAG, such as `0.2.0`. To run the checkout instead of a release, build
+Set an exact PAGEBOX_TAG, such as `0.3.0`. To run the checkout instead of a release, build
 the image locally and use the same tag. Compose uses pull_policy=missing. Supply all blank secrets,
 provision a separate bucket-scoped app key, and read [the upgrade procedure](/docs/operate/security).
 
@@ -112,7 +112,7 @@ Deployments are immutable objects in S3 and the schema is migrated forward on bo
 upgrade is a new tag and a restart:
 
 ```bash
-PAGEBOX_TAG=0.2.0 docker compose up -d      # or edit .env and: docker compose up -d
+PAGEBOX_TAG=0.3.0 docker compose up -d      # or edit .env and: docker compose up -d
 ```
 
 Take a database backup first if you are moving more than one version. Nothing in the object

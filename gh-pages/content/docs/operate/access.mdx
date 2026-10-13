@@ -3,8 +3,30 @@ title: Accounts, roles and grants
 description: Who can do what, why a private site answers 404, and how to get back in.
 ---
 
-Everything on this page lives on the **admin host**. The sites host only ever offers
-sign-in, sign-out and the sites themselves.
+Account administration lives on the **admin host**. The central reader host also offers
+sign-in, sign-out and authenticator settings for reader accounts.
+
+## Authenticator and two-factor authentication
+
+Every account can set up an authenticator under **Account → Manage authenticator** in the
+panel, or **Manage authenticator** on the reader landing page. Enter the current password,
+scan the locally generated QR code or enter its setup key, save the ten recovery codes,
+and verify a six-digit code from the authenticator. 2FA becomes active only after verification.
+
+Password sign-in then asks for an authenticator or recovery code on both hosts. Each recovery
+code works once. Use **Replace recovery codes** to generate a new set with the current password;
+the previous set stops working. Enabling or disabling an authenticator signs out the account's
+other sessions. A password reset preserves the authenticator.
+
+The superadmin can select **Required for all users** under **Security**, after setting up and
+verifying their own authenticator. The requirement applies to existing sessions, the panel,
+private sites and API calls authenticated by a browser cookie. Accounts without 2FA must
+enroll, and users cannot disable 2FA while required. Issued or reset panel passwords must be
+replaced before enrollment. Deploy API keys retain their scoped CI permissions.
+
+Switching the policy back to **Optional** leaves existing authenticators enabled. Account owners
+can disable them with their password. Policy and authenticator changes appear in the audit log
+without secrets or recovery codes.
 
 ## There is no sign-up page
 

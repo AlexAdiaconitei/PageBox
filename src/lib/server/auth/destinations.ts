@@ -13,7 +13,12 @@ export function safeLoginDestination(
 		const url = new URL(value, 'https://login.invalid');
 		if (url.origin !== 'https://login.invalid' || decodeSubpath(url.pathname.slice(1)) === null)
 			return '/';
-		if (kind === 'sites' && url.pathname !== '/access' && !url.pathname.startsWith(prefix + '/'))
+		if (
+			kind === 'sites' &&
+			url.pathname !== '/access' &&
+			url.pathname !== '/two-factor/setup' &&
+			!url.pathname.startsWith(prefix + '/')
+		)
 			return '/';
 		return url.pathname + url.search;
 	} catch {

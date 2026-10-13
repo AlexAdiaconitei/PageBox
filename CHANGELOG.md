@@ -3,6 +3,32 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-10-14
+
+Authenticator-based two-factor authentication for every account, with an optional instance-wide requirement.
+
+### Added
+
+- Enable an authenticator with a locally generated QR code or manual setup key. Verify a six-digit TOTP code before activation and save ten single-use recovery codes. Replace recovery codes or disable 2FA with the current password when policy permits.
+- Challenge password sign-ins on both the panel and reader hosts with an authenticator or recovery code, using Better Auth's official two-factor plugin, encrypted storage, throttling and account lockout.
+- Let the superadmin require 2FA for every account under Security, after verifying their own authenticator. Enforce the policy on existing sessions, cookie-authenticated API calls and private site capabilities. Accounts without 2FA must enroll, and required authenticators cannot be disabled.
+- Record authenticator activation, disabling, recovery-code replacement, policy changes and second-factor sign-in results in the audit log.
+
+### Security
+
+- Track second-factor verification per session. Enabling or disabling an authenticator revokes the account's other sessions on both hosts. Password changes preserve verified status in the replacement session.
+- Keep forced password replacement accessible before mandatory enrollment. Preserve host-only cookies and origin checks, and prevent caching of setup responses.
+
+### Dependencies
+
+- Add local QR generation with `qrcode` and direct `devalue` 6 support for integration-test action responses. Scope the existing patched devalue 5 override to its major version so it does not replace the declared test dependency.
+
+### Migration and validation
+
+Migration `0010_two_factor.sql` adds the authenticator table, account/session flags and the instance policy. It runs at startup when migrations are enabled; otherwise run `pnpm db:migrate` before starting this version. The initial policy is optional. Existing accounts do not need to enroll until the superadmin makes it mandatory.
+
+Users configure 2FA under Account → Manage authenticator in the panel or Manage authenticator on the reader landing page. Deploy API keys retain their existing CI permissions. See [the 0.3.0 release notes](docs/releases/0.3.0.md) and [the upgrade procedure](DEPLOYMENT-SECURITY.md).
+
 ## [0.2.0] — 2026-10-13
 
 Security release. Upgrading from 0.1.x changes the deployment: read the migration notes below

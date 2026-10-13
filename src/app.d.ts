@@ -16,6 +16,7 @@ declare global {
 			/** Session user for *this host*; a session from the other host is not accepted. */
 			user: SessionUser | null;
 			sessionId: string | null;
+			twoFactorVerified: boolean;
 		}
 		// interface PageData {}
 		// interface PageState {}
