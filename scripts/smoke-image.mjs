@@ -25,7 +25,7 @@ try {
 		[
 			's3',
 			['MINIO_ROOT_USER=fixture-storage', 'MINIO_ROOT_PASSWORD=fixture-storage-password'],
-			['minio/minio:latest', 'server', '/data']
+			['pgsty/minio:RELEASE.2026-08-04T00-00-00Z', 'server', '/data']
 		]
 	]) {
 		const name = `${mark}-${suffix}`;

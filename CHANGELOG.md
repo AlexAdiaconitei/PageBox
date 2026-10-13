@@ -30,6 +30,7 @@ published as an image.
 
 ### Dependencies
 
+- Run storage on `pgsty/minio`, pinned to RELEASE.2026-08-04T00-00-00Z, in Compose and the test scripts. MinIO no longer publishes `minio/minio` or `minio/mc`, so new pulls fail. The community build is a drop-in replacement and reuses existing `miniodata` volumes.
 - Update source-map-js to 1.2.2 (GHSA-68fv-2mgg-jv7q) in the app build chain. Update the documentation site to Next.js 16.3.8 and patch its compression, sharp and source-map-js dependencies.
 
 ### Migration and validation

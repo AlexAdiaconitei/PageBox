@@ -27,7 +27,7 @@ const mc = (...args) =>
 		`MC_HOST_fixture=http://fixture-admin:fixture-admin-password@${mark}:9000`,
 		'-v',
 		`${resolve('storage-policy.example.json')}:/policy.json:ro`,
-		'minio/mc:latest',
+		'pgsty/mc:RELEASE.2026-09-16T00-00-00Z',
 		...args
 	);
 try {
@@ -46,7 +46,7 @@ try {
 		'MINIO_ROOT_USER=fixture-admin',
 		'-e',
 		'MINIO_ROOT_PASSWORD=fixture-admin-password',
-		'minio/minio:latest',
+		'pgsty/minio:RELEASE.2026-08-04T00-00-00Z',
 		'server',
 		'/data'
 	);

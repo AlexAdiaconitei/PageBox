@@ -61,7 +61,7 @@ try {
 			'MINIO_ROOT_USER=fixture-local',
 			'-e',
 			'MINIO_ROOT_PASSWORD=fixture-local-secret',
-			'minio/minio:latest',
+			'pgsty/minio:RELEASE.2026-08-04T00-00-00Z',
 			'server',
 			'/data'
 		)
