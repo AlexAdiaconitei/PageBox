@@ -1,4 +1,4 @@
-> Development checkout: 0.2.0 is unreleased. Read the upgrade procedure before deploying. See [the remediation evidence](security-checks/README.md) and [deployment configuration changes](DEPLOYMENT-SECURITY.md) before using this checkout.
+> Upgrading from 0.1.x? 0.2.0 changes how sites are addressed and which secrets are required. Read [the upgrade procedure](DEPLOYMENT-SECURITY.md) before deploying it. The verification evidence is in [security-checks/README.md](security-checks/README.md).
 
 <p align="center">
   <picture>
@@ -171,19 +171,18 @@ touch targets on coarse pointers only — a mouse keeps the tighter console.
 
 ## Run it
 
-The latest published image is ghcr.io/alexadiaconitei/pagebox:0.1.1. It does not contain the
-security corrections in this checkout. Version 0.2.0 must be built locally until it is
-released. The local isolation and verification results are recorded in
-[security-checks/README.md](security-checks/README.md).
+The image is published, so nothing here builds anything:
+
+```
+ghcr.io/alexadiaconitei/pagebox:0.2.0
+```
 
 ### Standalone (Postgres + MinIO included)
 
-For testing the local checkout, use the files from this repository:
-
 ```bash
-cp env.secure.example .env
-docker build -t ghcr.io/alexadiaconitei/pagebox:0.2.0 .
-# choose all credentials and an exact image tag; see DEPLOYMENT-SECURITY.md
+curl -O  https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/AlexAdiaconitei/PageBox/main/.env.example
+# set PAGEBOX_TAG=0.2.0 and choose every blank credential; see DEPLOYMENT-SECURITY.md
 # create the bucket and its dedicated app credential before starting PageBox
 docker compose up -d postgres minio
 # provision the bucket and restricted S3 user, then:
@@ -209,7 +208,7 @@ credential, not a password: nothing else in the panel opens until it has been re
 
 ### Dokploy
 
-One application, provider **Docker**, image `ghcr.io/alexadiaconitei/pagebox:0.1.1`, then
+One application, provider **Docker**, image `ghcr.io/alexadiaconitei/pagebox:0.2.0`, then
 **Add Domain twice on that same application** — both at container port 3000, one for the
 panel and one for the sites. Not two apps, not two ports, not two paths: PageBox listens on
 one port and splits by `Host`, and hostnames are the only split browsers enforce for
@@ -329,16 +328,18 @@ tokens, Tailwind 4, and optionally Valkey once there is more than one replica. N
 
 ## Status
 
-**0.1.1, published.** Two-host dispatch, schema and migrations, health check, the image on
+**0.2.0, published.** Two-host dispatch, schema and migrations, health check, the image on
 GHCR, compose stack and Dokploy guide; serving from S3 with the full resolution, caching and
 range semantics; the deploy API with rollback and an audit trail; the admin panel with
 users, groups, grants, deploy tokens, quotas, retention and deployment history; private
 sites enforced on every file; drag & drop uploads with the preflight; the security checklist
-running as an integration suite in CI against a real Postgres and a real S3.
+running as an integration suite in CI against a real Postgres and a real S3. 0.2.0 adds a
+separate origin per hosted site, site-bound reader sessions, bounded uploads and the fixes
+from the October security review.
 
 Every milestone through M7 is done and the four decisions that were left open are closed —
-see [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md). What is left is not code:
-one hostname per site, and whatever the first instances ask for.
+see [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md). Next up is custom domains and
+sites served from `/` — see [`docs/PLAN-custom-domains.md`](docs/PLAN-custom-domains.md).
 
 ## Documentation
 

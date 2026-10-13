@@ -3,9 +3,11 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - Unreleased
+## [0.2.0] — 2026-10-13
 
-Prepared locally. No release, registry upload or deployment has been performed.
+Security release. Upgrading from 0.1.x changes the deployment: read the migration notes below
+before pulling the image. It also carries the 0.1.1 changes, which were tagged but never
+published as an image.
 
 ### Security
 
@@ -26,11 +28,17 @@ Prepared locally. No release, registry upload or deployment has been performed.
 - Honor compression quality weights and exact encoding names, and try gzip when the preferred Brotli sibling is unavailable.
 - Replace deprecated SvelteKit CSRF configuration while retaining the hook's origin checks. Remove an unsupported select pseudo-element.
 
+### Dependencies
+
+- Update source-map-js to 1.2.2 (GHSA-68fv-2mgg-jv7q) in the app build chain. Update the documentation site to Next.js 16.3.8 and patch its compression, sharp and source-map-js dependencies.
+
 ### Migration and validation
 
 Wildcard DNS, proxy routes and TLS are required for the new site origins. Rebuild or review deployments created before ingest version 3. See [DEPLOYMENT-SECURITY.md](DEPLOYMENT-SECURITY.md) for the upgrade procedure and [security-checks/README.md](security-checks/README.md) for test evidence.
 
 ## [0.1.1] — 2026-09-15
+
+Tagged but never published to GHCR. Its changes ship in 0.2.0.
 
 ### Fixed — the SPA fallback answered missing assets with the app shell
 

@@ -1,6 +1,6 @@
 # Deployment security for 0.2.0
 
-PageBox 0.2.0 is prepared in this checkout and has not been published. Build its image locally. The repair evidence is in [security-checks/README.md](security-checks/README.md).
+PageBox 0.2.0 is published as `ghcr.io/alexadiaconitei/pagebox:0.2.0`. The repair evidence is in [security-checks/README.md](security-checks/README.md).
 
 ## Upgrade from 0.1
 
@@ -9,7 +9,7 @@ PageBox 0.2.0 is prepared in this checkout and has not been published. Build its
 3. Configure the panel host and central reader host separately. Uploaded content now uses `<slug-prefix>-<immutable-site-id>.<PAGEBOX_SITES_HOST>`. The prefix holds at most 28 slug characters. Existing `/s/<slug>/` base paths remain unchanged. Old central URLs redirect to the new host.
 4. Configure wildcard DNS for `*.pages.example.com`, routing to PageBox and TLS covering that wildcard, the central reader host and the panel host. The supplied Traefik profile is HTTP for local development. Use the actual HTTPS entrypoint and your certificate resolver in production. Copy [the router example](deploy/traefik-dynamic.example.yml), replace its names and backend address, and verify it accepts the generated site URLs.
 5. Set PAGEBOX_PUBLIC_SCHEME=https in production. Canonical hosts must include the public port if it differs from the protocol default. For `pnpm dev`, use the hostnames with `:5173` in [.env.local.example](.env.local.example).
-6. Build `docker build -t ghcr.io/alexadiaconitei/pagebox:0.2.0 .` and select `PAGEBOX_TAG=0.2.0`. This does not publish the image. Start the app and check `/healthz` and its migration log. Migrations 0008 and 0009 protect the active deployment reference and create reader authorization/session tables.
+6. Select `PAGEBOX_TAG=0.2.0` (or build the checkout with `docker build -t ghcr.io/alexadiaconitei/pagebox:0.2.0 .`). Start the app and check `/healthz` and its migration log. Migrations 0008 and 0009 protect the active deployment reference and create reader authorization/session tables.
 7. Re-upload audited source archives for deployments produced before ingest version 3. Stored deployments are not re-extracted by a migration. Keep affected sites disabled until their contents have been reviewed or rebuilt. Old extraction rules could store hidden files or rebase content from a hidden directory.
 8. Verify a private site in a browser, then revoke its grant and check its next file request fails. Verify logout and a password reset also revoke access. Test backup restoration before removing the maintenance restriction.
 

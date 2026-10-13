@@ -1,6 +1,6 @@
 # Cierre de la corrección de seguridad
 
-PageBox 0.2.0 está preparado localmente. No se ha publicado, subido al registro ni desplegado en el homelab. Esta revisión cierra el plan sobre el código y las pruebas locales; los requisitos de infraestructura están en [DEPLOYMENT-SECURITY.md](../DEPLOYMENT-SECURITY.md).
+PageBox 0.2.0 se publicó el 2026-10-13 en GHCR. No se ha desplegado en el homelab. Esta revisión cierra el plan sobre el código y las pruebas locales; los requisitos de infraestructura están en [DEPLOYMENT-SECURITY.md](../DEPLOYMENT-SECURITY.md).
 
 ## Hallazgos
 

@@ -1,10 +1,10 @@
 ---
 title: Security upgrade
-description: Deploying the unreleased 0.2.0 checkout and migrating site origins.
+description: Upgrading from 0.1 to 0.2.0 and migrating site origins.
 ---
 
-Version 0.2.0 is prepared locally and has not been published. Build its image from the
-checkout. Do not substitute a 0.1 image while using the new configuration.
+Version 0.2.0 is published as `ghcr.io/alexadiaconitei/pagebox:0.2.0`. Do not substitute a
+0.1 image while using the new configuration.
 
 The panel and central reader login have separate trusted origins. Uploaded content uses
 `<slug-prefix>-<immutable-site-id>.<PAGEBOX_SITES_HOST>`, with the existing `/s/<slug>/`

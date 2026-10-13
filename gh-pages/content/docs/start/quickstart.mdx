@@ -1,15 +1,14 @@
 ---
 title: Quickstart
-description: Run the unreleased 0.2.0 checkout locally with separate site origins.
+description: Run PageBox 0.2.0 locally with separate site origins.
 ---
 
-Version 0.2.0 has not been published. Use a checkout and build the image locally:
+Clone the repository for the Compose file and the storage policy example:
 
 ```bash
 git clone https://github.com/AlexAdiaconitei/PageBox.git
 cd PageBox
 cp .env.example .env
-docker build -t ghcr.io/alexadiaconitei/pagebox:0.2.0 .
 ```
 
 Set PAGEBOX_TAG=0.2.0 and fill every blank secret before running Compose. Generate a unique
