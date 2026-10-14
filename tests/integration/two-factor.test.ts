@@ -404,7 +404,10 @@ run('authenticator and mandatory two-factor policy', () => {
 			args: ['--host-resolver-rules=MAP *.localhost 127.0.0.1', '--no-proxy-server']
 		});
 		try {
-			const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+			const context = await browser.newContext({
+				viewport: { width: 390, height: 844 },
+				colorScheme: 'light'
+			});
 			await context.addCookies(
 				[...jar]
 					.filter(([name, value]) => value && name.includes('session_token'))
@@ -421,6 +424,14 @@ run('authenticator and mandatory two-factor policy', () => {
 			]);
 			expect(setupResponse.status()).toBe(200);
 			await page.getByAltText('Scan this QR code with your authenticator app').waitFor();
+			expect(await page.locator('input[name=password]:visible').count()).toBe(0);
+			await page.getByText('Restart setup', { exact: true }).click();
+			expect(await page.locator('input[name=password]:visible').count()).toBe(1);
+			await page.getByText('Restart setup', { exact: true }).click();
+			expect(await page.locator('.notice-info').count()).toBeGreaterThan(0);
+			const icon = await request('/icon-192.png');
+			expect(icon.status).toBe(200);
+			expect(icon.headers.get('content-type')).toContain('image/png');
 			const secret = (await page.locator('code').innerText()).trim();
 			expect(await page.locator('main').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
 				true
@@ -455,6 +466,18 @@ run('authenticator and mandatory two-factor policy', () => {
 					{ cause: error }
 				);
 			}
+			const success = page
+				.getByRole('status')
+				.filter({ hasText: 'Two-factor authentication is enabled.' });
+			expect(await success.getAttribute('class')).toContain('notice-ok');
+			const successColors = await success.evaluate((element) => ({
+				border: getComputedStyle(element).borderLeftColor,
+				background: getComputedStyle(element).backgroundColor
+			}));
+			await page.emulateMedia({ colorScheme: 'dark' });
+			expect(
+				await success.evaluate((element) => getComputedStyle(element).borderLeftColor)
+			).not.toBe(successColors.border);
 			await page.getByRole('button', { name: 'Sign out', exact: true }).click();
 			await page.goto('http://' + adminHost + '/login');
 			await page.locator('input[name=email]').fill(accountEmail);

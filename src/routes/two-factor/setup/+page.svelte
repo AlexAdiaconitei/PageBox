@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
+	import PageboxMark from '$lib/components/PageboxMark.svelte';
 	let { data, form } = $props();
 	const enrollment = $derived(!data.enabled && (form?.enrollment || data.pending));
 </script>
@@ -7,6 +8,21 @@
 <svelte:head
 	><title>Authenticator — PageBox</title><meta name="robots" content="noindex" /></svelte:head
 >
+
+{#snippet setupForm(restart: boolean)}
+	<form method="POST" action="?/enable" class="flex flex-col gap-4">
+		<label class="field"
+			>Current password<PasswordInput
+				name="password"
+				autocomplete="current-password"
+				required
+			/></label
+		>
+		<button class="btn btn-ghost" type="submit"
+			>{restart ? 'Generate a new QR code and recovery codes' : 'Set up authenticator'}</button
+		>
+	</form>
+{/snippet}
 
 <main class="mx-auto flex min-h-dvh w-full max-w-lg flex-col justify-center gap-6 px-6 py-10">
 	<header>
@@ -17,12 +33,22 @@
 			Authenticator or 2FAS.
 		</p>
 	</header>
-	{#if data.required}<p class="notice">
+	{#if data.required}<p class="notice notice-info">
 			Your administrator requires two-factor authentication for every account.
 		</p>{/if}
-	{#if form?.message}<p class="notice" role="status">{form.message}</p>{/if}
+	{#if form?.message}<p
+			class="notice"
+			class:notice-ok={form.ok === true}
+			class:notice-info={form.info === true}
+			role={form.ok || form.info ? 'status' : 'alert'}
+		>
+			{form.message}
+		</p>{/if}
 	{#if form?.qr && !data.enabled}
 		<div class="flex flex-col items-center gap-3">
+			<div class="flex items-center gap-2">
+				<PageboxMark size={24} /><span class="font-semibold">PageBox</span>
+			</div>
 			<img
 				src={form.qr}
 				alt="Scan this QR code with your authenticator app"
@@ -72,18 +98,18 @@
 		</form>
 	{/if}
 	{#if !data.enabled}
-		<form method="POST" action="?/enable" class="flex flex-col gap-4">
-			<label class="field"
-				>Current password<PasswordInput
-					name="password"
-					autocomplete="current-password"
-					required
-				/></label
-			>
-			<button class="btn btn-ghost" type="submit"
-				>{enrollment ? 'Restart setup and generate new codes' : 'Set up authenticator'}</button
-			>
-		</form>
+		{#if enrollment}
+			<details class="section">
+				<summary class="text-muted cursor-pointer text-sm">Restart setup</summary>
+				<p class="text-muted my-3 text-sm">
+					Only restart if you need a new QR code. This replaces the current setup key and recovery
+					codes.
+				</p>
+				{@render setupForm(true)}
+			</details>
+		{:else}
+			{@render setupForm(false)}
+		{/if}
 	{:else}
 		<p class="text-sm font-medium">Authenticator is enabled.</p>
 		<form method="POST" action="?/regenerate" class="flex flex-col gap-4">

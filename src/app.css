@@ -1018,6 +1018,10 @@ table {
 		border-left-color: var(--pb-accent);
 		background: var(--pb-accent-soft);
 	}
+	.notice-info {
+		border-left-color: var(--pb-line);
+		background: var(--pb-raise);
+	}
 
 	/* The mobile tab strip scrolls when the nav is long, but a scrollbar drawn across the
 	   bar is chrome the bar does not need — the tabs themselves show there is more. */

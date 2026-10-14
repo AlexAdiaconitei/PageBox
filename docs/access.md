@@ -11,6 +11,19 @@ password, displays a locally generated QR code and a manual setup key, and provi
 recovery codes to save. A valid six-digit TOTP code is required to activate it. Each recovery
 code works once; replacing the recovery codes invalidates the previous set.
 
+After generating the QR, the normal verification step asks only for the authenticator code
+and confirmation that recovery codes were saved. The password form for restarting enrollment
+is hidden under **Restart setup**. Completed operations use success styling; setup instructions
+and policy notices use neutral styling. Better Auth still requires the current password when
+starting or restarting enrollment for credential accounts.
+
+New QR codes also include an optional `image` URL pointing to PageBox's canonical
+`/icon-192.png`, without changing the TOTP secret, account label or issuer. Apps that support
+image hints may use it; the [common URI format](https://github.com/google/google-authenticator/wiki/Key-Uri-Format)
+does not define a universal logo field. [2FAuth documents support for linked images](https://docs.2fauth.app/getting-started/config/env-vars/#block_optauth_imagelink_fetching),
+subject to its image-fetching settings. Other apps may choose their own icon. Existing
+authenticator entries keep their current icon until updated in that app.
+
 The superadmin can select **Required for all users** under **Security**. They must first
 enable and verify their own authenticator. This policy is stored in PostgreSQL and applies
 to the panel and private site access, including existing sessions. Accounts without an

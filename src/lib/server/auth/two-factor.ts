@@ -2,7 +2,13 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { securityPolicy } from '../db/schema';
 import { safeLoginDestination } from './destinations';
-import { config, type HostKind } from '../config';
+import { adminUrl, config, type HostKind } from '../config';
+
+export function authenticatorUri(value: string): string {
+	const uri = new URL(value);
+	uri.searchParams.set('image', adminUrl('/icon-192.png'));
+	return uri.href;
+}
 
 export function twoFactorDestination(value: string | null, kind: HostKind): string {
 	const next = safeLoginDestination(value, kind, config.PAGEBOX_SITES_PREFIX);

@@ -3,6 +3,21 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-10-14
+
+### Fixed
+
+- Hide the restart password form while verifying authenticator enrollment. Show it only when explicitly reopening setup.
+- Use success styling for completed 2FA operations and neutral styling for setup instructions and the mandatory-policy notice.
+
+### Added
+
+- Include the canonical PageBox icon as an optional image hint in newly generated authenticator QR codes, and show the PageBox mark beside the QR. Authenticator apps decide whether to use the hint.
+
+### Upgrade
+
+Select `PAGEBOX_TAG=0.3.1` and restart PageBox. No new database migrations or authenticator re-enrollment are required. The initial password confirmation required by Better Auth remains. See [the hotfix notes](docs/releases/0.3.1.md).
+
 ## [0.3.0] — 2026-10-14
 
 Authenticator-based two-factor authentication for every account, with an optional instance-wide requirement.

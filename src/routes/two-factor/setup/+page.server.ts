@@ -11,7 +11,8 @@ import { loadSession } from '$lib/server/auth/session';
 import {
 	isTwoFactorRequired,
 	twoFactorGate,
-	twoFactorDestination
+	twoFactorDestination,
+	authenticatorUri
 } from '$lib/server/auth/two-factor';
 import { db } from '$lib/server/db';
 import { withStorageLock } from '$lib/server/db/locks';
@@ -82,7 +83,8 @@ export const actions: Actions = {
 		const { totpURI, backupCodes } = result.body as { totpURI: string; backupCodes: string[] };
 		return {
 			enrollment: true,
-			qr: await QRCode.toDataURL(totpURI, { width: 240, margin: 4 }),
+			info: true,
+			qr: await QRCode.toDataURL(authenticatorUri(totpURI), { width: 240, margin: 4 }),
 			secret: new URL(totpURI).searchParams.get('secret'),
 			backupCodes,
 			message: 'Scan the QR code, save your recovery codes, then verify your authenticator.'
@@ -143,6 +145,7 @@ export const actions: Actions = {
 		if (!result.ok) return failure(result);
 		await audit({ action: 'two_factor.recovery_regenerated', actorUserId: event.locals.user!.id });
 		return {
+			ok: true,
 			backupCodes: (result.body as { backupCodes: string[] }).backupCodes,
 			message: 'Save these recovery codes. Your previous codes no longer work.'
 		};

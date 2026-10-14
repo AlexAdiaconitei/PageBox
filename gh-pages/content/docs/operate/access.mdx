@@ -13,6 +13,15 @@ panel, or **Manage authenticator** on the reader landing page. Enter the current
 scan the locally generated QR code or enter its setup key, save the ten recovery codes,
 and verify a six-digit code from the authenticator. 2FA becomes active only after verification.
 
+At the verification step, enter only the authenticator code and confirm that recovery codes
+were saved. The password form for restarting setup is hidden under **Restart setup**. Better
+Auth still requires password confirmation when starting or restarting setup. Completed
+operations use the success color; setup instructions and policy notices use neutral styling.
+
+New QR codes include an optional image hint pointing to the PageBox icon. Authenticator apps
+decide whether to use it; some keep their own icon. Existing authenticator entries continue
+working and do not need to be recreated for this update.
+
 Password sign-in then asks for an authenticator or recovery code on both hosts. Each recovery
 code works once. Use **Replace recovery codes** to generate a new set with the current password;
 the previous set stops working. Enabling or disabling an authenticator signs out the account's
