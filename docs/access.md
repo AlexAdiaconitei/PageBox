@@ -24,6 +24,16 @@ does not define a universal logo field. [2FAuth documents support for linked ima
 subject to its image-fetching settings. Other apps may choose their own icon. Existing
 authenticator entries keep their current icon until updated in that app.
 
+Authy does not use the QR image hint for ordinary TOTP tokens. [Twilio documents that Authy
+looks up their logos using the issuer name](https://help.twilio.com/articles/19753405130523).
+To edit the icon in Authy, open **Settings → Accounts → PageBox → Edit logo**. PageBox cannot
+force its own icon in Authy through the TOTP QR code.
+
+When 2FA is enabled, **Manage authenticator** provides a single current-password field for
+both **Replace recovery codes** and **Disable two-factor authentication**. Choose the action
+to submit; each operation still verifies the password on the server. The disable action is
+unavailable while the instance policy requires 2FA.
+
 The superadmin can select **Required for all users** under **Security**. They must first
 enable and verify their own authenticator. This policy is stored in PostgreSQL and applies
 to the panel and private site access, including existing sessions. Accounts without an

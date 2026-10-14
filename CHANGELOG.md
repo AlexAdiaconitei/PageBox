@@ -3,6 +3,18 @@
 All notable changes to PageBox. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-10-14
+
+### Fixed
+
+- Align the recovery-code acknowledgment checkbox with its label using the shared checkbox style.
+- Replace the two password forms for an enabled authenticator with one password field and separate action buttons. Keep password verification and mandatory-policy enforcement on the server.
+- Show an enabled status badge and document how to edit the logo in Authy, which chooses its own icon for ordinary TOTP tokens.
+
+### Upgrade
+
+Select `PAGEBOX_TAG=0.3.2` and restart PageBox. No new database migrations or authenticator re-enrollment are required. See [the hotfix notes](docs/releases/0.3.2.md).
+
 ## [0.3.1] — 2026-10-14
 
 ### Fixed

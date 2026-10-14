@@ -295,6 +295,9 @@ run('authenticator and mandatory two-factor policy', () => {
 	});
 
 	it('enforces enrollment on the reader host and prohibits disabling required authenticators', async () => {
+		const management = await (await request('/two-factor/setup', { jar: seat })).text();
+		expect(management).toContain('Manage authenticator');
+		expect(management).not.toContain('formaction="?/disable"');
 		const view = await signIn({ email: reader.email, password: chosen + '-changed' }, sitesHost);
 		const data = await enrollment(view, chosen + '-changed', sitesHost);
 		expect(
@@ -389,7 +392,7 @@ run('authenticator and mandatory two-factor policy', () => {
 		expect((await login.json()).location).toMatch(/^\/two-factor/);
 	});
 
-	it('completes QR enrollment and a subsequent challenge in Chromium', async () => {
+	it('enrolls, challenges and manages 2FA with one password field in Chromium', async () => {
 		const accountEmail = `browser-two-factor-${tag()}@example.com`;
 		await submit('/users?/create', seat, { email: accountEmail, password: chosen, role: 'user' });
 		const jar = await signIn({ email: accountEmail, password: chosen });
@@ -437,6 +440,20 @@ run('authenticator and mandatory two-factor policy', () => {
 				true
 			);
 			await page.locator('input[name=code]').fill(totp(secret));
+			const savedLabel = page.locator('label').filter({ has: page.locator('input[name=saved]') });
+			const savedAlignment = await savedLabel.evaluate((label) => {
+				const checkbox = label.querySelector('input')!.getBoundingClientRect();
+				const range = document.createRange();
+				const text = Array.from(label.childNodes).find(
+					(node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
+				);
+				const span = label.querySelector('span');
+				if (span) range.selectNodeContents(span);
+				else range.selectNodeContents(text!);
+				const line = range.getBoundingClientRect();
+				return Math.abs(checkbox.y + checkbox.height / 2 - (line.y + line.height / 2));
+			});
+			expect(savedAlignment).toBeLessThanOrEqual(2);
 			await page.locator('input[name=saved]').check();
 			expect(
 				await page.locator('form[action="?/verify"]').evaluate((form) =>
@@ -459,7 +476,7 @@ run('authenticator and mandatory two-factor policy', () => {
 			]);
 			expect(verifiedResponse.status()).toBe(200);
 			try {
-				await page.getByText('Authenticator is enabled.', { exact: true }).waitFor();
+				await page.getByRole('heading', { name: 'Manage authenticator', exact: true }).waitFor();
 			} catch (error) {
 				throw new Error(
 					`Enrollment confirmation failed at ${page.url()}: ${(await page.locator('.notice').allTextContents()).join(' ')}`,
@@ -470,6 +487,7 @@ run('authenticator and mandatory two-factor policy', () => {
 				.getByRole('status')
 				.filter({ hasText: 'Two-factor authentication is enabled.' });
 			expect(await success.getAttribute('class')).toContain('notice-ok');
+			expect(await page.locator('input[name=password]').count()).toBe(1);
 			const successColors = await success.evaluate((element) => ({
 				border: getComputedStyle(element).borderLeftColor,
 				background: getComputedStyle(element).backgroundColor
@@ -487,6 +505,29 @@ run('authenticator and mandatory two-factor policy', () => {
 			await page.locator('input[name=code]').fill(totp(secret));
 			await page.getByRole('button', { name: 'Verify and continue', exact: true }).click();
 			await page.waitForURL('**/sites');
+			await page.goto('http://' + adminHost + '/two-factor/setup');
+			expect(await page.locator('input[name=password]').count()).toBe(1);
+			await page.locator('input[name=password]').fill(chosen + '-changed');
+			const [regeneratedResponse] = await Promise.all([
+				page.waitForResponse((response) => response.request().method() === 'POST'),
+				page.getByRole('button', { name: 'Replace recovery codes', exact: true }).click()
+			]);
+			expect(regeneratedResponse.url()).toContain('?/regenerate');
+			expect(regeneratedResponse.status()).toBe(200);
+			await page.getByRole('heading', { name: 'Recovery codes', exact: true }).waitFor();
+			expect(await page.locator('section ul li').count()).toBe(10);
+			expect(await page.locator('input[name=password]').count()).toBe(1);
+			await page.locator('input[name=password]').fill(chosen + '-changed');
+			const [disabledResponse] = await Promise.all([
+				page.waitForResponse((response) => response.request().method() === 'POST'),
+				page.getByRole('button', { name: 'Disable two-factor authentication', exact: true }).click()
+			]);
+			expect(disabledResponse.url()).toContain('?/disable');
+			expect(disabledResponse.status()).toBe(200);
+			await page.getByRole('button', { name: 'Set up authenticator', exact: true }).waitFor();
+			expect(
+				await page.getByRole('heading', { name: 'Manage authenticator', exact: true }).count()
+			).toBe(0);
 		} finally {
 			await browser.close();
 		}

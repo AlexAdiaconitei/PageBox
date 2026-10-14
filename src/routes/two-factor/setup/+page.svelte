@@ -29,8 +29,9 @@
 		<p class="eyebrow">PageBox · {data.email}</p>
 		<h1 class="text-[1.6rem] font-semibold tracking-tight">Two-factor authentication</h1>
 		<p class="text-muted mt-2 text-sm">
-			Protect your account with an authenticator app such as Google Authenticator, Microsoft
-			Authenticator or 2FAS.
+			{data.enabled
+				? 'Your account is protected with an authenticator app.'
+				: 'Protect your account with an authenticator app such as Authy, Google Authenticator or 2FAS.'}
 		</p>
 	</header>
 	{#if data.required}<p class="notice notice-info">
@@ -57,6 +58,15 @@
 			/>
 			<p class="text-muted text-sm">Or enter this setup key manually:</p>
 			<code class="mono break-all select-all">{form.secret}</code>
+			<p class="text-muted text-center text-xs">
+				Authy chooses its own icon. To change it, open Settings → Accounts → PageBox → Edit logo.
+				<a
+					class="underline"
+					href="https://help.twilio.com/articles/19753405130523"
+					target="_blank"
+					rel="noreferrer">Authy help</a
+				>
+			</p>
 		</div>
 	{/if}
 	{#if form?.backupCodes}
@@ -91,8 +101,10 @@
 					required
 				/></label
 			>
-			<label class="flex items-start gap-2 text-sm"
-				><input type="checkbox" name="saved" value="yes" required />I have saved my recovery codes</label
+			<label class="flex items-center gap-2 text-sm"
+				><input class="check" type="checkbox" name="saved" value="yes" required /><span
+					>I have saved my recovery codes</span
+				></label
 			>
 			<button class="btn btn-primary" type="submit">Verify and enable</button>
 		</form>
@@ -111,19 +123,20 @@
 			{@render setupForm(false)}
 		{/if}
 	{:else}
-		<p class="text-sm font-medium">Authenticator is enabled.</p>
-		<form method="POST" action="?/regenerate" class="flex flex-col gap-4">
-			<label class="field"
-				>Current password<PasswordInput
-					name="password"
-					autocomplete="current-password"
-					required
-				/></label
+		<section class="section" aria-labelledby="manage-authenticator">
+			<div class="flex items-center justify-between gap-3">
+				<h2 id="manage-authenticator" class="font-semibold">Manage authenticator</h2>
+				<span class="tag tag-live">Enabled</span>
+			</div>
+			<p id="authenticator-actions-help" class="text-muted mt-2 mb-4 text-sm">
+				Enter your current password to confirm the action you choose below.
+			</p>
+			<form
+				method="POST"
+				action="?/regenerate"
+				class="flex flex-col gap-4"
+				aria-describedby="authenticator-actions-help"
 			>
-			<button class="btn btn-ghost" type="submit">Replace recovery codes</button>
-		</form>
-		{#if !data.required}
-			<form method="POST" action="?/disable" class="flex flex-col gap-4">
 				<label class="field"
 					>Current password<PasswordInput
 						name="password"
@@ -131,9 +144,17 @@
 						required
 					/></label
 				>
-				<button class="btn btn-ghost" type="submit">Disable two-factor authentication</button>
+				<div class="flex flex-wrap gap-2">
+					<button class="btn btn-ghost" type="submit">Replace recovery codes</button>
+					{#if !data.required}
+						<button class="btn btn-danger" type="submit" formaction="?/disable"
+							>Disable two-factor authentication</button
+						>
+					{/if}
+				</div>
+				<p class="text-muted text-xs">Replacing recovery codes invalidates your previous codes.</p>
 			</form>
-		{/if}
+		</section>
 	{/if}
 	{#if data.enabled || !data.required}
 		<a class="btn btn-primary" href={data.next}>Continue</a>
