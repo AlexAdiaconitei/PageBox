@@ -3,12 +3,12 @@ title: Security and upgrades
 description: Configure mandatory authenticator 2FA and upgrade to PageBox 0.3.0.
 ---
 
-Version 0.3.0 adds authenticator-based two-factor authentication. Its release image tag is
-`ghcr.io/alexadiaconitei/pagebox:0.3.2`.
+Version 0.3.0 adds authenticator-based two-factor authentication. The current release image tag is
+`ghcr.io/alexadiaconitei/pagebox:0.4.0`.
 
 ## Upgrade from 0.2.0
 
-Back up PostgreSQL and the bucket, select PAGEBOX_TAG=0.3.2, restart the app and check
+Back up PostgreSQL and the bucket, select PAGEBOX_TAG=0.4.0, restart the app and check
 /healthz and the migration log. Migration 0010 adds the authenticator table, account/session
 flags and the instance policy. It runs at startup when migrations are enabled; otherwise run
 `pnpm db:migrate` before starting the new version. No DNS, proxy or TLS changes are needed.

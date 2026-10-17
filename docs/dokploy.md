@@ -3,7 +3,7 @@
 The image is published, so the shortest route pulls it rather than building on your server:
 
 ```
-ghcr.io/alexadiaconitei/pagebox:0.3.2
+ghcr.io/alexadiaconitei/pagebox:0.4.0
 ```
 
 | Route                      | Use it when                                                        |
@@ -52,7 +52,7 @@ the sites host — unless you give it a domain of its own, below.
 1. **Project** → create `app-pagebox` (an application, not a shared resource, so it does not
    belong in a `core`-style project).
 2. **Create Application** → *General* → provider **Docker** → image
-   `ghcr.io/alexadiaconitei/pagebox:0.3.2`. The package is public, so no registry
+   `ghcr.io/alexadiaconitei/pagebox:0.4.0`. The package is public, so no registry
    credentials are needed. Pin the version: `latest` moves on the next release.
 3. **Domains** → **Add Domain** twice, on this same application:
 

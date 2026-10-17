@@ -5,6 +5,8 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-18
+
 ### Added
 
 - Serve any site from the root of its own domain. An admin who owns the site sets the domain in the site's **Domain** section; PageBox then picks the site from the `Host` header, serves its build from `/` and reports `"mode": "domain"`, the `hostname` and `"basePath": "/"` from `whoami`. Old `/s/<slug>/` links are forwarded to the domain after the private-site check. Private sites keep signing readers in on `PAGEBOX_SITES_HOST` and receive a host-only cookie for the domain through a one-time code. Changing or removing a domain revokes those cookies and switches the base path, so the site must be rebuilt.
@@ -15,7 +17,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Upgrade
 
-No database migration. Sites keep their `/s/<slug>/` URLs. Instances that ran with `PAGEBOX_SITE_SUBDOMAINS=true` lose the generated hosts: give each site that needs its own origin a domain in the panel, route that domain to PageBox (in Dokploy, **Add Domain** on the same application with path `/` and container port 3000), and rebuild the site for base path `/`. See [Dokploy](docs/dokploy.md#a-site-on-its-own-domain).
+No database migration. Sites keep their `/s/<slug>/` URLs. Instances that ran with `PAGEBOX_SITE_SUBDOMAINS=true` lose the generated hosts: give each site that needs its own origin a domain in the panel, route that domain to PageBox (in Dokploy, **Add Domain** on the same application with path `/` and container port 3000), and rebuild the site for base path `/`. See [Dokploy](docs/dokploy.md#a-site-on-its-own-domain) and [the release notes](docs/releases/0.4.0.md).
 
 ## [0.3.2] — 2026-10-14
 
