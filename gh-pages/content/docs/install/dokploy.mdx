@@ -164,6 +164,27 @@ Open `https://pagebox.<your-domain>/`, sign in, replace the password. Then
 
 </Steps>
 
+## A site on its own domain
+
+Any site can be served from a domain of its own — `docs.example.org` instead of
+`pages.example.com/s/docs/`. An admin who owns the site sets it in the panel. PageBox picks
+the site from the `Host` header and serves its build from `/`, so the proxy only has to
+deliver the request unchanged.
+
+1. **Panel** → the site → **Domain** → type `docs.example.org` → _Save domain_.
+2. **DNS**: point `docs.example.org` at the Dokploy server.
+3. **Dokploy** → this same PageBox application → _Domains_ → **Add Domain**: host
+   `docs.example.org`, path `/`, internal path empty, strip path off, container port
+   `3000`, HTTPS on with Let's Encrypt.
+4. **Rebuild the site for base path `/`** and deploy it. `whoami` already answers
+   `"basePath": "/"`.
+
+No internal path and no `/s/<slug>/`: a rewrite hides the prefix from the browser, and every
+redirect or absolute link would then point somewhere it cannot follow. Old
+`/s/<slug>/` links on the sites host are forwarded to the domain, after the sign-in check
+for a private site. Private sites still sign readers in on the sites host; the domain gets
+its own host-only cookie through a one-time code.
+
 ## Application → Dockerfile
 
 Same domains, same environment, same health check. The only difference is the source: point
@@ -183,7 +204,7 @@ same published image. Two things to remember:
   into Dokploy's dynamic configuration directory — usually
   `/etc/dokploy/traefik/dynamic/pagebox.yml` — and adjust the two hostnames and the
   container name. Both routers point at one service: the same split as above, written by
-  hand.
+  hand. A site's custom domain needs one more `Host(...)` router to that service.
 - The service must be attached to `dokploy-network`.
 
 ## Upgrading

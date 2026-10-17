@@ -20,13 +20,13 @@ export const readerCookieName = () =>
 
 export function safeSiteDestination(
 	value: string | null,
-	ref: Pick<SiteRef, 'basePath' | 'id' | 'slug'>
+	ref: Pick<SiteRef, 'basePath' | 'hostname'>
 ): string {
 	return safeReaderDestination(value, { origin: siteUrl(ref), basePath: ref.basePath });
 }
 export function accessUrl(ref: SiteRef, path: string): string {
-	// Without per-site origins the site shares the reader host, so its login is enough.
-	if (!config.PAGEBOX_SITE_SUBDOMAINS)
+	// Without a domain of its own the site shares the reader host, so its login is enough.
+	if (!ref.hostname)
 		return readerUrl('/login?next=' + encodeURIComponent(safeSiteDestination(path, ref)));
 	return readerUrl(
 		'/access?site=' +
@@ -61,7 +61,12 @@ export async function authorizeReader(event: RequestEvent): Promise<Response> {
 		const fresh = await loadSession(event, 'sites');
 		if (!fresh || event.locals.sessionId !== parentId) error(404, 'Not found');
 		const ref = await lookupSiteBySlug(event.url.searchParams.get('site') ?? '');
-		if (!ref || ref.disabled || !atLeast(await permissionFor(fresh, ref), 'viewer'))
+		if (
+			!ref ||
+			!ref.hostname ||
+			ref.disabled ||
+			!atLeast(await permissionFor(fresh, ref), 'viewer')
+		)
 			error(404, 'Not found');
 		await db.delete(siteAuthorization).where(lt(siteAuthorization.expiresAt, new Date()));
 		const [{ outstanding }] = await db
@@ -90,7 +95,8 @@ export async function acceptReader(event: RequestEvent, siteId: string): Promise
 	return withLock('reader-code:' + hash(code), async () =>
 		db.transaction(async (tx) => {
 			const [ref] = await tx.select().from(site).where(eq(site.id, siteId)).limit(1);
-			if (!ref || new URL(siteUrl(ref)).origin !== event.url.origin) error(404, 'Not found');
+			if (!ref?.hostname || new URL(siteUrl(ref)).origin !== event.url.origin)
+				error(404, 'Not found');
 			const [authorization] = await tx
 				.delete(siteAuthorization)
 				.where(

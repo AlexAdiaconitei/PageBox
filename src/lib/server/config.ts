@@ -1,3 +1,4 @@
+import { domainToASCII } from 'node:url';
 import { z } from 'zod';
 import { formatBytes, parseSize, SIZE_HINT } from '$lib/format';
 import { lazy } from './lazy';
@@ -76,10 +77,6 @@ const schema = z.object({
 		.transform((v) => '/' + v.replace(/^\/+|\/+$/g, ''))
 		.refine((v) => /^\/[a-z0-9][a-z0-9-]*$/.test(v), 'must look like /s'),
 	PAGEBOX_PUBLIC_SCHEME: z.enum(['http', 'https']).default('https'),
-	// Serve each site from its own `<slug>-<id>.<SITES_HOST>` origin instead of
-	// `<SITES_HOST>/s/<slug>/`. Needs wildcard DNS and a wildcard certificate, so it is off
-	// until an operator has both.
-	PAGEBOX_SITE_SUBDOMAINS: z.stringbool().default(false),
 	PAGEBOX_REPLICAS: z.coerce.number().int().positive().default(1),
 
 	// --- infra ---------------------------------------------------------------
@@ -219,8 +216,6 @@ export function parseConfig(env: Record<string, string | undefined>): {
 	}
 	if (adminHost.endsWith('.' + sitesHost))
 		errors.push('PAGEBOX_ADMIN_HOST must be outside the reader subdomain namespace');
-	if (c.PAGEBOX_SITE_SUBDOMAINS && sitesHost.length > 197)
-		errors.push('PAGEBOX_SITES_HOST is too long for per-site hostnames');
 	try {
 		const database = new URL(c.DATABASE_URL);
 		if (!['postgres:', 'postgresql:'].includes(database.protocol)) throw new Error();
@@ -310,43 +305,61 @@ export const config: Config = lazy(getConfig);
 /** Which of the two hostnames a request arrived on, or null for anything else. */
 export type HostKind = 'admin' | 'sites';
 
+const hostOnly = (host: string) => host.toLowerCase().split(':')[0];
+
 export function hostKind(host: string): HostKind | null {
-	const h = host.toLowerCase().split(':')[0];
-	if (h === config.PAGEBOX_ADMIN_HOST.split(':')[0]) return 'admin';
-	if (h === config.PAGEBOX_SITES_HOST.split(':')[0]) return 'sites';
-	if (siteIdForHost(host)) return 'sites';
+	const h = hostOnly(host);
+	if (h === hostOnly(config.PAGEBOX_ADMIN_HOST)) return 'admin';
+	if (h === hostOnly(config.PAGEBOX_SITES_HOST)) return 'sites';
 	return null;
 }
 
 /**
- * Absolute URL of a site, built from config — never from request headers.
+ * Validates a custom domain an owner types for a site, and returns it in the one spelling
+ * the resolver compares against: lowercase ASCII, no trailing dot. A port is kept because
+ * local stacks run on one; a public domain never carries one.
  *
- * `port` is the one thing worth taking from the current request: both hosts are served by
- * the same process, so a link printed without it is dead on a dev server or any deployment
- * that does not sit on 80/443. It is a port number, not a hostname: it cannot redirect a
- * link somewhere else.
+ * Returns an error message instead of throwing: this is form input, not configuration.
  */
-export function siteHostFor(site: { slug: string; id: string }): string {
-	// IDs prevent a newly created site inheriting an old site's cookies or service worker.
-	return `${site.slug.slice(0, 28)}-${site.id.toLowerCase()}.${config.PAGEBOX_SITES_HOST}`;
+export function normaliseSiteDomain(input: string): { hostname: string } | { error: string } {
+	const raw = input
+		.trim()
+		.toLowerCase()
+		.replace(/\.(?=:|$)/, '');
+	if (!raw) return { error: 'Type a domain' };
+	if (/[/?#@\s\\]/.test(raw) || raw.includes('://'))
+		return { error: 'Type only the domain, like docs.example.com — no scheme or path' };
+	const [name, port, extra] = raw.split(':');
+	if (extra !== undefined || (port !== undefined && !/^[1-9][0-9]{0,4}$/.test(port)))
+		return { error: 'That is not a valid domain' };
+	const ascii = domainToASCII(name);
+	if (
+		!ascii ||
+		ascii.length > 253 ||
+		!ascii.includes('.') ||
+		/^[0-9.]+$/.test(ascii) ||
+		!ascii.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
+	)
+		return { error: 'That is not a valid domain' };
+	const admin = hostOnly(config.PAGEBOX_ADMIN_HOST);
+	// The panel and the reader login hold PageBox's own cookies; uploaded content never
+	// shares, or sits under, the panel's origin.
+	if (
+		ascii === admin ||
+		ascii.endsWith('.' + admin) ||
+		ascii === hostOnly(config.PAGEBOX_SITES_HOST)
+	)
+		return { error: 'That domain belongs to PageBox itself' };
+	return { hostname: port ? `${ascii}:${port}` : ascii };
 }
 
-export function siteIdForHost(host: string): string | null {
-	if (!config.PAGEBOX_SITE_SUBDOMAINS) return null;
-	const hostname = host.toLowerCase().split(':')[0];
-	const suffix = `.${config.PAGEBOX_SITES_HOST.split(':')[0]}`;
-	if (!hostname.endsWith(suffix)) return null;
-	const label = hostname.slice(0, -suffix.length);
-	return (
-		/^[a-z0-9][a-z0-9-]{0,27}-([0-9a-hjkmnp-tv-z]{26})$/.exec(label)?.[1].toUpperCase() ?? null
-	);
-}
-
-export function siteUrl(
-	site: { slug: string; id: string; basePath: string },
-	_port?: string | null
-): string {
-	const host = config.PAGEBOX_SITE_SUBDOMAINS ? siteHostFor(site) : config.PAGEBOX_SITES_HOST;
+/**
+ * Absolute URL of a site, built from config and the stored row — never from request
+ * headers. A site with a custom domain is served from that domain's root; any other site
+ * lives under the shared sites host.
+ */
+export function siteUrl(site: { hostname: string | null; basePath: string }): string {
+	const host = site.hostname ?? config.PAGEBOX_SITES_HOST;
 	return `${config.PAGEBOX_PUBLIC_SCHEME}://${host}${site.basePath}`;
 }
 

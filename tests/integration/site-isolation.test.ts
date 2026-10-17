@@ -10,7 +10,7 @@ import {
 	upload,
 	buildZip,
 	request,
-	siteHost,
+	giveDomain,
 	sitesHost,
 	tag,
 	store,
@@ -27,10 +27,10 @@ let reader: Jar;
 let hostA: string;
 let hostB: string;
 let sql: ReturnType<typeof postgres>;
-const privateAsset = (host: string, slug: string, jar?: Jar) =>
-	request(`/s/${slug}/secret.txt`, { host, jar, headers: { 'sec-fetch-dest': 'empty' } });
+const privateAsset = (host: string, jar?: Jar, path = '/secret.txt') =>
+	request(path, { host, jar, headers: { 'sec-fetch-dest': 'empty' } });
 async function issue(slug: string, jar = reader) {
-	const res = await request(`/access?site=${slug}&next=${encodeURIComponent(`/s/${slug}/`)}`, {
+	const res = await request(`/access?site=${slug}&next=${encodeURIComponent('/')}`, {
 		host: sitesHost,
 		jar
 	});
@@ -70,8 +70,8 @@ run('site origin isolation', () => {
 				).status
 			).toBe(201);
 		}
-		hostA = (await siteHost(a))!;
-		hostB = (await siteHost(b))!;
+		hostA = await giveDomain(admin, a);
+		hostB = await giveDomain(admin, b);
 	}, 20000);
 	afterAll(async () => {
 		await sql?.end();
@@ -83,8 +83,14 @@ run('site origin isolation', () => {
 		expect(res.headers.get('cache-control')).toBe('private, no-store');
 	});
 	it('does not accept central cookies on a site origin', async () => {
-		expect((await privateAsset(hostA, a, reader)).status).toBe(401);
-		expect((await request('/login', { host: hostA })).status).toBe(404);
+		expect((await privateAsset(hostA, reader)).status).toBe(401);
+		// `/login` on a site's domain is a path of its build, not PageBox's sign-in form.
+		const login = await request('/login', {
+			host: hostA,
+			headers: { 'sec-fetch-dest': 'document' }
+		});
+		expect(login.status).toBe(302);
+		expect(new URL(login.headers.get('location')!).host).toBe(sitesHost);
 	});
 	it('binds each capability to one site and leaves CORS disabled', async () => {
 		const { response, jar } = await redeem(await issue(a));
@@ -94,12 +100,12 @@ run('site origin isolation', () => {
 			expect(cookie.toLowerCase()).not.toContain('domain=');
 			expect(cookie.toLowerCase()).toContain('httponly');
 		}
-		const own = await privateAsset(hostA, a, jar);
+		const own = await privateAsset(hostA, jar);
 		expect(own.status).toBe(200);
 		expect(await own.text()).toBe('isolation-secret-' + a);
 		expect(own.headers.get('access-control-allow-origin')).toBeNull();
-		expect((await privateAsset(hostB, b, jar)).status).toBe(401);
-		expect((await privateAsset(hostA, b, jar)).status).toBe(404);
+		expect((await privateAsset(hostB, jar)).status).toBe(401);
+		expect((await privateAsset(hostA, jar, `/s/${b}/secret.txt`)).status).toBe(404);
 	});
 	it('rejects the wrong origin without consuming a code and rejects replay', async () => {
 		const code = await issue(a);
@@ -121,13 +127,19 @@ run('site origin isolation', () => {
 		await sql`update site_authorization set expires_at = now() - interval '1 minute' where code_hash = ${hash}`;
 		expect((await redeem(code)).response.status).toBe(404);
 	});
-	it('checks authorization before redirecting a private path to its trailing slash', async () => {
-		const denied = await request(`/s/${a}`, { host: hostA });
+	it('checks authorization before forwarding an old /s/ link to the domain', async () => {
+		const denied = await request(`/s/${a}/secret.txt`, {
+			host: sitesHost,
+			headers: { 'sec-fetch-dest': 'empty' }
+		});
 		expect(denied.status).toBe(401);
 		expect(denied.headers.get('location')).toBeNull();
-		const cap = await redeem(await issue(a));
-		const allowed = await request(`/s/${a}`, { host: hostA, jar: cap.jar });
-		expect(allowed.status).toBe(301);
+		const allowed = await request(`/s/${a}/secret.txt?x=1`, { host: sitesHost, jar: reader });
+		expect(allowed.status).toBe(302);
+		const location = new URL(allowed.headers.get('location')!);
+		expect(location.host).toBe(sitesHost);
+		expect(location.pathname).toBe('/access');
+		expect(location.searchParams.get('next')).toBe('/secret.txt?x=1');
 		expect(allowed.headers.get('cache-control')).toBe('private, no-store');
 	});
 	it('logs in and serves a private page in Chromium, while blocking cross-origin reads', async () => {
@@ -138,15 +150,15 @@ run('site origin isolation', () => {
 		try {
 			const context = await browser.newContext();
 			const page = await context.newPage();
-			await page.goto(`http://${hostA}/s/${a}/`);
+			await page.goto(`http://${hostA}/`);
 			expect(page.url()).toContain('/login?next=');
 			await page.locator('input[name=email]').fill(email!);
 			await page.locator('input[name=password]').fill(password!);
 			await page.locator('button[type=submit]').click();
-			await page.waitForURL(`http://${hostA}/s/${a}/`);
+			await page.waitForURL(`http://${hostA}/`);
 			expect(await page.locator('body').textContent()).toContain('isolated');
-			await page.goto(`http://${hostB}/s/${b}/`);
-			await page.waitForURL(`http://${hostB}/s/${b}/`);
+			await page.goto(`http://${hostB}/`);
+			await page.waitForURL(`http://${hostB}/`);
 			const cookies = await context.cookies();
 			expect(
 				cookies
@@ -154,7 +166,7 @@ run('site origin isolation', () => {
 					.map((c) => c.domain)
 					.sort()
 			).toEqual([hostA.split(':')[0], hostB.split(':')[0]].sort());
-			await page.goto(`http://${hostA}/s/${a}/`);
+			await page.goto(`http://${hostA}/`);
 			const result = await page.evaluate(
 				async ({ own, other }) => {
 					const local = await fetch(own).then((r) => r.text());
@@ -163,7 +175,7 @@ run('site origin isolation', () => {
 						.catch(() => 'blocked');
 					return { local, cross };
 				},
-				{ own: `/s/${a}/secret.txt`, other: `http://${hostB}/s/${b}/secret.txt` }
+				{ own: '/secret.txt', other: `http://${hostB}/secret.txt` }
 			);
 			expect(result.local).toBe('isolation-secret-' + a);
 			expect(result.cross).toBe('blocked');
@@ -175,7 +187,7 @@ run('site origin isolation', () => {
 		const cap = await redeem(await issue(a));
 		const pending = await issue(b);
 		expect((await post('/logout', reader, {}, sitesHost)).status).toBe(303);
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(401);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(401);
 		expect((await redeem(pending)).response.status).toBe(404);
 	});
 	it('checks live grants, account bans and both session expirations on each file', async () => {
@@ -201,28 +213,28 @@ run('site origin isolation', () => {
 		).toBe('success');
 		const viewer = await signIn({ email: address, password: chosen }, sitesHost);
 		let cap = await redeem(await issue(a, viewer));
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(200);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(200);
 		await sql`update "user" set banned = true where id = ${account.id}`;
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(401);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(401);
 		await sql`update "user" set banned = false where id = ${account.id}`;
 		await sql`update site_session set expires_at = now() - interval '1 minute' where session_id in (select id from session where user_id = ${account.id})`;
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(401);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(401);
 		cap = await redeem(await issue(a, viewer));
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(200);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(200);
 		const pending = await issue(a, viewer);
 		const [grant] = await sql`select id from site_grant where principal_id = ${account.id}`;
 		expect(
 			(await actionResult(await post(`/sites/${a}?/removeGrant`, admin, { grantId: grant.id })))
 				.type
 		).toBe('success');
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(404);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(404);
 		expect((await redeem(pending)).response.status).toBe(404);
 		await post(`/sites/${a}?/addGrant`, admin, { principal: `user:${account.id}`, role: 'viewer' });
 		cap = await redeem(await issue(a, viewer));
 		await sql`update session set expires_at = now() - interval '1 minute' where user_id = ${account.id}`;
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(401);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(401);
 	}, 20000);
-	it('assigns a fresh origin when a deleted slug is recreated', async () => {
+	it('carries no reader cookie into a site recreated on the same domain', async () => {
 		const viewer = await signIn(undefined, sitesHost);
 		const cap = await redeem(await issue(a, viewer));
 		expect(
@@ -235,9 +247,8 @@ run('site origin isolation', () => {
 				)
 			).type
 		).toBe('redirect');
-		const newHost = (await siteHost(a))!;
-		expect(newHost).not.toBe(hostA);
-		expect((await privateAsset(hostA, a, cap.jar)).status).toBe(404);
-		expect((await privateAsset(newHost, a, cap.jar)).status).toBe(401);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(404);
+		expect(await giveDomain(admin, a)).toBe(hostA);
+		expect((await privateAsset(hostA, cap.jar)).status).toBe(401);
 	});
 });

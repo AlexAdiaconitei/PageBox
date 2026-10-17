@@ -11,7 +11,7 @@ import {
 	password,
 	request,
 	signIn,
-	siteHost,
+	giveDomain,
 	sitesHost,
 	store,
 	tag,
@@ -70,6 +70,7 @@ run('authenticator and mandatory two-factor policy', () => {
 	let reader: { email: string; jar: Jar; id: string };
 	let authenticator: Awaited<ReturnType<typeof enrollment>>;
 	let slug: string;
+	let domain: string;
 	let fixture: ReturnType<typeof postgres>;
 	beforeAll(async () => {
 		fixture = postgres(process.env.DATABASE_URL_HOST ?? process.env.DATABASE_URL!, { max: 1 });
@@ -98,6 +99,7 @@ run('authenticator and mandatory two-factor policy', () => {
 		slug = 'two-factor-' + tag();
 		await submit('/sites?/create', seat, { slug, name: slug, visibility: 'private' });
 		await submit(`/sites/${slug}?/addGrant`, seat, { principal: `user:${id}`, role: 'viewer' });
+		domain = await giveDomain(seat, slug);
 	}, 30_000);
 
 	afterAll(async () => {
@@ -282,12 +284,11 @@ run('authenticator and mandatory two-factor policy', () => {
 				'location'
 			)
 		).toMatch(/^\/two-factor\/setup/);
-		const site = (await siteHost(slug))!;
 		expect(
 			(
-				await request('/s/' + slug + '/', {
+				await request('/', {
 					jar: child,
-					host: site,
+					host: domain,
 					headers: { 'sec-fetch-dest': 'style' }
 				})
 			).status

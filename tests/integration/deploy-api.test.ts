@@ -110,7 +110,8 @@ run('deploy API', () => {
 		const body = await res.json();
 		expect(body.slug).toBe(slug);
 		expect(body.basePath).toBe(`/s/${slug}/`);
-		expect(body.mode).toBe('subdomain');
+		expect(body.mode).toBe('path');
+		expect(body.hostname).toBeNull();
 	});
 
 	it('refuses anonymous and malformed credentials', async () => {

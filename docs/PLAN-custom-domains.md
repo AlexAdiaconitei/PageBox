@@ -1,5 +1,12 @@
 # Plan para dominios personalizados y sites en raíz
 
+> **Superado.** La implementación es más simple que este plan: cada site tiene un campo
+> *Domain* opcional que fija un admin propietario en el panel. Con dominio, el site se sirve
+> desde `/` de ese host y su base path pasa a `/`; sin dominio sigue en `/s/<slug>/`. No hay
+> subdominios generados con ID, ni verificación TXT, ni worker de Traefik: el operador
+> enruta el dominio en su proxy (en Dokploy, *Add Domain* sobre la misma aplicación). Ver
+> [dokploy.md](dokploy.md#a-site-on-its-own-domain). Se conserva como antecedente.
+
 Fecha de revisión: 2026-10-05.
 
 Este documento detalla la implementación propuesta a partir del código actual, incluidos los cambios locales del checkout. La investigación de infraestructura y sus fuentes están en [custom-domains-research.md](custom-domains-research.md).

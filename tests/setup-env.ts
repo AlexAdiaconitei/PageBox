@@ -6,8 +6,6 @@
 process.env.NODE_ENV = 'test';
 process.env.PAGEBOX_ADMIN_HOST ??= 'pagebox.test';
 process.env.PAGEBOX_SITES_HOST ??= 'pages.test';
-// The isolation suites exercise per-site origins; path mode is the shipped default.
-process.env.PAGEBOX_SITE_SUBDOMAINS ??= 'true';
 process.env.DATABASE_URL ??= 'postgres://pagebox:pagebox@localhost:5432/pagebox_test';
 process.env.S3_ENDPOINT ??= 'http://localhost:9000';
 process.env.S3_ACCESS_KEY ??= 'test';

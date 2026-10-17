@@ -121,8 +121,6 @@ try {
 		PAGEBOX_ADMIN_HOST: `pagebox.localhost:${port}`,
 		PAGEBOX_SITES_HOST: `pages.localhost:${port}`,
 		PAGEBOX_PUBLIC_SCHEME: 'http',
-		// The isolation suites run against per-site origins.
-		PAGEBOX_SITE_SUBDOMAINS: 'true',
 		PAGEBOX_REPLICAS: '1',
 		AUTH_SECRET: randomUUID() + randomUUID(),
 		BOOTSTRAP_ADMIN_EMAIL: 'fixture-bootstrap@example.com',

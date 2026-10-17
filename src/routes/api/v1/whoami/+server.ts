@@ -9,8 +9,8 @@ import { atLeast, permissionFor } from '$lib/server/perms';
 
 /**
  * Lets CI ask for its own base path before building, so the prefix is never hardcoded in
- * a workflow. When a site later moves to its own hostname (v2) the same call returns
- * basePath "/" and the next build comes out right without touching the pipeline.
+ * a workflow. When an owner gives the site its own domain the same call returns basePath
+ * "/" and the next build comes out right without touching the pipeline.
  */
 export const GET: RequestHandler = async (event) => {
 	const authenticated = await authenticateToken(event);
@@ -49,7 +49,9 @@ export const GET: RequestHandler = async (event) => {
 		// A build is worth making either way, but a pipeline that deploys to a site nobody
 		// is serving should be able to say so out loud.
 		serving: row.disabledAt === null,
-		mode: config.PAGEBOX_SITE_SUBDOMAINS ? 'subdomain' : 'path',
+		// 'domain': served from the root of `hostname`. 'path': under the shared sites host.
+		mode: row.hostname ? 'domain' : 'path',
+		hostname: row.hostname,
 		maxUploadBytes: config.MAX_UPLOAD_BYTES
 	});
 };

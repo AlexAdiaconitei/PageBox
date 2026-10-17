@@ -2,7 +2,14 @@ import { error, fail, isHttpError, redirect } from '@sveltejs/kit';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { audit } from '$lib/server/audit';
-import { adminUrl, config, formatBytes, siteUrl } from '$lib/server/config';
+import {
+	adminUrl,
+	basePathFor,
+	config,
+	formatBytes,
+	normaliseSiteDomain,
+	siteUrl
+} from '$lib/server/config';
 import { db } from '$lib/server/db';
 import { panelMutation } from '$lib/server/auth/mutation';
 import {
@@ -10,8 +17,10 @@ import {
 	deployment,
 	group,
 	site,
+	siteAuthorization,
 	siteGrant,
 	siteRoleValues,
+	siteSession,
 	user,
 	type SiteRole
 } from '$lib/server/db/schema';
@@ -167,6 +176,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			name: row.name,
 			visibility: row.visibility,
 			basePath: row.basePath,
+			hostname: row.hostname,
 			spaFallback: row.spaFallback,
 			activeDeploymentId: row.activeDeploymentId,
 			disabled: row.disabledAt !== null,
@@ -213,6 +223,9 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		// of this particular site. A plain user granted `owner` manages the site; releasing
 		// its name on the shared host is not theirs to do.
 		canDelete: isAdmin(locals.user) && atLeast(permission, 'owner'),
+		// A domain is infrastructure: it only works once someone routes it to this instance,
+		// so it takes the same standing as deleting — an admin who owns the site.
+		canSetDomain: isAdmin(locals.user) && atLeast(permission, 'owner'),
 		canDeploy: atLeast(permission, 'deployer'),
 		limits: {
 			maxFiles: config.MAX_FILES,
@@ -477,6 +490,64 @@ export const actions: Actions = {
 			}
 		}
 		return { message: 'Settings saved' };
+	},
+
+	/**
+	 * Gives the site its own domain, or takes it away.
+	 *
+	 * With a domain the site is served from that domain's root, so its base path becomes `/`
+	 * and builds made for `/s/<slug>/` stop resolving their assets: the live build has to be
+	 * rebuilt. Without one it goes back under the shared sites host. Either way every reader
+	 * cookie issued for the old origin is revoked here, in the same transaction.
+	 */
+	domain: async ({ locals, params, request }) => {
+		const { siteRef, permission } = await loadSite(params.slug, locals.user);
+		if (!isAdmin(locals.user) || !atLeast(permission, 'owner'))
+			return fail(403, { message: 'Not allowed' });
+
+		const data = await request.formData();
+		const input = String(data.get('hostname') ?? '').trim();
+		let hostname: string | null = null;
+		if (input) {
+			const parsed = normaliseSiteDomain(input);
+			if ('error' in parsed) return fail(400, { message: parsed.error });
+			hostname = parsed.hostname;
+		}
+		if (hostname === siteRef.hostname) return { message: 'Domain unchanged' };
+
+		const basePath = hostname ? '/' : basePathFor(siteRef.slug);
+		const taken = hostname
+			? await db.select({ id: site.id }).from(site).where(eq(site.hostname, hostname)).limit(1)
+			: [];
+		// Generic on purpose: which site holds a domain is not this owner's business.
+		if (taken.length) return fail(409, { message: 'That domain is already in use' });
+
+		try {
+			await db.transaction(async (tx) => {
+				await tx.update(site).set({ hostname, basePath }).where(eq(site.id, siteRef.id));
+				await tx.delete(siteSession).where(eq(siteSession.siteId, siteRef.id));
+				await tx.delete(siteAuthorization).where(eq(siteAuthorization.siteId, siteRef.id));
+			});
+		} catch (err) {
+			// Two owners claiming the same domain at once: the unique index decides.
+			const failure = err as { code?: string; cause?: { code?: string } };
+			if (failure.code === '23505' || failure.cause?.code === '23505')
+				return fail(409, { message: 'That domain is already in use' });
+			throw err;
+		}
+		await invalidateSite(siteRef.slug, siteRef.id);
+		await audit({
+			action: 'site.domain_changed',
+			actorUserId: locals.user!.id,
+			targetType: 'site',
+			targetId: siteRef.id,
+			meta: { from: siteRef.hostname, to: hostname, basePath }
+		});
+		return {
+			message: hostname
+				? `Domain set to ${hostname}. Rebuild the site for base path / and deploy it again.`
+				: `Domain removed. Rebuild the site for base path ${basePath} and deploy it again.`
+		};
 	},
 
 	/**

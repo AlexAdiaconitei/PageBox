@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSitePath } from '../../src/lib/server/sites/resolve';
-import { hostKind } from '../../src/lib/server/config';
+import { hostKind, normaliseSiteDomain } from '../../src/lib/server/config';
 
 describe('parseSitePath', () => {
 	it('parses a site root with trailing slash', () => {
@@ -49,5 +49,38 @@ describe('hostKind', () => {
 		expect(hostKind('pages.test:5173')).toBe('sites');
 		expect(hostKind('evil.example.com')).toBeNull();
 		expect(hostKind('')).toBeNull();
+	});
+});
+
+describe('normaliseSiteDomain', () => {
+	const host = (input: string) => {
+		const result = normaliseSiteDomain(input);
+		return 'hostname' in result ? result.hostname : null;
+	};
+
+	it('stores one spelling per domain', () => {
+		expect(host('Docs.Example.com')).toBe('docs.example.com');
+		expect(host(' docs.example.com. ')).toBe('docs.example.com');
+		expect(host('bücher.example')).toBe('xn--bcher-kva.example');
+		expect(host('docs.localhost:5173')).toBe('docs.localhost:5173');
+	});
+
+	it('takes a domain, not a URL', () => {
+		expect(host('https://docs.example.com')).toBeNull();
+		expect(host('docs.example.com/guide')).toBeNull();
+		expect(host('user@docs.example.com')).toBeNull();
+		expect(host('*.example.com')).toBeNull();
+		expect(host('localhost')).toBeNull();
+		expect(host('10.0.0.1')).toBeNull();
+		expect(host('docs.example.com:0')).toBeNull();
+		expect(host('')).toBeNull();
+	});
+
+	// Uploaded content must never share an origin with, or sit under, PageBox's own hosts.
+	it('refuses the instance hosts', () => {
+		expect(host('pagebox.test')).toBeNull();
+		expect(host('evil.pagebox.test')).toBeNull();
+		expect(host('pages.test')).toBeNull();
+		expect(host('docs.pages.test')).toBe('docs.pages.test');
 	});
 });

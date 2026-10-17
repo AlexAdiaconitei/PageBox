@@ -1,8 +1,7 @@
 # For a Dokploy Compose stack, place this file in its Traefik dynamic directory.
-# Replace the hostnames and container name. Application deployments also need a router
-# covering site subdomains. These rules use Traefik v3 / Go regexp syntax.
-# Production requires a TLS entrypoint and certificates for the central hosts and
-# *.pages.example.com. Upgrade the application and routes together.
+# Replace the hostnames and container name. These rules use Traefik v3 syntax.
+# Production requires a TLS entrypoint and a certificate for every host listed here.
+# Upgrade the application and routes together.
 
 http:
   routers:
@@ -11,9 +10,16 @@ http:
       entryPoints: [web]
       service: pagebox
     pagebox-sites:
-      rule: 'Host(`pages.example.com`) || HostRegexp(`^[a-z0-9][a-z0-9-]{0,27}-[0-9a-hjkmnp-tv-z]{26}\Q.pages.example.com\E$`)'
+      rule: 'Host(`pages.example.com`)'
       entryPoints: [web]
       service: pagebox
+    # One router per custom domain set on a site in the panel. PageBox picks the site by
+    # the Host header and serves it from `/`, so the request goes through unchanged: no
+    # path prefix, no rewrite.
+    # pagebox-docs:
+    #   rule: 'Host(`docs.example.org`)'
+    #   entryPoints: [web]
+    #   service: pagebox
 
   services:
     pagebox:

@@ -11,7 +11,7 @@ import {
 	upload,
 	userIdFor,
 	store,
-	siteHost,
+	giveDomain,
 	type Jar
 } from './helpers';
 
@@ -147,6 +147,7 @@ run('security regressions', () => {
 			(await upload(slug, buildZip({ 'index.html': 'private-reset-fixture' }), { jar: admin.jar }))
 				.status
 		).toBe(201);
+		const child = await giveDomain(admin.jar, slug);
 		const reader = await signIn({ email: admin.email, password: chosen }, sitesHost);
 		expect(reader.size).toBeGreaterThan(0);
 		const issue = async () => {
@@ -158,10 +159,7 @@ run('security regressions', () => {
 		const capability: Jar = new Map();
 		store(capability, await request(code.pathname + code.search, { host: code.host }));
 		expect(capability.size).toBeGreaterThan(0);
-		const child = (await siteHost(slug))!;
-		expect((await request(`/s/${slug}/index.html`, { host: child, jar: capability })).status).toBe(
-			200
-		);
+		expect((await request('/index.html', { host: child, jar: capability })).status).toBe(200);
 		const pending = await issue();
 		const issued = await post(`/sites/${slug}?/createToken`, admin.jar, {
 			name: 'reset-test',
@@ -186,9 +184,7 @@ run('security regressions', () => {
 			401
 		);
 		expect((await request(`/s/${slug}/`, { jar: reader, host: sitesHost })).status).toBe(401);
-		expect((await request(`/s/${slug}/index.html`, { host: child, jar: capability })).status).toBe(
-			401
-		);
+		expect((await request('/index.html', { host: child, jar: capability })).status).toBe(401);
 		expect((await request(pending.pathname + pending.search, { host: pending.host })).status).toBe(
 			404
 		);

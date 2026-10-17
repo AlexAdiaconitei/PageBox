@@ -11,7 +11,7 @@ traffic with a missing secret. Everything without a default is required.
 | Variable                | Default             | Notes                                                                               |
 | ----------------------- | ------------------- | ----------------------------------------------------------------------------------- |
 | `PAGEBOX_ADMIN_HOST`    | `pagebox.localhost` | the panel and the API                                                               |
-| `PAGEBOX_SITES_HOST`    | `pages.localhost`   | central reader login; uploaded sites use separate subdomains                        |
+| `PAGEBOX_SITES_HOST`    | `pages.localhost`   | central reader login; sites under `/s/<slug>/` when they have no domain             |
 | `PAGEBOX_SITES_PREFIX`  | `/s`                | the path segment sites live under                                                   |
 | `PAGEBOX_PUBLIC_SCHEME` | `http`              | used to build absolute URLs behind a tunnel. Never derived from `X-Forwarded-Proto` |
 | `PAGEBOX_REPLICAS`      | `1`                 | more than one requires `REDIS_URL`                                                  |
@@ -162,4 +162,5 @@ not the application.
 
 ## Not yet in use
 
-Each site uses its own immutable origin by default. The old PAGEBOX_BASE_DOMAIN and PAGEBOX_SUBDOMAIN_MODE settings have no effect.
+`PAGEBOX_BASE_DOMAIN`, `PAGEBOX_SUBDOMAIN_MODE` and `PAGEBOX_SITE_SUBDOMAINS` have no effect.
+A site gets its own origin by being given a domain in the panel, not through configuration.

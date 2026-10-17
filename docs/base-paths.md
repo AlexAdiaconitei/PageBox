@@ -1,7 +1,8 @@
 # Base paths: what each generator does not prefix
 
-A PageBox site is served under `/s/<slug>/`, never at a domain root. Every static site
-generator has an option for that, and **in all of them the option is necessary and not
+A PageBox site is served under `/s/<slug>/` — unless an admin gives it a domain of its own,
+in which case it is served from that domain's root and its base path is plain `/`, with none
+of what follows. Every static site generator has an option for a prefix, and **in all of them the option is necessary and not
 sufficient** — each one prefixes some things automatically and leaves the rest to you.
 
 The gap is where a site half-works: pages navigate fine, images 404, the favicon is missing.

@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { config, siteHostFor, siteIdForHost } from '../config';
+import { config } from '../config';
 import { db } from '../db';
 import { site } from '../db/schema';
 import { cache, cacheKeys } from '../cache';
@@ -8,8 +8,9 @@ import { SLUG_RE } from '../ids';
 /**
  * The single entry point that maps (host, path) to a site — PLAN §D1.
  *
- * v1 resolves `<SITES_HOST>/s/<slug>/<subpath>`. v2 (per-site subdomain, §12) adds a
- * branch here and nothing else changes: `serveSite` only ever sees `{ site, subpath }`.
+ * Two shapes: `<SITES_HOST>/s/<slug>/<subpath>` for a site without a domain, and
+ * `<custom domain>/<subpath>` for one an owner gave its own. `serveSite` only ever sees
+ * `{ site, subpath }`, whichever it was.
  */
 
 export type ResolvedSite = {
@@ -26,6 +27,8 @@ export type SiteRef = {
 	name: string;
 	visibility: 'public' | 'private';
 	basePath: string;
+	/** Custom domain the site is served from at `/`, or null for `/s/<slug>/`. */
+	hostname: string | null;
 	spaFallback: boolean;
 	activeDeploymentId: string | null;
 	ownerUserId: string | null;
@@ -54,10 +57,9 @@ export function parseSitePath(
 	return { slug, subpath: rest.slice(slash + 1), needsTrailingSlashRedirect: false };
 }
 
+/** A path on the shared sites host: `/s/<slug>/...`. */
 export async function resolveSite(host: string, path: string): Promise<ResolvedSite | null> {
-	const hostname = host.toLowerCase().split(':')[0];
-	const hostId = siteIdForHost(host);
-	if (hostname !== config.PAGEBOX_SITES_HOST.split(':')[0] && !hostId) return null;
+	if (host.toLowerCase().split(':')[0] !== config.PAGEBOX_SITES_HOST.split(':')[0]) return null;
 
 	const parsed = parseSitePath(path);
 	if (!parsed) return null;
@@ -66,8 +68,6 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 	// A disabled site is resolved but not served: `serveSite` answers the same 404 as a
 	// site that does not exist, so taking one down leaks nothing about what is hosted here.
 	if (!siteRef) return null;
-	if (hostId && (siteRef.id !== hostId || siteHostFor(siteRef).split(':')[0] !== hostname))
-		return null;
 
 	return {
 		siteRef,
@@ -76,23 +76,38 @@ export async function resolveSite(host: string, path: string): Promise<ResolvedS
 	};
 }
 
+/** A path on a site's own domain, which serves the build from `/`. */
+export function resolveDomainPath(siteRef: SiteRef, path: string): ResolvedSite {
+	return { siteRef, subpath: path.replace(/^\//, ''), needsTrailingSlashRedirect: false };
+}
+
+/** The site an owner pointed this exact host at, if any. */
+export async function lookupSiteByHost(host: string): Promise<SiteRef | null> {
+	const hostname = host.toLowerCase();
+	if (!hostname) return null;
+	const [row] = await db.select().from(site).where(eq(site.hostname, hostname)).limit(1);
+	return row ? toRef(row) : null;
+}
+
 export async function lookupSiteBySlug(slug: string): Promise<SiteRef | null> {
 	const [row] = await db.select().from(site).where(eq(site.slug, slug)).limit(1);
-	if (!row) return null;
+	return row ? toRef(row) : null;
+}
 
-	const ref: SiteRef = {
+function toRef(row: typeof site.$inferSelect): SiteRef {
+	return {
 		id: row.id,
 		slug: row.slug,
 		name: row.name,
 		visibility: row.visibility,
 		basePath: row.basePath,
+		hostname: row.hostname,
 		spaFallback: row.spaFallback,
 		activeDeploymentId: row.activeDeploymentId,
 		ownerUserId: row.ownerUserId,
 		disabled: row.disabledAt !== null || row.deletingAt !== null,
 		retentionLimit: row.retentionLimit
 	};
-	return ref;
 }
 
 /**

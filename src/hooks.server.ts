@@ -2,11 +2,11 @@ import { redirect, type Handle, type HandleServerError, type ServerInit } from '
 import { loadSession } from '$lib/server/auth/session';
 import { isTwoFactorRequired, twoFactorGate } from '$lib/server/auth/two-factor';
 import { acceptReader, accessUrl, loadSiteSession } from '$lib/server/auth/reader';
-import { config, hostKind, siteIdForHost, siteUrl } from '$lib/server/config';
+import { config, hostKind, siteUrl } from '$lib/server/config';
 import { sameOriginMutation } from '$lib/server/auth/origin';
 import { errorResponse, notFoundResponse } from '$lib/server/errorPage';
 import { probeHealth } from '$lib/server/health';
-import { resolveSite } from '$lib/server/sites/resolve';
+import { lookupSiteByHost, resolveDomainPath, resolveSite } from '$lib/server/sites/resolve';
 import { guardPrivate, serveSite } from '$lib/server/sites/serve';
 import { startup } from '$lib/server/startup';
 
@@ -37,27 +37,34 @@ export const handle: Handle = async ({ event, resolve }) => {
 			headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }
 		});
 	}
-	if (!kind) return notFoundResponse(event.request, null);
+
+	// A site's own domain: uploaded content from `/`, plus the one callback that turns a
+	// reader code into a cookie for this origin. Nothing else of PageBox answers here.
+	if (!kind) {
+		const owned = await lookupSiteByHost(event.url.host);
+		if (!owned) return notFoundResponse(event.request, null);
+		event.locals.hostKind = 'sites';
+		if (event.url.pathname === '/__pb/accept' && event.request.method === 'GET')
+			return acceptReader(event, owned.id);
+		if (event.url.pathname === '/__pb' || event.url.pathname.startsWith('/__pb/'))
+			return notFoundResponse(event.request, 'sites');
+		if (owned.visibility === 'private') event.locals.user = await loadSiteSession(event, owned.id);
+		return serveSite(event, resolveDomainPath(owned, event.url.pathname));
+	}
 	event.locals.hostKind = kind;
-	const childId = kind === 'sites' ? siteIdForHost(event.url.host) : null;
-	if (childId && event.url.pathname === '/__pb/accept' && event.request.method === 'GET')
-		return acceptReader(event, childId);
 	if (event.url.pathname.startsWith('/__pb/')) return notFoundResponse(event.request, kind);
 
 	if (kind === 'sites') {
 		const hit = await resolveSite(event.url.host, event.url.pathname);
 		if (hit) {
-			if (childId) {
-				if (hit.siteRef.visibility === 'private')
-					event.locals.user = await loadSiteSession(event, childId);
-				return serveSite(event, hit);
-			}
-			if (!config.PAGEBOX_SITE_SUBDOMAINS) {
+			if (!hit.siteRef.hostname) {
 				if (hit.siteRef.visibility === 'private')
 					event.locals.user = await loadSession(event, kind);
 				return serveSite(event, hit);
 			}
-			// The reader login origin must never execute uploaded content.
+			// A site with its own domain is built for `/`, so its files cannot be served under
+			// `/s/<slug>/`; old links are forwarded instead. The reader login origin must
+			// never execute uploaded content either.
 			if (hit.siteRef.disabled)
 				return notFoundResponse(event.request, kind, {
 					'cache-control': 'private, no-store',
@@ -72,10 +79,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 				const denial = await guardPrivate(event, hit.siteRef);
 				if (denial) return denial;
 			}
+			const path = '/' + hit.subpath + event.url.search;
 			const location =
 				hit.siteRef.visibility === 'private'
-					? accessUrl(hit.siteRef, event.url.pathname + event.url.search)
-					: new URL(event.url.pathname + event.url.search, siteUrl(hit.siteRef)).href;
+					? accessUrl(hit.siteRef, path)
+					: new URL(path, siteUrl(hit.siteRef)).href;
 			return new Response(null, {
 				status: 302,
 				headers: {
@@ -88,8 +96,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				}
 			});
 		}
-		if (childId || !SITES_HOST_ROUTES.has(event.url.pathname))
-			return notFoundResponse(event.request, kind);
+		if (!SITES_HOST_ROUTES.has(event.url.pathname)) return notFoundResponse(event.request, kind);
 	} else if (
 		event.url.pathname === '/access' ||
 		event.url.pathname.startsWith(config.PAGEBOX_SITES_PREFIX + '/')

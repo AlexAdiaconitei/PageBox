@@ -21,6 +21,7 @@ containers, not two ports, not two paths. Which surface a request reaches is dec
 ```
 Host: pagebox.example.com   →  the panel and the API
 Host: pages.example.com     →  the hosted sites, under /s/<slug>/
+Host: docs.example.org      →  one site, from /, if a site claims that domain
 Host: anything else         →  404
 ```
 
@@ -44,7 +45,7 @@ PageBox uses, and it refuses to start if the two are equal.
 
 Both are single-level names under a domain you already own, so one wildcard DNS record and
 one wildcard certificate cover them. There is no per-site DNS: a new site is a new path on
-the sites host.
+the sites host — unless you give it a domain of its own, below.
 
 ## Application → Docker (recommended)
 
@@ -117,6 +118,34 @@ the sites host.
    [pagebox] ready in 336ms · admin=pagebox.<domain> sites=pages.<domain>/s/<slug>/ cache=memory upload-cap=100 MB
    ```
 
+## A site on its own domain
+
+Any site can be served from a domain of its own — `docs.example.org` instead of
+`pages.example.com/s/docs/`. It is set per site, in the panel, by an admin who owns it.
+PageBox picks the site from the `Host` header and serves its build from `/`, so the proxy
+only has to deliver the request unchanged.
+
+1. **Panel** → the site → **Domain** → type `docs.example.org` → *Save domain*.
+2. **DNS**: point `docs.example.org` at the Dokploy server (an `A` record, or a `CNAME` to
+   the name the panel host already uses).
+3. **Dokploy** → this same PageBox application → **Domains** → **Add Domain**:
+
+   | Host               | Path | Internal path | Strip path | Container port | HTTPS             |
+   | ------------------ | ---- | ------------- | ---------- | -------------- | ----------------- |
+   | `docs.example.org` | `/`  | empty         | off        | 3000           | on, Let's Encrypt |
+
+4. **Rebuild the site for base path `/`** and deploy it. `whoami` already answers
+   `"basePath": "/"`, so a pipeline that reads it needs no change.
+
+No internal path, no `/s/<slug>/`: a rewrite would hide the prefix from the browser, and
+every redirect and absolute link PageBox or the build emits would then point somewhere the
+browser cannot follow. Old `pages.example.com/s/<slug>/…` links keep working — they are
+forwarded to the domain, after the sign-in check for a private site.
+
+Private sites still sign readers in on the sites host. After login the reader is sent back
+to the domain with a one-time code, and the domain sets its own host-only cookie. Changing or
+removing a domain signs those readers out of the site.
+
 ## Application → Dockerfile
 
 Same domains, same environment, same health check; only the source differs — this Git
@@ -132,7 +161,8 @@ published image. Remember:
 - Compose stacks in Dokploy **ignore** "Add Domain" and container labels for routing. Copy
   `deploy/traefik-dynamic.example.yml` into Dokploy's dynamic config directory (usually
   `/etc/dokploy/traefik/dynamic/pagebox.yml`), adjust hostnames and the container name. Both
-  routers point at one service — the same split, written by hand.
+  routers point at one service — the same split, written by hand. A site's custom domain
+  needs one more `Host(...)` router to the same service; the example file has it commented.
 - The service must be attached to the `dokploy-network`.
 
 ## Upgrading
@@ -152,7 +182,8 @@ needs a redeploy — it is a pointer move in the panel.
   admin API with your admin cookie.
 - **A domain Traefik routes but the app does not know answers 404.** Traefik and PageBox
   each keep their own list; adding one without the other gets you a certificate, a working
-  route, and a 404 on everything behind it.
+  route, and a 404 on everything behind it. For a site's custom domain, PageBox's list is
+  the site's **Domain** field in the panel.
 - **Upload cap and Cloudflare.** `MAX_UPLOAD_BYTES` defaults to 100 MB because Cloudflare's
   proxy rejects bigger request bodies on non-Enterprise plans. Raise it when nothing in
   front imposes a smaller cap; it propagates to adapter-node's `BODY_SIZE_LIMIT`

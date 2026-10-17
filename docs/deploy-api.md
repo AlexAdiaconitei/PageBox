@@ -24,13 +24,14 @@ Authorization: Bearer pbx_…
   "basePath": "/s/docs-a/",
   "siteUrl": "https://pages.example.com/s/docs-a/",
   "mode": "path",
+  "hostname": null,
   "maxUploadBytes": 104857600
 }
 ```
 
-Build with that `basePath` instead of hardcoding it. When a site later moves to its own
-hostname (v2), the same call returns `"basePath": "/"` and the next build comes out right
-without touching the workflow.
+Build with that `basePath` instead of hardcoding it. When an admin gives the site its own
+domain, the same call returns `"mode": "domain"`, the `hostname`, `"basePath": "/"` and the
+new `siteUrl`, and the next build comes out right without touching the workflow.
 
 Per generator: Next/Fumadocs `basePath` **and** `assetPrefix`, Docusaurus `baseUrl`,
 Astro/Vite `base`, SvelteKit `paths.base`, MkDocs `site_url`.

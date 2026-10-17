@@ -38,11 +38,12 @@ describe('config', () => {
 	});
 
 	// The host split is the security boundary of the whole design (PLAN §D1).
-	it('serves sites under the shared host unless per-site subdomains are enabled', () => {
-		expect(parseConfig(base).config?.PAGEBOX_SITE_SUBDOMAINS).toBe(false);
-		expect(
-			parseConfig({ ...base, PAGEBOX_SITE_SUBDOMAINS: 'true' }).config?.PAGEBOX_SITE_SUBDOMAINS
-		).toBe(true);
+	// Domains are per site, set in the panel; the retired global switch must not resurrect
+	// generated `<slug>-<id>` hosts.
+	it('ignores the retired per-site subdomain switch', () => {
+		const { config } = parseConfig({ ...base, PAGEBOX_SITE_SUBDOMAINS: 'true' });
+		expect(config).toBeDefined();
+		expect(config).not.toHaveProperty('PAGEBOX_SITE_SUBDOMAINS');
 	});
 
 	it('refuses identical admin and sites hosts', () => {

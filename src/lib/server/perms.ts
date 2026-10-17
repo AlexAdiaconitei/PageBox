@@ -93,6 +93,7 @@ export type SiteSummary = {
 	name: string;
 	visibility: 'public' | 'private';
 	basePath: string;
+	hostname: string | null;
 	activeDeploymentId: string | null;
 	/** Suspended: it holds everything it had and answers nothing (see sites/serve.ts). */
 	disabled: boolean;
@@ -163,6 +164,7 @@ export async function sitesForUser(user: SessionUser): Promise<SiteSummary[]> {
 			name: row.name,
 			visibility: row.visibility,
 			basePath: row.basePath,
+			hostname: row.hostname,
 			activeDeploymentId: row.activeDeploymentId,
 			disabled: row.disabledAt !== null,
 			retentionLimit: row.retentionLimit,

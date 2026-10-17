@@ -61,15 +61,12 @@ try {
 	assert.ok(ready, docker('logs', mark));
 	for (const [host, expected] of [
 		['pages.example.com', 200],
-		['demo-01arz3ndektsv4rrffq69g5fav.pages.example.com', 200],
 		['demo.pages.example.com', 404],
-		['demo-01arz3ndektsv4rrffq69g5fav.pagesXexample.com', 404],
-		['demo-01arz3ndektsv4rrffq69g5fav.pages.example.com.evil.test', 404]
+		['pages.example.com.evil.test', 404],
+		['docs.example.org', 404]
 	])
 		assert.equal(await status(host), expected, host);
-	console.log(
-		'Traefik router passed: central hosts and immutable site origins matched; near matches rejected.'
-	);
+	console.log('Traefik router passed: central hosts matched exactly; other hosts rejected.');
 } finally {
 	for (const container of containers.reverse()) docker('rm', '-f', container);
 	docker('network', 'rm', mark);

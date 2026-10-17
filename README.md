@@ -345,8 +345,9 @@ password field between authenticator actions and explains Authy's icon selection
 See [the release notes](docs/releases/0.3.2.md).
 
 Every milestone through M7 is done and the four decisions that were left open are closed —
-see [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md). Next up is custom domains and
-sites served from `/` — see [`docs/PLAN-custom-domains.md`](docs/PLAN-custom-domains.md).
+see [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md). Any site can also be served
+from the root of its own domain, set per site in the panel — see
+[`docs/dokploy.md`](docs/dokploy.md#a-site-on-its-own-domain).
 
 ## Documentation
 

@@ -11,6 +11,7 @@
 	import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Check from '@lucide/svelte/icons/check';
+	import Globe from '@lucide/svelte/icons/globe';
 	import Dropzone from '$lib/components/Dropzone.svelte';
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { formatBytes, fullDate, timeAgo } from '$lib/format';
@@ -590,6 +591,44 @@ curl -sfS -X POST ${data.adminOrigin}/api/v1/sites/${data.site.slug}/deployments
 			Deployments are full copies of the build. A limit deletes the oldest ones past it on every
 			upload — never the live one — and saving a lower limit here applies it immediately.
 		</p>
+	</section>
+
+	<section class="section">
+		<div class="mb-3 flex items-center gap-2">
+			<Globe size={15} strokeWidth={1.75} class="text-faint" />
+			<h2 class="text-[1.05rem] font-semibold">Domain</h2>
+		</div>
+		<p class="text-muted mb-3 text-[0.85rem]">
+			{data.site.hostname
+				? `Served from the root of ${data.site.hostname}. Builds use base path /.`
+				: `No domain: the site lives under the shared sites host, at ${data.site.basePath}.`}
+			Changing it changes the base path, so the live build has to be rebuilt and deployed again, and readers
+			of a private site sign in once more.
+		</p>
+		{#if data.canSetDomain}
+			<form method="POST" action="?/domain" class="flex flex-wrap items-end gap-3">
+				<label class="field w-80 max-w-full">
+					Custom domain <span class="text-faint">(empty to remove)</span>
+					<input
+						class="input mono"
+						name="hostname"
+						placeholder="docs.example.com"
+						autocomplete="off"
+						spellcheck="false"
+						value={data.site.hostname ?? ''}
+					/>
+				</label>
+				<button class="btn btn-ghost" type="submit">Save domain</button>
+			</form>
+			<p class="text-muted mt-2 text-[0.8rem]">
+				PageBox picks the site by the request's host, so the domain only has to reach this instance:
+				point its DNS at the server, and in Dokploy add it under this application's Domains with
+				path <span class="mono">/</span>, container port
+				<span class="mono">3000</span> and HTTPS on. No internal path.
+			</p>
+		{:else}
+			<p class="text-faint text-[0.8rem]">Only an admin who owns this site can change it.</p>
+		{/if}
 	</section>
 
 	<section class="section">

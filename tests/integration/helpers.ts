@@ -26,25 +26,40 @@ afterAll(async () => {
 	await fixtureSql?.end();
 });
 
-/** Read fixture IDs to address the actual per-site origin without bypassing HTTP auth. */
+/** The custom domain a site is served from, or null when it lives under `/s/<slug>/`. */
 export async function siteHost(slug: string): Promise<string | null> {
 	if (process.env.PAGEBOX_DB_TESTS !== '1')
 		throw new Error('Per-site tests require PAGEBOX_DB_TESTS=1 and a disposable database');
 	fixtureSql ??= postgres(process.env.DATABASE_URL_HOST ?? process.env.DATABASE_URL!, { max: 2 });
-	const [row] = await fixtureSql`select id from site where slug = ${slug}`;
-	return row ? `${slug.slice(0, 28)}-${row.id.toLowerCase()}.${sitesHost}` : null;
+	const [row] = await fixtureSql`select hostname from site where slug = ${slug}`;
+	return row?.hostname ?? null;
 }
 
-/** Obtain a site capability through the central reader flow, then request that origin. */
+/** Gives a site its own origin through the panel, the way an admin does. */
+export async function giveDomain(jar: Jar, slug: string): Promise<string> {
+	const port = sitesHost.includes(':') ? ':' + sitesHost.split(':').at(-1) : '';
+	const hostname = `${slug}.domains.localhost${port}`;
+	const response = await post(`/sites/${slug}?/domain`, jar, { hostname });
+	const result = await actionResult(response);
+	if (result.type !== 'success') throw new Error(`could not give ${slug} a domain: ${result.type}`);
+	return hostname;
+}
+
+/**
+ * Requests `/s/<slug>/<path>` the way a reader reaches it: on the shared sites host, or —
+ * for a site with its own domain — at `<domain>/<path>` after the central reader flow.
+ */
 export async function siteRequest(path: string, options: Parameters<typeof request>[1] = {}) {
-	const slug = /^\/s\/([^/?]+)/.exec(path)?.[1];
-	if (!slug) return request(path, options);
+	const match = /^\/s\/([^/?]+)\/?/.exec(path);
+	if (!match) return request(path, options);
+	const slug = match[1];
 	const host = await siteHost(slug);
 	if (!host) return request(path, { ...options, host: sitesHost });
+	const local = '/' + path.slice(match[0].length);
 	const child: Jar = new Map();
 	if (options?.jar && [...options.jar.keys()].some((name) => name.includes('pb_view'))) {
 		const issued = await request(
-			'/access?site=' + encodeURIComponent(slug) + '&next=' + encodeURIComponent(path),
+			'/access?site=' + encodeURIComponent(slug) + '&next=' + encodeURIComponent(local),
 			{ host: sitesHost, jar: options.jar }
 		);
 		if (issued.status === 404) return issued;
@@ -56,7 +71,7 @@ export async function siteRequest(path: string, options: Parameters<typeof reque
 			store(child, accepted);
 		}
 	}
-	return request(path, { ...options, host, jar: child });
+	return request(local, { ...options, host, jar: child });
 }
 
 /**

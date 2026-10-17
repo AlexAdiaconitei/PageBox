@@ -147,9 +147,7 @@ run('private sites', () => {
 	it('sends an anonymous navigation to the login page', async () => {
 		const res = await navigation(`/s/${slug}/`);
 		expect(res.status).toBe(302);
-		expect(res.headers.get('location')).toBe(
-			`http://${sitesHost}/access?site=${slug}&next=%2Fs%2F${slug}%2F`
-		);
+		expect(res.headers.get('location')).toBe(`http://${sitesHost}/login?next=%2Fs%2F${slug}%2F`);
 		expect(res.headers.get('cache-control')).toBe('private, no-store');
 	});
 
