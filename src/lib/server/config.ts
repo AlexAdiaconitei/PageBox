@@ -76,6 +76,10 @@ const schema = z.object({
 		.transform((v) => '/' + v.replace(/^\/+|\/+$/g, ''))
 		.refine((v) => /^\/[a-z0-9][a-z0-9-]*$/.test(v), 'must look like /s'),
 	PAGEBOX_PUBLIC_SCHEME: z.enum(['http', 'https']).default('https'),
+	// Serve each site from its own `<slug>-<id>.<SITES_HOST>` origin instead of
+	// `<SITES_HOST>/s/<slug>/`. Needs wildcard DNS and a wildcard certificate, so it is off
+	// until an operator has both.
+	PAGEBOX_SITE_SUBDOMAINS: z.stringbool().default(false),
 	PAGEBOX_REPLICAS: z.coerce.number().int().positive().default(1),
 
 	// --- infra ---------------------------------------------------------------
@@ -215,7 +219,8 @@ export function parseConfig(env: Record<string, string | undefined>): {
 	}
 	if (adminHost.endsWith('.' + sitesHost))
 		errors.push('PAGEBOX_ADMIN_HOST must be outside the reader subdomain namespace');
-	if (sitesHost.length > 197) errors.push('PAGEBOX_SITES_HOST is too long for per-site hostnames');
+	if (c.PAGEBOX_SITE_SUBDOMAINS && sitesHost.length > 197)
+		errors.push('PAGEBOX_SITES_HOST is too long for per-site hostnames');
 	try {
 		const database = new URL(c.DATABASE_URL);
 		if (!['postgres:', 'postgresql:'].includes(database.protocol)) throw new Error();
@@ -327,6 +332,7 @@ export function siteHostFor(site: { slug: string; id: string }): string {
 }
 
 export function siteIdForHost(host: string): string | null {
+	if (!config.PAGEBOX_SITE_SUBDOMAINS) return null;
 	const hostname = host.toLowerCase().split(':')[0];
 	const suffix = `.${config.PAGEBOX_SITES_HOST.split(':')[0]}`;
 	if (!hostname.endsWith(suffix)) return null;
@@ -340,7 +346,8 @@ export function siteUrl(
 	site: { slug: string; id: string; basePath: string },
 	_port?: string | null
 ): string {
-	return `${config.PAGEBOX_PUBLIC_SCHEME}://${siteHostFor(site)}${site.basePath}`;
+	const host = config.PAGEBOX_SITE_SUBDOMAINS ? siteHostFor(site) : config.PAGEBOX_SITES_HOST;
+	return `${config.PAGEBOX_PUBLIC_SCHEME}://${host}${site.basePath}`;
 }
 
 export function readerUrl(path: string): string {

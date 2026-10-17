@@ -25,6 +25,9 @@ export function safeSiteDestination(
 	return safeReaderDestination(value, { origin: siteUrl(ref), basePath: ref.basePath });
 }
 export function accessUrl(ref: SiteRef, path: string): string {
+	// Without per-site origins the site shares the reader host, so its login is enough.
+	if (!config.PAGEBOX_SITE_SUBDOMAINS)
+		return readerUrl('/login?next=' + encodeURIComponent(safeSiteDestination(path, ref)));
 	return readerUrl(
 		'/access?site=' +
 			encodeURIComponent(ref.slug) +

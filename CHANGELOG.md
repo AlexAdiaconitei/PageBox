@@ -7,13 +7,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Serve sites from `<PAGEBOX_SITES_HOST>/s/<slug>/` again. Per-site subdomains are now opt-in through `PAGEBOX_SITE_SUBDOMAINS`, which defaults to `false`; turning them on requires wildcard DNS and a wildcard certificate for `*.<PAGEBOX_SITES_HOST>`.
 - Align the recovery-code acknowledgment checkbox with its label using the shared checkbox style.
 - Replace the two password forms for an enabled authenticator with one password field and separate action buttons. Keep password verification and mandatory-policy enforcement on the server.
 - Show an enabled status badge and document how to edit the logo in Authy, which chooses its own icon for ordinary TOTP tokens.
 
 ### Upgrade
 
-Select `PAGEBOX_TAG=0.3.2` and restart PageBox. No new database migrations or authenticator re-enrollment are required. See [the hotfix notes](docs/releases/0.3.2.md).
+Select `PAGEBOX_TAG=0.3.2` and restart PageBox. No new database migrations or authenticator re-enrollment are required. Sites keep their `/s/<slug>/` URLs unless `PAGEBOX_SITE_SUBDOMAINS=true`. See [the hotfix notes](docs/releases/0.3.2.md).
 
 ## [0.3.1] — 2026-10-14
 

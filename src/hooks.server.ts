@@ -52,6 +52,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 					event.locals.user = await loadSiteSession(event, childId);
 				return serveSite(event, hit);
 			}
+			if (!config.PAGEBOX_SITE_SUBDOMAINS) {
+				if (hit.siteRef.visibility === 'private')
+					event.locals.user = await loadSession(event, kind);
+				return serveSite(event, hit);
+			}
 			// The reader login origin must never execute uploaded content.
 			if (hit.siteRef.disabled)
 				return notFoundResponse(event.request, kind, {

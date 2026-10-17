@@ -38,6 +38,13 @@ describe('config', () => {
 	});
 
 	// The host split is the security boundary of the whole design (PLAN §D1).
+	it('serves sites under the shared host unless per-site subdomains are enabled', () => {
+		expect(parseConfig(base).config?.PAGEBOX_SITE_SUBDOMAINS).toBe(false);
+		expect(
+			parseConfig({ ...base, PAGEBOX_SITE_SUBDOMAINS: 'true' }).config?.PAGEBOX_SITE_SUBDOMAINS
+		).toBe(true);
+	});
+
 	it('refuses identical admin and sites hosts', () => {
 		const { config, errors } = parseConfig({ ...base, PAGEBOX_SITES_HOST: 'pagebox.example.com' });
 		expect(config).toBeUndefined();

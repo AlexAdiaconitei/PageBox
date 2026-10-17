@@ -49,7 +49,7 @@ export const GET: RequestHandler = async (event) => {
 		// A build is worth making either way, but a pipeline that deploys to a site nobody
 		// is serving should be able to say so out loud.
 		serving: row.disabledAt === null,
-		mode: 'subdomain',
+		mode: config.PAGEBOX_SITE_SUBDOMAINS ? 'subdomain' : 'path',
 		maxUploadBytes: config.MAX_UPLOAD_BYTES
 	});
 };
